@@ -64,8 +64,8 @@
 
 ### 1. โคลนและเตรียม Environment
 ```bash
-git clone https://github.com/Suphawit2004/snmp_font_end.git
-cd snmp_font_end
+git clone https://github.com/Suphawit2004/NetMonitor.git
+cd NetMonitor
 
 # คัดลอกไฟล์ Environment
 cp .env.example .env
