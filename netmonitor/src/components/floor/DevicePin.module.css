@@ -1,0 +1,471 @@
+/* ── Base ── */
+.device {
+  position: absolute;
+  cursor: grab;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  z-index: 2;
+  margin-left: -13px;
+  margin-top: -13px;
+  overflow: visible;
+  transition: z-index 0s;
+}
+/* ยก z-index เมื่อ popup เปิด เพื่อให้ popup ลอยอยู่บนสุด */
+.popupOpen { z-index: 50; }
+
+.device:active,
+.dragging  { cursor: grabbing; }
+.locked    { cursor: default; }
+.locked:active { cursor: default; }
+
+/* ── Pin rounded-box (matching Image 3) ── */
+.pin {
+  width: 26px;
+  height: 26px;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.6);
+}
+
+.pinIcon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+}
+
+.pinIcon svg {
+  width: 17px;
+  height: 17px;
+  display: block;
+}
+
+.device:not(.locked):not(.popupOpen):hover .pin { transform: scale(1.15); }
+.popupOpen .pin { transform: scale(1.1); }
+
+/* Status colours */
+.online {
+  background: rgba(15, 23, 42, 0.95);
+  border: 2px solid #22c55e;
+  color: #22c55e;
+  box-shadow: 0 0 12px rgba(34, 197, 94, 0.5);
+}
+.warning {
+  background: rgba(15, 23, 42, 0.95);
+  border: 2px solid #f59e0b;
+  color: #f59e0b;
+  box-shadow: 0 0 12px rgba(245, 158, 11, 0.5);
+}
+.offline {
+  background: rgba(15, 23, 42, 0.95);
+  border: 2px solid #ef4444;
+  color: #ef4444;
+  box-shadow: 0 0 12px rgba(239, 68, 68, 0.5);
+}
+
+/* ── Status dot pulse ── */
+.dot {
+  position: absolute;
+  top: -3px;
+  right: -3px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
+.dot_online  { background: #22c55e; box-shadow: 0 0 8px #22c55e; animation: blink 2s infinite; }
+.dot_warning { background: #f59e0b; box-shadow: 0 0 8px #f59e0b; }
+.dot_offline { background: #ef4444; box-shadow: 0 0 8px #ef4444; }
+
+@keyframes blink {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.4; }
+}
+
+/* ── Lock badge (matching Image 3) ── */
+.lockBadge {
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  background: rgba(15, 23, 42, 0.92);
+  border: 1px solid #64748b;
+  border-radius: 50%;
+  width: 14px;
+  height: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+  padding: 1px;
+  z-index: 3;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.8);
+}
+
+.online .lockBadge {
+  border-color: #22c55e;
+  color: #22c55e;
+}
+.warning .lockBadge {
+  border-color: #f59e0b;
+  color: #f59e0b;
+}
+.offline .lockBadge {
+  border-color: #ef4444;
+  color: #ef4444;
+}
+
+.lockIcon {
+  width: 10px;
+  height: 10px;
+  display: block;
+}
+
+/* ── Name label (matching Image 3) ── */
+.name {
+  font-size: 12px;
+  color: #f1f5f9;
+  font-weight: 600;
+  white-space: nowrap;
+  background: rgba(15, 23, 42, 0.92);
+  border: 1px solid rgba(51, 65, 85, 0.7);
+  padding: 1px 6px;
+  border-radius: 4px;
+  letter-spacing: 0.3px;
+  pointer-events: none;
+  max-width: 120px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.5);
+}
+
+/* ── Popup (click-to-open, không dùng :hover) ── */
+.popup {
+  position: absolute;
+  width: 230px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-default);
+  border-radius: 10px;
+  box-shadow: var(--shadow-lg);
+  z-index: 100;
+  pointer-events: auto;
+}
+
+/* ── Placement: above (default) ── */
+.popup_above {
+  bottom: calc(100% + 14px);
+  left: 50%;
+  transform: translateX(-50%);
+  animation: popInAbove 0.14s ease forwards;
+}
+@keyframes popInAbove {
+  from { opacity: 0; transform: translateX(-50%) translateY(6px) scale(0.96); }
+  to   { opacity: 1; transform: translateX(-50%) translateY(0)   scale(1); }
+}
+
+/* ── Placement: below ── */
+.popup_below {
+  top: calc(100% + 14px);
+  left: 50%;
+  transform: translateX(-50%);
+  animation: popInBelow 0.14s ease forwards;
+}
+@keyframes popInBelow {
+  from { opacity: 0; transform: translateX(-50%) translateY(-6px) scale(0.96); }
+  to   { opacity: 1; transform: translateX(-50%) translateY(0)    scale(1); }
+}
+
+/* ── Placement: left ── */
+.popup_left {
+  right: calc(100% + 14px);
+  top: 50%;
+  transform: translateY(-50%);
+  animation: popInLeft 0.14s ease forwards;
+}
+@keyframes popInLeft {
+  from { opacity: 0; transform: translateY(-50%) translateX(6px) scale(0.96); }
+  to   { opacity: 1; transform: translateY(-50%) translateX(0)   scale(1); }
+}
+
+/* ── Placement: right ── */
+.popup_right {
+  left: calc(100% + 14px);
+  top: 50%;
+  transform: translateY(-50%);
+  animation: popInRight 0.14s ease forwards;
+}
+@keyframes popInRight {
+  from { opacity: 0; transform: translateY(-50%) translateX(-6px) scale(0.96); }
+  to   { opacity: 1; transform: translateY(-50%) translateX(0)    scale(1); }
+}
+
+/* ── Arrow base ── */
+.popupArrow {
+  position: absolute;
+  width: 12px;
+  height: 12px;
+  background: var(--bg-surface);
+}
+
+/* Arrow pointing down (popup is above) */
+.arrow_above {
+  bottom: -7px;
+  left: 50%;
+  transform: translateX(-50%) rotate(45deg);
+  border-right: 1px solid var(--border-default);
+  border-bottom: 1px solid var(--border-default);
+}
+
+/* Arrow pointing up (popup is below) */
+.arrow_below {
+  top: -7px;
+  left: 50%;
+  transform: translateX(-50%) rotate(45deg);
+  border-left: 1px solid var(--border-default);
+  border-top: 1px solid var(--border-default);
+}
+
+/* Arrow pointing right (popup is to the left) */
+.arrow_left {
+  right: -7px;
+  top: 50%;
+  transform: translateY(-50%) rotate(45deg);
+  border-right: 1px solid var(--border-default);
+  border-top: 1px solid var(--border-default);
+}
+
+/* Arrow pointing left (popup is to the right) */
+.arrow_right {
+  left: -7px;
+  top: 50%;
+  transform: translateY(-50%) rotate(45deg);
+  border-left: 1px solid var(--border-default);
+  border-bottom: 1px solid var(--border-default);
+}
+
+.popupHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 14px 8px;
+  border-bottom: 1px solid var(--border-subtle);
+}
+.popupName {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+.popupStatus {
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.popupBody {
+  padding: 8px 14px;
+}
+.popupRow {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 5px;
+  font-size: 12px;
+}
+.popupKey {
+  color: var(--text-secondary);
+  font-weight: 500;
+  flex-shrink: 0;
+}
+.popupVal {
+  color: var(--text-primary);
+  font-weight: 600;
+  text-align: right;
+  word-break: break-word;
+}
+
+.popupActions {
+  display: flex;
+  gap: 6px;
+  padding: 8px 10px 12px;
+  border-top: 1px solid var(--border-subtle);
+}
+
+.btnDetail {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  flex: 1.2;
+  padding: 6px 8px;
+  border-radius: 6px;
+  border: none;
+  background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
+  color: #ffffff;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: opacity 0.15s ease;
+}
+
+.btnDetail:hover {
+  opacity: 0.9;
+}
+
+/* ปุ่มล็อค */
+.btnLock {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  flex: 1;
+  padding: 6px 6px;
+  border-radius: 6px;
+  border: 1px solid var(--border-default);
+  background: var(--bg-elevated);
+  color: var(--text-primary);
+  font-size: 12px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.12s, border-color 0.12s, color 0.12s;
+}
+.btnLock:hover {
+  border-color: rgba(250,204,21,0.5);
+  color: #facc15;
+  background: rgba(250,204,21,0.08);
+}
+.btnLockActive {
+  background: rgba(250,204,21,0.12);
+  border-color: rgba(250,204,21,0.45);
+  color: #facc15;
+}
+.btnLockActive:hover {
+  background: rgba(250,204,21,0.2);
+  border-color: #facc15;
+}
+
+/* Tooltip status colours */
+.s_online  { color: var(--status-online); }
+.s_warning { color: var(--status-warning); }
+.s_offline { color: var(--status-critical); }
+
+/* จางหายตอนปิด popup — override animation เดิมที่ค้าง opacity ไว้ (fill-forwards) */
+.popupFading {
+  animation: fadeOut 0.35s ease forwards !important;
+  pointer-events: none;
+}
+
+/* ─────────────────────────────────────────────
+   Light Mode Theme Adaptation for DevicePin
+   ───────────────────────────────────────────── */
+:global([data-theme="light"]) .pin {
+  background: #ffffff;
+  box-shadow: 0 3px 8px rgba(15, 23, 42, 0.12);
+}
+
+:global([data-theme="light"]) .online {
+  border-color: var(--status-online);
+  color: var(--status-online);
+  box-shadow: 0 0 10px rgba(4, 120, 87, 0.25);
+}
+
+:global([data-theme="light"]) .warning {
+  border-color: var(--status-warning);
+  color: var(--status-warning);
+  box-shadow: 0 0 10px rgba(180, 83, 9, 0.25);
+}
+
+:global([data-theme="light"]) .offline {
+  border-color: var(--status-critical);
+  color: var(--status-critical);
+  box-shadow: 0 0 10px rgba(220, 38, 38, 0.25);
+}
+
+:global([data-theme="light"]) .lockBadge {
+  background: #ffffff;
+  border-color: var(--border-default);
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.2);
+}
+
+:global([data-theme="light"]) .online .lockBadge {
+  border-color: var(--status-online);
+  color: var(--status-online);
+}
+
+:global([data-theme="light"]) .warning .lockBadge {
+  border-color: var(--status-warning);
+  color: var(--status-warning);
+}
+
+:global([data-theme="light"]) .offline .lockBadge {
+  border-color: var(--status-critical);
+  color: var(--status-critical);
+}
+
+:global([data-theme="light"]) .name {
+  background: rgba(255, 255, 255, 0.94);
+  border: 1px solid var(--border-default);
+  color: var(--text-primary);
+  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.12);
+}
+
+:global([data-theme="light"]) .popup {
+  background: #ffffff;
+  border-color: var(--border-default);
+  box-shadow: 0 12px 28px rgba(15, 23, 42, 0.15);
+}
+
+:global([data-theme="light"]) .popupArrow {
+  background: #ffffff;
+}
+
+:global([data-theme="light"]) .popupHeader {
+  border-bottom-color: var(--border-subtle);
+}
+
+:global([data-theme="light"]) .popupName {
+  color: #0f172a !important;
+}
+
+:global([data-theme="light"]) .popupKey {
+  color: #475569 !important;
+}
+
+:global([data-theme="light"]) .popupVal {
+  color: #0f172a !important;
+}
+
+:global([data-theme="light"]) .popupActions {
+  border-top-color: var(--border-subtle);
+}
+
+:global([data-theme="light"]) .btnLock {
+  background: #f8fafc;
+  border-color: var(--border-default);
+  color: var(--text-primary);
+}
+
+:global([data-theme="light"]) .btnLock:hover {
+  background: var(--bg-elevated);
+  border-color: #d97706;
+  color: #b45309;
+}
+
+:global([data-theme="light"]) .btnLockActive {
+  background: #fef3c7;
+  border-color: #f59e0b;
+  color: #b45309;
+}
+
+:global([data-theme="light"]) .btnLockActive:hover {
+  background: #fde68a;
+  border-color: #d97706;
+  color: #92400e;
+}
+@keyframes fadeOut {
+  from { opacity: 1; }
+  to   { opacity: 0; }
+}

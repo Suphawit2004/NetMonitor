@@ -1,0 +1,748 @@
+.canvasWrap {
+  flex: 1;
+  position: relative;
+  overflow: hidden;
+  background: var(--bg-canvas);
+  cursor: default;
+  user-select: none;
+}
+
+/* Grid background (no image mode) */
+.canvasBg {
+  position: absolute;
+  inset: 0;
+  background-image:
+    linear-gradient(var(--border-subtle) 1px, transparent 1px),
+    linear-gradient(90deg, var(--border-subtle) 1px, transparent 1px);
+  background-size: 40px 40px;
+  pointer-events: none;
+}
+
+/* Viewport — centred, scalable */
+.viewport {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform-origin: center center;
+  transition: none;
+}
+
+/* The actual floor plan container */
+.floorPlan {
+  position: relative;
+  border-radius: 10px;
+  /* overflow: visible เพื่อให้ pin ที่ขอบไม่ถูกตัด */
+  overflow: visible;
+  box-shadow: 0 0 0 2px #3b82f6, 0 0 24px rgba(59, 130, 246, 0.25), 0 10px 40px rgba(0, 0, 0, 0.7);
+}
+
+/* Background image (uploaded floor plan) */
+.bgImg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  opacity: 0.85;
+  filter: brightness(0.9) contrast(1.05);
+  pointer-events: none;
+}
+
+/* Grid inside plan (when no image) */
+.gridInner {
+  position: absolute;
+  inset: 0;
+  background: #0f172a;
+  background-image:
+    linear-gradient(rgba(51, 65, 85, 0.4) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(51, 65, 85, 0.4) 1px, transparent 1px);
+  background-size: 40px 40px;
+  pointer-events: none;
+}
+
+/* Room overlay (no-image mode) */
+.room {
+  position: absolute;
+  border: 2px solid rgba(56, 189, 248, 0.65);
+  background: rgba(14, 165, 233, 0.12);
+  border-radius: 6px;
+  pointer-events: none;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.5);
+  transition: border-color 0.15s ease, background-color 0.15s ease;
+}
+.roomLabel {
+  position: absolute;
+  bottom: 6px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 12px;
+  color: rgba(226, 232, 240, 0.7);
+  font-weight: 500;
+  padding: 2px 8px;
+  letter-spacing: 0.3px;
+  text-transform: uppercase;
+  background: rgba(15, 23, 42, 0.6);
+  backdrop-filter: blur(4px);
+  border: 1px solid rgba(56, 189, 248, 0.3);
+  border-radius: 4px;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.4);
+  white-space: nowrap;
+  pointer-events: none;
+  max-width: calc(100% - 16px);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  text-align: center;
+  transition: all 0.2s ease;
+}
+
+/* Special Room Types: Stairs */
+.roomStairs {
+  border-color: #f59e0b !important;
+  background: repeating-linear-gradient(
+    45deg,
+    rgba(245, 158, 11, 0.12),
+    rgba(245, 158, 11, 0.12) 8px,
+    rgba(245, 158, 11, 0.25) 8px,
+    rgba(245, 158, 11, 0.25) 12px
+  ) !important;
+}
+
+.roomStairs .roomLabel {
+  color: rgba(251, 191, 36, 0.75);
+  background: rgba(28, 21, 5, 0.6);
+  border-color: rgba(245, 158, 11, 0.35);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.4);
+}
+
+.roomEditing.roomStairs {
+  border-color: #fbbf24 !important;
+  background: repeating-linear-gradient(
+    45deg,
+    rgba(245, 158, 11, 0.18),
+    rgba(245, 158, 11, 0.18) 8px,
+    rgba(245, 158, 11, 0.32) 8px,
+    rgba(245, 158, 11, 0.32) 12px
+  ) !important;
+}
+
+/* Special Room Types: Server Room */
+.roomServer {
+  border-color: #818cf8 !important;
+  background: radial-gradient(ellipse at top left, rgba(99, 102, 241, 0.32), rgba(15, 23, 42, 0.95)) !important;
+  box-shadow: inset 0 0 16px rgba(99, 102, 241, 0.25);
+}
+
+.roomServer .roomLabel {
+  color: rgba(199, 210, 254, 0.75);
+  background: rgba(24, 21, 52, 0.6);
+  border-color: rgba(129, 140, 248, 0.35);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.4);
+}
+
+.roomEditing.roomServer {
+  border-color: #a5b4fc !important;
+  background: radial-gradient(ellipse at top left, rgba(99, 102, 241, 0.38), rgba(15, 23, 42, 0.9)) !important;
+}
+
+/* Special Room Types: Restroom */
+.roomRestroom {
+  border-color: #06b6d4 !important;
+  background: radial-gradient(ellipse at top left, rgba(6, 182, 212, 0.28), rgba(15, 23, 42, 0.95)) !important;
+  box-shadow: inset 0 0 16px rgba(6, 182, 212, 0.2);
+}
+
+.roomRestroom .roomLabel {
+  color: rgba(103, 232, 249, 0.75);
+  background: rgba(8, 32, 50, 0.6);
+  border-color: rgba(6, 182, 212, 0.35);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.4);
+}
+
+.roomEditing.roomRestroom {
+  border-color: #22d3ee !important;
+  background: radial-gradient(ellipse at top left, rgba(6, 182, 212, 0.35), rgba(15, 23, 42, 0.9)) !important;
+}
+
+.roomEditing.roomServer {
+  border-color: #818cf8 !important;
+  background: radial-gradient(ellipse at top left, rgba(99, 102, 241, 0.3), rgba(15, 23, 42, 0.9)) !important;
+}
+
+/* Stair Floor Connector Link Badge */
+.stairLink {
+  position: absolute;
+  top: 6px;
+  left: 6px;
+  background: rgba(245, 158, 11, 0.22);
+  border: 1px solid #f59e0b;
+  color: #fbbf24;
+  border-radius: 4px;
+  padding: 2px 7px;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  pointer-events: auto;
+  z-index: 8;
+  transition: all 0.15s ease;
+  white-space: nowrap;
+}
+
+.stairLink:hover {
+  background: #f59e0b;
+  color: #0f172a;
+  box-shadow: 0 0 10px rgba(245, 158, 11, 0.6);
+  transform: translateY(-1px);
+}
+
+/* Stats bar */
+.statsBar {
+  position: absolute;
+  top: 12px;
+  right: 16px;
+  background: rgba(15, 23, 42, 0.94);
+  border: 1px solid rgba(56, 189, 248, 0.35);
+  border-radius: 10px;
+  padding: 10px 16px;
+  display: flex;
+  gap: 20px;
+  z-index: 20;
+  backdrop-filter: blur(10px);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.6);
+}
+.stat {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+}
+.statNum { font-size: 20px; font-weight: 700; line-height: 1; font-variant-numeric: tabular-nums; }
+.statLbl { color: #94a3b8; font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; }
+
+.green  { color: #22c55e; }
+.yellow { color: #f59e0b; }
+.red    { color: #ef4444; }
+.blue   { color: #38bdf8; }
+
+/* Zoom controls */
+.zoomCtrl {
+  position: absolute;
+  bottom: 16px;
+  right: 16px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  z-index: 20;
+}
+.zoomBtn {
+  width: 34px;
+  height: 34px;
+  background: #1e293b;
+  border: 1px solid #475569;
+  border-radius: 8px;
+  color: #f8fafc;
+  font-size: 16px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.5);
+}
+.zoomBtn:hover {
+  border-color: #38bdf8;
+  color: #38bdf8;
+  background: #25334d;
+  box-shadow: 0 0 12px rgba(56, 189, 248, 0.5);
+}
+.zoomLevel {
+  font-size: 11.5px;
+  color: #f8fafc;
+  font-weight: 700;
+  min-width: 42px;
+  text-align: center;
+  background: #0f172a;
+  padding: 3px 6px;
+  border-radius: 6px;
+  border: 1px solid #334155;
+}
+
+/* Keyboard hint */
+.hint {
+  position: absolute;
+  bottom: 16px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 11.5px;
+  color: #f1f5f9;
+  font-weight: 600;
+  background: rgba(15, 23, 42, 0.95);
+  border: 1px solid rgba(56, 189, 248, 0.45);
+  padding: 5px 16px;
+  border-radius: 20px;
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.6);
+  pointer-events: none;
+  white-space: nowrap;
+  z-index: 25;
+}
+
+/* ─────────────────────────────────────────────
+   Building Dimensions & Room Customization
+   ───────────────────────────────────────────── */
+.topBar {
+  position: absolute;
+  top: 12px;
+  left: 16px;
+  z-index: 25;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.dimBadge {
+  background: rgba(15, 23, 42, 0.95);
+  border: 1px solid rgba(56, 189, 248, 0.5);
+  color: #38bdf8;
+  font-family: monospace;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 6px 12px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.6);
+  backdrop-filter: blur(8px);
+}
+
+.editRoomsBtn {
+  background: #1e293b;
+  border: 1px solid #475569;
+  color: #f1f5f9;
+  font-size: 11.5px;
+  font-weight: 600;
+  padding: 6px 12px;
+  border-radius: 8px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+  transition: all 0.15s ease;
+}
+
+.editRoomsBtn:hover {
+  background: #2563eb;
+  border-color: #3b82f6;
+  color: #ffffff;
+}
+
+.editRoomsBtnActive {
+  background: #d97706 !important;
+  border-color: #f59e0b !important;
+  color: #ffffff !important;
+  box-shadow: 0 0 12px rgba(245, 158, 11, 0.6) !important;
+}
+
+.editControls {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.secondaryBtn {
+  background: #1e293b;
+  border: 1px solid #475569;
+  color: #f8fafc;
+  font-size: 11.5px;
+  font-weight: 600;
+  padding: 6px 12px;
+  border-radius: 7px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
+  transition: all 0.15s ease;
+}
+
+.secondaryBtn:hover {
+  background: #25334d;
+  border-color: #38bdf8;
+  color: #38bdf8;
+  box-shadow: 0 0 10px rgba(56, 189, 248, 0.4);
+}
+
+.btnAddRoom {
+  background: rgba(14, 165, 233, 0.2);
+  border-color: #0ea5e9;
+  color: #38bdf8;
+}
+.btnAddRoom:hover {
+  background: #0284c7;
+  color: #ffffff;
+  border-color: #38bdf8;
+}
+
+.btnAddServer {
+  background: rgba(99, 102, 241, 0.2);
+  border-color: #818cf8;
+  color: #c7d2fe;
+}
+.btnAddServer:hover {
+  background: #4f46e5;
+  color: #ffffff;
+  border-color: #a5b4fc;
+}
+
+.btnAddStairs {
+  background: rgba(245, 158, 11, 0.2);
+  border-color: #f59e0b;
+  color: #fde68a;
+}
+.btnAddStairs:hover {
+  background: #d97706;
+  color: #ffffff;
+  border-color: #fbbf24;
+}
+
+.btnAddRestroom {
+  background: rgba(6, 182, 212, 0.2);
+  border-color: #06b6d4;
+  color: #a5f3fc;
+}
+.btnAddRestroom:hover {
+  background: #0891b2;
+  color: #ffffff;
+  border-color: #22d3ee;
+}
+
+.btnResetRooms {
+  background: rgba(239, 68, 68, 0.18);
+  border-color: #ef4444;
+  color: #fca5a5;
+  margin-left: 6px;
+}
+.btnResetRooms:hover {
+  background: #dc2626;
+  color: #ffffff;
+  border-color: #f87171;
+}
+
+/* Empty building frame placeholder */
+.emptyBuildingFrame {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  pointer-events: none;
+  padding: 24px;
+  z-index: 5;
+}
+
+.emptyBuildingIcon {
+  font-size: 40px;
+  opacity: 0.5;
+  margin-bottom: 8px;
+}
+
+.emptyBuildingTitle {
+  font-size: 15px;
+  font-weight: 700;
+  color: #94a3b8;
+  margin-bottom: 6px;
+  letter-spacing: 0.5px;
+}
+
+.emptyBuildingSub {
+  font-size: 12px;
+  color: #64748b;
+  max-width: 320px;
+  line-height: 1.5;
+}
+
+/* Room Edit Interactive Styles */
+.roomEditing {
+  pointer-events: auto !important;
+  cursor: grab !important;
+  border: 2px dashed #38bdf8 !important;
+  background: rgba(56, 189, 248, 0.16) !important;
+  box-shadow: 0 0 14px rgba(56, 189, 248, 0.3), inset 0 0 20px rgba(56, 189, 248, 0.08) !important;
+  transition: all 0.15s ease;
+}
+
+.roomEditing:hover {
+  border-color: #00f0ff !important;
+  border-style: solid !important;
+  background: rgba(56, 189, 248, 0.25) !important;
+  box-shadow: 0 0 20px rgba(0, 240, 255, 0.6) !important;
+}
+
+.roomDragging {
+  cursor: grabbing !important;
+  border: 2px solid #60a5fa !important;
+  background: rgba(96, 165, 250, 0.3) !important;
+  box-shadow: 0 0 24px rgba(96, 165, 250, 0.7) !important;
+  z-index: 50 !important;
+}
+
+.roomActions {
+  position: absolute;
+  top: 5px;
+  right: 5px;
+  display: flex;
+  gap: 5px;
+  z-index: 10;
+}
+
+.roomActionBtn {
+  background: #1e293b;
+  border: 1px solid #475569;
+  color: #ffffff;
+  border-radius: 5px;
+  font-size: 12px;
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.6);
+  transition: all 0.12s ease;
+}
+
+.roomActionBtn:hover {
+  background: #2563eb;
+  color: #ffffff;
+  border-color: #60a5fa;
+  box-shadow: 0 0 8px rgba(59, 130, 246, 0.6);
+  transform: scale(1.1);
+}
+
+.roomActionBtnDanger {
+  border-color: #ef4444;
+}
+
+.roomActionBtnDanger:hover {
+  background: #dc2626 !important;
+  border-color: #f87171 !important;
+  color: #ffffff !important;
+  box-shadow: 0 0 8px rgba(239, 68, 68, 0.6) !important;
+  transform: scale(1.1);
+}
+
+.resizeHandle {
+  position: absolute;
+  bottom: 0;
+  right: 0;
+  width: 16px;
+  height: 16px;
+  background: #00f0ff;
+  border-radius: 3px 0 4px 0;
+  cursor: se-resize;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 0 10px rgba(0, 240, 255, 0.9);
+  z-index: 10;
+}
+
+.resizeHandle::after {
+  content: '';
+  width: 6px;
+  height: 6px;
+  border-right: 2px solid #0f172a;
+  border-bottom: 2px solid #0f172a;
+}
+
+.renameInput {
+  position: absolute;
+  bottom: 6px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: #0f172a;
+  border: 1.5px solid #00f0ff;
+  color: #ffffff;
+  font-size: 12px;
+  font-weight: 700;
+  padding: 3px 8px;
+  border-radius: 5px;
+  outline: none;
+  width: min(150px, calc(100% - 20px));
+  box-shadow: 0 0 10px rgba(0, 240, 255, 0.4);
+  text-align: center;
+  z-index: 15;
+}
+
+/* ─────────────────────────────────────────────
+   Light Mode Theme Adaptation for 2D Canvas
+   ───────────────────────────────────────────── */
+:global([data-theme="light"]) .floorPlan {
+  box-shadow: 0 0 0 2px var(--accent-primary), 0 0 20px rgba(37, 99, 235, 0.15), 0 10px 30px rgba(15, 23, 42, 0.08);
+}
+
+:global([data-theme="light"]) .gridInner {
+  background: #ffffff;
+  background-image:
+    linear-gradient(rgba(189, 200, 214, 0.45) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(189, 200, 214, 0.45) 1px, transparent 1px);
+}
+
+:global([data-theme="light"]) .room {
+  border-color: rgba(2, 132, 199, 0.65);
+  background: rgba(2, 132, 199, 0.08);
+  box-shadow: 0 4px 14px rgba(15, 23, 42, 0.06);
+}
+
+:global([data-theme="light"]) .roomLabel {
+  color: var(--text-primary);
+  background: rgba(255, 255, 255, 0.92);
+  border: 1px solid var(--border-default);
+  box-shadow: 0 2px 6px rgba(15, 23, 42, 0.08);
+}
+
+:global([data-theme="light"]) .roomStairs {
+  border-color: #d97706 !important;
+  background: repeating-linear-gradient(
+    45deg,
+    rgba(245, 158, 11, 0.1),
+    rgba(245, 158, 11, 0.1) 8px,
+    rgba(245, 158, 11, 0.2) 8px,
+    rgba(245, 158, 11, 0.2) 12px
+  ) !important;
+}
+
+:global([data-theme="light"]) .roomStairs .roomLabel {
+  color: #92400e;
+  background: rgba(254, 243, 199, 0.95);
+  border-color: rgba(217, 119, 6, 0.5);
+}
+
+:global([data-theme="light"]) .roomServer {
+  border-color: #6366f1 !important;
+  background: radial-gradient(ellipse at top left, rgba(99, 102, 241, 0.15), rgba(241, 245, 249, 0.95)) !important;
+  box-shadow: inset 0 0 16px rgba(99, 102, 241, 0.12);
+}
+
+:global([data-theme="light"]) .roomServer .roomLabel {
+  color: #3730a3;
+  background: rgba(238, 242, 255, 0.95);
+  border-color: rgba(99, 102, 241, 0.5);
+}
+
+:global([data-theme="light"]) .roomRestroom {
+  border-color: #0891b2 !important;
+  background: radial-gradient(ellipse at top left, rgba(6, 182, 212, 0.15), rgba(241, 245, 249, 0.95)) !important;
+  box-shadow: inset 0 0 16px rgba(6, 182, 212, 0.12);
+}
+
+:global([data-theme="light"]) .roomRestroom .roomLabel {
+  color: #155e75;
+  background: rgba(236, 254, 255, 0.95);
+  border-color: rgba(6, 182, 212, 0.5);
+}
+
+:global([data-theme="light"]) .stairLink {
+  background: rgba(254, 243, 199, 0.95);
+  border: 1px solid rgba(217, 119, 6, 0.6);
+  color: #92400e;
+  box-shadow: 0 1px 4px rgba(15, 23, 42, 0.08);
+}
+
+:global([data-theme="light"]) .stairLink:hover {
+  background: #d97706;
+  color: #ffffff;
+}
+
+:global([data-theme="light"]) .statsBar {
+  background: rgba(246, 248, 250, 0.94);
+  border: 1px solid var(--border-default);
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.1);
+}
+
+:global([data-theme="light"]) .statLbl {
+  color: var(--text-muted);
+}
+
+:global([data-theme="light"]) .green  { color: var(--status-online); }
+:global([data-theme="light"]) .yellow { color: var(--status-warning); }
+:global([data-theme="light"]) .red    { color: var(--status-critical); }
+:global([data-theme="light"]) .blue   { color: var(--accent-primary); }
+
+:global([data-theme="light"]) .dimBadge {
+  background: rgba(246, 248, 250, 0.94);
+  border: 1px solid var(--border-default);
+  color: var(--accent-primary);
+  box-shadow: 0 4px 15px rgba(15, 23, 42, 0.08);
+}
+
+:global([data-theme="light"]) .editRoomsBtn {
+  background: var(--bg-surface);
+  border-color: var(--border-default);
+  color: var(--text-primary);
+  box-shadow: 0 4px 12px rgba(15, 23, 42, 0.06);
+}
+
+:global([data-theme="light"]) .secondaryBtn {
+  background: var(--bg-surface);
+  border-color: var(--border-default);
+  color: var(--text-primary);
+  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.06);
+}
+
+:global([data-theme="light"]) .zoomBtn {
+  background: var(--bg-surface);
+  border-color: var(--border-default);
+  color: var(--text-primary);
+  box-shadow: 0 4px 10px rgba(15, 23, 42, 0.08);
+}
+
+:global([data-theme="light"]) .zoomBtn:hover {
+  background: var(--bg-elevated);
+  border-color: var(--accent-primary);
+  color: var(--accent-primary);
+}
+
+:global([data-theme="light"]) .zoomLevel {
+  background: var(--bg-surface);
+  border-color: var(--border-default);
+  color: var(--text-primary);
+}
+
+:global([data-theme="light"]) .hint {
+  background: rgba(246, 248, 250, 0.92);
+  border-color: var(--border-default);
+  color: var(--text-secondary);
+  box-shadow: 0 4px 12px rgba(15, 23, 42, 0.08);
+}
+
+:global([data-theme="light"]) .roomActionBtn {
+  background: var(--bg-surface);
+  border-color: var(--border-default);
+  color: var(--text-primary);
+}
+
+:global([data-theme="light"]) .renameInput {
+  background: #ffffff;
+  border-color: var(--accent-primary);
+  color: var(--text-primary);
+  box-shadow: 0 0 10px rgba(37, 99, 235, 0.2);
+}
+
+:global([data-theme="light"]) .emptyBuildingTitle {
+  color: var(--text-secondary);
+}
+
+:global([data-theme="light"]) .emptyBuildingSub {
+  color: var(--text-muted);
+}
+

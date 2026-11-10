@@ -1,0 +1,52 @@
+# Python & Virtual Environments
+__pycache__/
+**/__pycache__/
+*.py[cod]
+*$py.class
+venv/
+**/venv/
+.venv/
+**/.venv/
+.pytest_cache/
+**/.pytest_cache/
+
+# Node & Frontend Build
+node_modules/
+**/node_modules/
+dist/
+**/dist/
+build/
+**/build/
+.npm/
+
+# Temporary test tiles & images
+*_test.png
+test_tile.png
+bkk_tile.png
+
+# Environment & Secrets
+.env
+**/.env
+.env.local
+**/.env.local
+.env.*.local
+**/.env.*.local
+!**/.env.example
+
+# AI Harness & Agent configs
+.agent/
+.agents/
+.claude/
+.codex/
+.gemini/
+.impeccable/
+.kiro/
+.opencode/
+skills-lock.json
+
+# Editor & OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+*.log

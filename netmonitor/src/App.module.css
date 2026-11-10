@@ -1,0 +1,70 @@
+.app {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  width: 100%;
+  overflow: hidden;
+  background: var(--bg-canvas);
+}
+
+.mainContent {
+  flex: 1;
+  min-height: 0;
+  position: relative;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.errorBanner {
+  position: fixed;
+  top: 56px;
+  left: 0;
+  right: 0;
+  z-index: 90;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 20px;
+  background: var(--status-critical-bg);
+  border-bottom: 1px solid var(--status-critical);
+  color: var(--status-critical);
+  font-size: 13px;
+  box-shadow: var(--shadow-sm);
+}
+
+.errorRetry {
+  flex-shrink: 0;
+  padding: 4px 14px;
+  border-radius: 6px;
+  border: 1px solid var(--status-critical);
+  background: transparent;
+  color: var(--status-critical);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.12s, color 0.12s;
+}
+
+.errorRetry:hover {
+  background: var(--status-critical);
+  color: #fff;
+}
+
+/* shortcut: mobile layout is a first-pass horizontal scroll, not a true responsive redesign; upgrade when mobile/tablet is a real target */
+@media (max-width: 768px) {
+  .mainContent { overflow: auto; }
+  .navbar { flex-wrap: wrap; height: auto; gap: 8px; padding: 8px 12px; }
+}
+
+.pageLoading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  width: 100%;
+  color: var(--text-muted);
+  font-size: 13px;
+  background: var(--bg-canvas);
+}

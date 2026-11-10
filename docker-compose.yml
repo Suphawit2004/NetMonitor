@@ -1,0 +1,17 @@
+services:
+  db:
+    image: postgres:17-alpine
+    container_name: docker-db-1
+    restart: always
+    environment:
+      POSTGRES_USER: ${DB_USER:-netmon}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-nHCOCm9+o9tXSND2N5uOJRE+WbOHhQvYoeYUl+tVLcahRovZ}
+      POSTGRES_DB: ${DB_NAME:-netmon}
+    ports:
+      - "${DB_PORT:-5432}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./seed_mock_data.sql:/docker-entrypoint-initdb.d/init.sql:ro
+
+volumes:
+  postgres_data:

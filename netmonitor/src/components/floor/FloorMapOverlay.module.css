@@ -1,0 +1,957 @@
+.mapContainer {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  min-height: 560px;
+  background: #0b0f17;
+  overflow: hidden;
+  border-radius: 8px;
+}
+
+.leafletWrap {
+  width: 100%;
+  height: 100%;
+  min-height: 560px;
+}
+
+/* ─────────────────────────────────────────────
+   Map Floating Toolbar & Controls
+   ───────────────────────────────────────────── */
+.mapToolbar {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: rgba(15, 23, 42, 0.9);
+  border: 1px solid rgba(51, 65, 85, 0.7);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  padding: 8px 12px;
+  border-radius: 10px;
+  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.6);
+}
+
+.toolGroup {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.toolDivider {
+  width: 1px;
+  height: 20px;
+  background: rgba(51, 65, 85, 0.6);
+}
+
+.controlBtn {
+  background: #1e293b;
+  border: 1px solid #475569;
+  color: #f8fafc;
+  font-size: 11.5px;
+  font-weight: 600;
+  padding: 5px 10px;
+  border-radius: 6px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  transition: all 0.15s ease;
+}
+
+.controlBtn:hover {
+  background: #2563eb;
+  border-color: #38bdf8;
+  color: #ffffff;
+}
+
+.controlBtnActive {
+  background: #2563eb;
+  border-color: #38bdf8;
+  color: #ffffff;
+  box-shadow: 0 0 10px rgba(37, 99, 235, 0.5);
+}
+
+.editBtnActive {
+  background: #d97706 !important;
+  border-color: #f59e0b !important;
+  color: #ffffff !important;
+  box-shadow: 0 0 12px rgba(245, 158, 11, 0.6) !important;
+}
+
+.editGuideBanner {
+  position: absolute;
+  top: 68px;
+  right: 14px;
+  z-index: 1000;
+  background: rgba(15, 23, 42, 0.96);
+  border: 1px solid #f59e0b;
+  color: #fef3c7;
+  padding: 8px 14px;
+  border-radius: 8px;
+  font-size: 11.5px;
+  font-weight: 500;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.6);
+  pointer-events: auto;
+  animation: fadeInDown 0.2s ease-out;
+}
+
+.guideText {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.rotateRow {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.rotateBtn {
+  background: #1e293b;
+  border: 1px solid #475569;
+  color: #e2e8f0;
+  padding: 3px 8px;
+  border-radius: 5px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.rotateBtn:hover {
+  background: #2563eb;
+  border-color: #38bdf8;
+  color: #ffffff;
+}
+
+.resetOrthoBtn {
+  background: #334155;
+  border: 1px solid #64748b;
+  color: #f1f5f9;
+  padding: 3px 9px;
+  border-radius: 5px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  margin-left: auto;
+  transition: all 0.15s ease;
+}
+
+.resetOrthoBtn:hover {
+  background: #dc2626;
+  border-color: #ef4444;
+  color: #ffffff;
+}
+
+@keyframes fadeInDown {
+  from { opacity: 0; transform: translateY(-6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.coordPill {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  background: rgba(15, 23, 42, 0.95);
+  border: 1px solid rgba(56, 189, 248, 0.35);
+  color: #38bdf8;
+  font-family: monospace;
+  font-size: 11.5px;
+  font-weight: 600;
+  padding: 4px 8px;
+  border-radius: 6px;
+  white-space: nowrap;
+}
+
+.layerSelect {
+  background: #1e293b;
+  border: 1px solid #334155;
+  color: #f1f5f9;
+  font-size: 12px;
+  font-weight: 500;
+  padding: 5px 8px;
+  border-radius: 6px;
+  outline: none;
+  cursor: pointer;
+}
+
+.opacityControl {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: #94a3b8;
+}
+
+.slider {
+  width: 70px;
+  cursor: pointer;
+  accent-color: #3b82f6;
+}
+
+/* ─────────────────────────────────────────────
+   Stats Bar on Map (Bottom Left)
+   ───────────────────────────────────────────── */
+.statsOverlay {
+  position: absolute;
+  bottom: 16px;
+  left: 16px;
+  z-index: 1000;
+  display: flex;
+  gap: 8px;
+  background: rgba(15, 23, 42, 0.95);
+  border: 1px solid rgba(56, 189, 248, 0.4);
+  backdrop-filter: blur(8px);
+  padding: 6px 12px;
+  border-radius: 8px;
+  font-size: 12px;
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.6);
+}
+
+.statItem {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  color: #cbd5e1;
+}
+
+.statNum {
+  font-weight: 700;
+  font-family: monospace;
+  font-variant-numeric: tabular-nums;
+}
+
+.statOnline  { color: #22c55e; }
+.statWarning { color: #f59e0b; }
+.statOffline { color: #ef4444; }
+.statTotal   { color: #38bdf8; }
+
+/* ─────────────────────────────────────────────
+   Room Labels on Map (Anchored at Bottom of Frame)
+   ───────────────────────────────────────────── */
+:global(.roomMapLabelWrap) {
+  background: transparent !important;
+  border: none !important;
+  overflow: visible !important;
+}
+
+:global(.roomMapLabel) {
+  position: absolute;
+  bottom: 0;
+  left: 50%;
+  transform: translate(-50%, 0);
+  background: rgba(10, 15, 30, 0.65);
+  backdrop-filter: blur(4px);
+  border: 1px solid rgba(56, 189, 248, 0.3);
+  color: rgba(226, 232, 240, 0.7);
+  font-size: 12px;
+  font-weight: 500;
+  padding: 2px 8px;
+  border-radius: 4px;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.4);
+  white-space: nowrap;
+  pointer-events: none;
+  cursor: default;
+  transition: all 0.2s ease;
+}
+
+:global(.roomMapLabelStairs) {
+  border-color: rgba(245, 158, 11, 0.35) !important;
+  color: rgba(251, 191, 36, 0.75) !important;
+  background: rgba(25, 18, 5, 0.65) !important;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.4) !important;
+}
+
+:global(.roomMapLabelServer) {
+  border-color: rgba(129, 140, 248, 0.35) !important;
+  color: rgba(199, 210, 254, 0.75) !important;
+  background: rgba(20, 18, 45, 0.65) !important;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.4) !important;
+}
+
+:global(.roomMapLabelRestroom) {
+  border-color: rgba(6, 182, 212, 0.35) !important;
+  color: rgba(103, 232, 249, 0.75) !important;
+  background: rgba(8, 25, 40, 0.65) !important;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.4) !important;
+}
+
+/* ─────────────────────────────────────────────
+   Room Tooltip in Leaflet (Fallback)
+   ───────────────────────────────────────────── */
+:global(.leaflet-tooltip.roomTooltip) {
+  background: rgba(10, 15, 30, 0.95) !important;
+  border: 1.5px solid #38bdf8 !important;
+  color: #ffffff !important;
+  font-size: 12px !important;
+  font-weight: 700 !important;
+  padding: 3px 8px !important;
+  border-radius: 5px !important;
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.7), 0 0 10px rgba(56, 189, 248, 0.4) !important;
+  white-space: nowrap !important;
+}
+
+:global(.leaflet-tooltip.roomTooltip:before) {
+  display: none !important;
+}
+
+/* ─────────────────────────────────────────────
+   Interactive Building Drag & Resize Handles
+   ───────────────────────────────────────────── */
+:global(.buildingCornerHandle) {
+  width: 16px !important;
+  height: 16px !important;
+  background: #38bdf8;
+  border: 2px solid #ffffff;
+  border-radius: 4px;
+  box-shadow: 0 0 12px rgba(56, 189, 248, 1), 0 2px 6px rgba(0, 0, 0, 0.7);
+  transition: transform 0.1s ease, background 0.1s ease;
+  pointer-events: auto !important;
+}
+
+:global(.buildingCornerHandle:hover) {
+  transform: scale(1.35);
+  background: #67e8f9;
+}
+
+:global(.buildingCenterHandle) {
+  width: 32px !important;
+  height: 32px !important;
+  background: rgba(15, 23, 42, 0.95);
+  border: 2px solid #38bdf8;
+  border-radius: 50%;
+  color: #38bdf8;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+  font-weight: 700;
+  cursor: grab;
+  pointer-events: auto !important;
+  box-shadow: 0 0 15px rgba(56, 189, 248, 0.9), 0 4px 10px rgba(0, 0, 0, 0.6);
+}
+
+:global(.buildingCenterHandle:active) {
+  cursor: grabbing;
+  transform: scale(1.15);
+}
+
+:global(.handleNW), :global(.handleSE) {
+  cursor: nwse-resize !important;
+}
+
+:global(.handleNE), :global(.handleSW) {
+  cursor: nesw-resize !important;
+}
+
+/* ─────────────────────────────────────────────
+   Custom Device Pin on Map
+   ───────────────────────────────────────────── */
+:global(.deviceMapPin) {
+  background: transparent;
+  border: none;
+  cursor: grab;
+}
+
+:global(.deviceMapPin:active) {
+  cursor: grabbing;
+}
+
+:global(.mapPinWrap) {
+  width: 26px;
+  height: 26px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  pointer-events: auto;
+}
+
+:global(.mapPinWrap:hover) {
+  z-index: 999;
+}
+
+:global(.pinScaleBox) {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  transition: transform 0.12s ease-out;
+}
+
+:global(.pinIconBox) {
+  width: 26px;
+  height: 26px;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.6);
+  transition: all 0.15s ease;
+}
+
+:global(.pinEmoji) {
+  font-size: 11.5px;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+:global(.mapPinImg) {
+  width: 17px;
+  height: 17px;
+  object-fit: contain;
+  display: block;
+}
+
+:global(.pinStatusOnline) {
+  background: rgba(15, 23, 42, 0.95);
+  border: 2px solid #22c55e;
+  color: #22c55e;
+  box-shadow: 0 0 12px rgba(34, 197, 94, 0.5);
+}
+
+:global(.pinStatusWarning) {
+  background: rgba(15, 23, 42, 0.95);
+  border: 2px solid #f59e0b;
+  color: #f59e0b;
+  box-shadow: 0 0 12px rgba(245, 158, 11, 0.5);
+}
+
+:global(.pinStatusOffline) {
+  background: rgba(15, 23, 42, 0.95);
+  border: 2px solid #ef4444;
+  color: #ef4444;
+  box-shadow: 0 0 12px rgba(239, 68, 68, 0.5);
+}
+
+:global(.pinDotPulse) {
+  position: absolute;
+  top: -3px;
+  right: -3px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
+
+:global(.pinStatusOnline .pinDotPulse) {
+  background: #22c55e;
+  box-shadow: 0 0 8px #22c55e;
+}
+
+:global(.pinStatusWarning .pinDotPulse) {
+  background: #f59e0b;
+  box-shadow: 0 0 8px #f59e0b;
+}
+
+:global(.pinStatusOffline .pinDotPulse) {
+  background: #ef4444;
+  box-shadow: 0 0 8px #ef4444;
+}
+
+:global(.pinNameTag) {
+  position: absolute;
+  top: 28px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(15, 23, 42, 0.92);
+  border: 1px solid rgba(51, 65, 85, 0.7);
+  color: #f1f5f9;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 1px 6px;
+  border-radius: 4px;
+  white-space: nowrap;
+  max-width: 120px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.4);
+  pointer-events: none;
+}
+
+/* ─────────────────────────────────────────────
+   Leaflet Popup Customization
+   ───────────────────────────────────────────── */
+:global(.leaflet-popup-content-wrapper) {
+  background: rgba(15, 23, 42, 0.96) !important;
+  border: 1px solid rgba(51, 65, 85, 0.8) !important;
+  color: #f1f5f9 !important;
+  border-radius: 10px !important;
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.7) !important;
+  padding: 0 !important;
+}
+
+:global(.leaflet-popup-content) {
+  margin: 12px 14px !important;
+  line-height: 1.4 !important;
+}
+
+:global(.leaflet-popup-tip) {
+  background: rgba(15, 23, 42, 0.96) !important;
+  border: 1px solid rgba(51, 65, 85, 0.8) !important;
+}
+
+:global(.popupTitle) {
+  font-size: 13px;
+  font-weight: 700;
+  color: #f8fafc;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+:global(.popupRow) {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: #94a3b8;
+  margin-bottom: 3px;
+}
+
+:global(.popupVal) {
+  color: #f1f5f9;
+  font-weight: 600;
+  font-family: monospace;
+}
+
+:global(.popupBtn) {
+  margin-top: 8px;
+  width: 100%;
+  background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
+  color: #ffffff;
+  border: none;
+  border-radius: 6px;
+  padding: 6px 12px;
+  font-size: 11.5px;
+  font-weight: 600;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  transition: opacity 0.15s ease;
+}
+
+:global(.popupBtn:hover) {
+  opacity: 0.9;
+}
+
+:global(.popupLockBtn) {
+  border-radius: 6px;
+  padding: 6px 10px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  border: 1px solid #475569;
+  background: #1e293b;
+  color: #f8fafc;
+  transition: all 0.15s ease;
+}
+
+:global(.popupLockBtn.locked) {
+  background: #0284c7;
+  border-color: #38bdf8;
+  color: #ffffff;
+}
+
+:global(.popupLockBtn.unlocked) {
+  background: #d97706;
+  border-color: #f59e0b;
+  color: #ffffff;
+}
+
+:global(.popupLockBtn:hover) {
+  filter: brightness(1.15);
+}
+
+:global(.mapPinLockBadge) {
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  background: rgba(15, 23, 42, 0.92);
+  border: 1px solid #64748b;
+  border-radius: 50%;
+  width: 14px;
+  height: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+  padding: 1px;
+}
+
+:global(.mapLockImg) {
+  width: 10px;
+  height: 10px;
+  object-fit: contain;
+  display: block;
+}
+
+/* ─────────────────────────────────────────────────────────────
+   Hover Mini Tooltip บน Map Marker
+   ───────────────────────────────────────────────────────────── */
+:global(.leaflet-tooltip.mapDeviceTooltip) {
+  background: rgba(15, 23, 42, 0.95) !important;
+  border: 1px solid rgba(56, 189, 248, 0.45) !important;
+  color: #f1f5f9 !important;
+  border-radius: 8px !important;
+  padding: 8px 11px !important;
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.65) !important;
+  font-family: inherit !important;
+  backdrop-filter: blur(8px);
+  pointer-events: none;
+}
+
+:global(.leaflet-tooltip-top.mapDeviceTooltip:before) {
+  border-top-color: rgba(15, 23, 42, 0.95) !important;
+}
+:global(.leaflet-tooltip-bottom.mapDeviceTooltip:before) {
+  border-bottom-color: rgba(15, 23, 42, 0.95) !important;
+}
+:global(.leaflet-tooltip-left.mapDeviceTooltip:before) {
+  border-left-color: rgba(15, 23, 42, 0.95) !important;
+}
+:global(.leaflet-tooltip-right.mapDeviceTooltip:before) {
+  border-right-color: rgba(15, 23, 42, 0.95) !important;
+}
+
+:global(.mapTipContent) {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 140px;
+}
+
+:global(.mapTipHeader) {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 3px;
+  padding-bottom: 4px;
+  border-bottom: 1px solid rgba(51, 65, 85, 0.6);
+}
+
+:global(.mapTipName) {
+  font-weight: 700;
+  font-size: 12px;
+  color: #f8fafc;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+:global(.mapTipDot) {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  display: inline-block;
+  flex-shrink: 0;
+}
+
+:global(.mapTipDot.online) {
+  background: #22c55e;
+  box-shadow: 0 0 6px #22c55e;
+}
+
+:global(.mapTipDot.warning) {
+  background: #f59e0b;
+  box-shadow: 0 0 6px #f59e0b;
+}
+
+:global(.mapTipDot.offline) {
+  background: #ef4444;
+  box-shadow: 0 0 6px #ef4444;
+}
+
+:global(.mapTipRow) {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 10.5px;
+  line-height: 1.4;
+}
+
+:global(.mapTipRow span) {
+  color: #94a3b8;
+}
+
+:global(.mapTipRow strong) {
+  color: #e2e8f0;
+  font-family: monospace;
+  font-weight: 600;
+}
+
+/* ─────────────────────────────────────────────
+   Light Mode Theme Adaptation
+   ───────────────────────────────────────────── */
+:global([data-theme="light"]) .mapContainer {
+  background: var(--bg-canvas);
+}
+
+:global([data-theme="light"]) .mapToolbar {
+  background: rgba(246, 248, 250, 0.94);
+  border: 1px solid var(--border-default);
+  box-shadow: 0 10px 25px -5px rgba(15, 23, 42, 0.12), 0 4px 6px -2px rgba(15, 23, 42, 0.05);
+}
+
+:global([data-theme="light"]) .toolDivider {
+  background: var(--border-default);
+}
+
+:global([data-theme="light"]) .controlBtn {
+  background: var(--bg-surface);
+  border-color: var(--border-default);
+  color: var(--text-primary);
+}
+
+:global([data-theme="light"]) .controlBtn:hover {
+  background: var(--accent-primary);
+  border-color: var(--accent-primary);
+  color: #ffffff;
+}
+
+:global([data-theme="light"]) .controlBtnActive {
+  background: var(--accent-primary);
+  border-color: var(--accent-primary);
+  color: #ffffff;
+  box-shadow: 0 0 10px rgba(37, 99, 235, 0.3);
+}
+
+:global([data-theme="light"]) .layerSelect {
+  background: var(--bg-surface);
+  border-color: var(--border-default);
+  color: var(--text-primary);
+}
+
+:global([data-theme="light"]) .layerSelect option {
+  background: var(--bg-surface);
+  color: var(--text-primary);
+}
+
+:global([data-theme="light"]) .opacityControl {
+  color: var(--text-secondary);
+}
+
+:global([data-theme="light"]) .statsOverlay {
+  background: rgba(246, 248, 250, 0.94);
+  border-color: var(--border-default);
+  box-shadow: 0 8px 20px rgba(15, 23, 42, 0.1);
+}
+
+:global([data-theme="light"]) .statItem {
+  color: var(--text-secondary);
+}
+
+:global([data-theme="light"]) .statOnline {
+  color: var(--status-online);
+}
+
+:global([data-theme="light"]) .statWarning {
+  color: var(--status-warning);
+}
+
+:global([data-theme="light"]) .statOffline {
+  color: var(--status-critical);
+}
+
+:global([data-theme="light"]) .statTotal {
+  color: var(--accent-primary);
+}
+
+:global([data-theme="light"]) .editGuideBanner {
+  background: rgba(255, 255, 255, 0.96);
+  border-color: #f59e0b;
+  color: #78350f;
+  box-shadow: 0 4px 15px rgba(15, 23, 42, 0.12);
+}
+
+:global([data-theme="light"]) .rotateBtn {
+  background: var(--bg-surface);
+  border-color: var(--border-default);
+  color: var(--text-primary);
+}
+
+:global([data-theme="light"]) .resetOrthoBtn {
+  background: var(--bg-elevated);
+  border-color: var(--border-default);
+  color: var(--text-primary);
+}
+
+:global([data-theme="light"]) .coordPill {
+  background: rgba(246, 248, 250, 0.94);
+  border-color: var(--border-default);
+  color: var(--accent-primary);
+}
+
+:global([data-theme="light"]) :global(.leaflet-popup-content-wrapper) {
+  background: rgba(255, 255, 255, 0.98) !important;
+  border: 1px solid var(--border-default) !important;
+  color: var(--text-primary) !important;
+  box-shadow: 0 12px 30px rgba(15, 23, 42, 0.15) !important;
+}
+
+:global([data-theme="light"]) :global(.leaflet-popup-tip) {
+  background: rgba(255, 255, 255, 0.98) !important;
+  border: 1px solid var(--border-default) !important;
+}
+
+:global([data-theme="light"]) :global(.popupTitle) {
+  color: #0f172a !important;
+}
+
+:global([data-theme="light"]) :global(.popupRow) {
+  color: #475569 !important;
+}
+
+:global([data-theme="light"]) :global(.popupVal) {
+  color: #0f172a !important;
+}
+
+:global([data-theme="light"]) :global(.popupLockBtn) {
+  background: var(--bg-surface);
+  border-color: var(--border-default);
+  color: var(--text-primary);
+}
+
+:global([data-theme="light"]) :global(.leaflet-tooltip.mapDeviceTooltip) {
+  background: rgba(255, 255, 255, 0.98) !important;
+  border-color: var(--border-default) !important;
+  color: var(--text-primary) !important;
+  box-shadow: 0 10px 25px rgba(15, 23, 42, 0.15) !important;
+}
+
+:global([data-theme="light"]) :global(.leaflet-tooltip-top.mapDeviceTooltip:before) {
+  border-top-color: rgba(255, 255, 255, 0.98) !important;
+}
+:global([data-theme="light"]) :global(.leaflet-tooltip-bottom.mapDeviceTooltip:before) {
+  border-bottom-color: rgba(255, 255, 255, 0.98) !important;
+}
+:global([data-theme="light"]) :global(.leaflet-tooltip-left.mapDeviceTooltip:before) {
+  border-left-color: rgba(255, 255, 255, 0.98) !important;
+}
+:global([data-theme="light"]) :global(.leaflet-tooltip-right.mapDeviceTooltip:before) {
+  border-right-color: rgba(255, 255, 255, 0.98) !important;
+}
+:global([data-theme="light"]) :global(.mapTipHeader) {
+  border-bottom-color: var(--border-default) !important;
+}
+:global([data-theme="light"]) :global(.mapTipRow span) {
+  color: var(--text-secondary) !important;
+}
+:global([data-theme="light"]) :global(.mapTipRow strong) {
+  color: var(--text-primary) !important;
+}
+
+/* ── Room labels on map (Light mode) ── */
+:global([data-theme="light"]) :global(.roomMapLabel) {
+  background: rgba(255, 255, 255, 0.92);
+  border: 1px solid var(--border-default);
+  color: var(--text-primary);
+  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.12);
+}
+
+:global([data-theme="light"]) :global(.roomMapLabelStairs) {
+  border-color: rgba(217, 119, 6, 0.6) !important;
+  color: #92400e !important;
+  background: rgba(254, 243, 199, 0.95) !important;
+  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.12) !important;
+}
+
+:global([data-theme="light"]) :global(.roomMapLabelServer) {
+  border-color: rgba(99, 102, 241, 0.6) !important;
+  color: #3730a3 !important;
+  background: rgba(238, 242, 255, 0.95) !important;
+  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.12) !important;
+}
+
+:global([data-theme="light"]) :global(.roomMapLabelRestroom) {
+  border-color: rgba(6, 182, 212, 0.6) !important;
+  color: #155e75 !important;
+  background: rgba(236, 254, 255, 0.95) !important;
+  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.12) !important;
+}
+
+/* ── Device pins & name tags on map (Light mode) ── */
+:global([data-theme="light"]) :global(.pinNameTag) {
+  background: rgba(255, 255, 255, 0.94);
+  border: 1px solid var(--border-default);
+  color: var(--text-primary);
+  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.15);
+}
+
+:global([data-theme="light"]) :global(.pinIconBox) {
+  background: #ffffff;
+  box-shadow: 0 4px 10px rgba(15, 23, 42, 0.15);
+}
+
+:global([data-theme="light"]) :global(.pinStatusOnline) {
+  border-color: var(--status-online);
+  color: var(--status-online);
+  box-shadow: 0 0 10px rgba(4, 120, 87, 0.25);
+}
+
+:global([data-theme="light"]) :global(.pinStatusWarning) {
+  border-color: var(--status-warning);
+  color: var(--status-warning);
+  box-shadow: 0 0 10px rgba(180, 83, 9, 0.25);
+}
+
+:global([data-theme="light"]) :global(.pinStatusOffline) {
+  border-color: var(--status-critical);
+  color: var(--status-critical);
+  box-shadow: 0 0 10px rgba(220, 38, 38, 0.25);
+}
+
+:global([data-theme="light"]) :global(.mapPinLockBadge) {
+  background: #ffffff;
+  border-color: var(--border-default);
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.2);
+}
+
+:global([data-theme="light"]) :global(.pinStatusOnline .mapPinLockBadge) {
+  border-color: var(--status-online);
+  color: var(--status-online);
+}
+
+:global([data-theme="light"]) :global(.pinStatusOnline .mapLockImg) {
+  color: var(--status-online);
+}
+
+:global([data-theme="light"]) :global(.pinStatusWarning .mapPinLockBadge) {
+  border-color: var(--status-warning);
+  color: var(--status-warning);
+}
+
+:global([data-theme="light"]) :global(.pinStatusOffline .mapPinLockBadge) {
+  border-color: var(--status-critical);
+  color: var(--status-critical);
+}
+
+:global([data-theme="light"]) :global(.buildingCenterHandle) {
+  background: rgba(255, 255, 255, 0.95);
+  border-color: var(--accent-primary);
+  color: var(--accent-primary);
+  box-shadow: 0 0 15px rgba(37, 99, 235, 0.4), 0 4px 10px rgba(15, 23, 42, 0.15);
+}
+
+
+

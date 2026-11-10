@@ -1,0 +1,300 @@
+.navbar {
+  height: 56px;
+  width: 100%;
+  background: var(--bg-surface);
+  border-bottom: 1px solid var(--border-subtle);
+  display: flex;
+  align-items: center;
+  padding: 0 20px;
+  gap: 28px;
+  flex-shrink: 0;
+  z-index: 50;
+  transition: background-color 0.2s ease, border-color 0.2s ease;
+}
+
+.logo {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--accent-primary);
+  letter-spacing: 0.5px;
+  white-space: nowrap;
+}
+.logo span { color: var(--text-primary); }
+
+.navLinks { display: flex; gap: 4px; }
+
+.navItem {
+  padding: 6px 14px;
+  border-radius: 6px;
+  font-size: 13px;
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+  white-space: nowrap;
+}
+.navItem:hover {
+  background: var(--bg-elevated);
+  color: var(--text-primary);
+}
+.navItem.active {
+  background: var(--accent-subtle);
+  color: var(--accent-primary);
+  font-weight: 600;
+}
+
+.navRight {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+/* ปุ่มค้นหา (Ctrl+K) */
+.searchBtn {
+  height: 32px;
+  width: 220px;
+  padding: 0 12px;
+  border-radius: 8px;
+  border: 1px solid var(--border-default);
+  background: var(--bg-surface);
+  color: var(--text-muted);
+  font-size: 13px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  transition: border-color 0.12s, color 0.12s;
+  white-space: nowrap;
+}
+.searchBtn:hover {
+  border-color: var(--accent-primary);
+  color: var(--text-primary);
+}
+.searchLabel {
+  flex: 1;
+  text-align: left;
+}
+.searchKbd {
+  font-size: 12px;
+  color: var(--text-muted);
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-subtle);
+  border-radius: 4px;
+  padding: 1px 5px;
+  font-family: inherit;
+}
+
+@media (max-width: 768px) {
+  .searchBtn {
+    width: auto;
+  }
+  .searchKbd {
+    display: none;
+  }
+}
+
+/* ปุ่มสลับธีม ☀️ / 🌙 */
+.themeBtn {
+  height: 32px;
+  width: 32px;
+  border-radius: 16px;
+  border: 1px solid var(--border-default);
+  background: var(--bg-elevated);
+  color: var(--text-primary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  cursor: pointer;
+  transition: border-color 0.15s, background-color 0.15s, transform 0.15s;
+}
+.themeBtn:hover {
+  border-color: var(--accent-primary);
+  transform: scale(1.05);
+}
+
+/* ปุ่มสลับภาษา TH / EN */
+.langSwitch {
+  display: flex;
+  border: 1px solid var(--border-default);
+  border-radius: 16px;
+  overflow: hidden;
+}
+.langBtn {
+  height: 32px;
+  padding: 0 10px;
+  background: var(--bg-elevated);
+  border: none;
+  color: var(--text-muted);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  cursor: pointer;
+  transition: background 0.12s, color 0.12s;
+}
+.langBtn:hover {
+  color: var(--text-primary);
+}
+.langActive {
+  background: var(--accent-primary);
+  color: #ffffff;
+  font-weight: 700;
+}
+
+/* ปุ่ม Live / Pause */
+.liveBtn {
+  height: 28px;
+  padding: 0 12px;
+  border-radius: 14px;
+  border: 1px solid var(--border-default);
+  background: var(--bg-elevated);
+  color: var(--text-muted);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  white-space: nowrap;
+}
+.liveBtn:hover {
+  border-color: var(--status-online);
+  color: var(--text-primary);
+}
+.liveOn {
+  border-color: var(--status-online);
+  background: var(--status-online-bg);
+  color: var(--status-online);
+}
+.liveOn:hover {
+  border-color: var(--status-online);
+  color: var(--status-online);
+}
+
+.avatar {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-subtle);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--accent-primary);
+  flex-shrink: 0;
+  cursor: default;
+}
+
+/* Health Pill */
+.healthPill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: 9999px;
+  font-size: 12px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+  border: 1px solid transparent;
+  transition: all 0.15s ease;
+  white-space: nowrap;
+}
+
+.healthHealthy {
+  background: rgba(16, 185, 129, 0.12);
+  color: var(--status-online);
+  border-color: rgba(16, 185, 129, 0.25);
+}
+
+.healthHealthy:hover {
+  background: rgba(16, 185, 129, 0.18);
+}
+
+.healthWarning {
+  background: rgba(245, 158, 11, 0.12);
+  color: var(--status-warning);
+  border-color: rgba(245, 158, 11, 0.28);
+}
+
+.healthWarning:hover {
+  background: rgba(245, 158, 11, 0.18);
+}
+
+.healthCritical {
+  background: rgba(239, 68, 68, 0.12);
+  color: var(--status-critical);
+  border-color: rgba(239, 68, 68, 0.28);
+}
+
+.healthCritical:hover {
+  background: rgba(239, 68, 68, 0.18);
+}
+
+/* Help Button */
+.helpBtn {
+  height: 32px;
+  padding: 0 10px;
+  border-radius: 8px;
+  border: 1px solid var(--border-default);
+  background: var(--bg-surface);
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 500;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  white-space: nowrap;
+}
+
+.helpBtn:hover {
+  border-color: var(--accent-primary);
+  color: var(--text-primary);
+  background: var(--bg-elevated);
+}
+
+/* UI Scale Switcher */
+.scaleBtn {
+  height: 32px;
+  padding: 0 10px;
+  border-radius: 8px;
+  border: 1px solid var(--border-default);
+  background: var(--bg-elevated);
+  color: var(--text-primary);
+  font-size: 12px;
+  font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.scaleBtn:hover {
+  border-color: var(--accent-primary);
+  color: var(--accent-primary);
+  background: var(--bg-surface);
+}
+
+.scaleActive {
+  background: var(--accent-subtle);
+  border-color: var(--accent-primary);
+  color: var(--accent-primary);
+}
+
+@media (max-width: 900px) {
+  .healthPill span {
+    display: none;
+  }
+  .healthPill {
+    padding: 4px 6px;
+  }
+}
+

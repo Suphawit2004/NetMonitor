@@ -1,0 +1,250 @@
+/* ── Identity header ── */
+.identity {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex: 1;
+  min-width: 0;
+}
+
+.iconWrap {
+  width: 44px;
+  height: 44px;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 22px;
+  border: 2px solid var(--border-default);
+  background: var(--bg-surface);
+  flex-shrink: 0;
+}
+.iconWrap img,
+.iconWrap svg {
+  width: 24px;
+  height: 24px;
+  display: block;
+}
+.iconOnline {
+  background: var(--status-online-bg);
+  border-color: var(--status-online);
+}
+.iconWarning {
+  background: var(--status-warning-bg);
+  border-color: var(--status-warning);
+  box-shadow: 0 0 14px rgba(245, 158, 11, 0.25);
+}
+.iconOffline {
+  background: var(--status-critical-bg);
+  border-color: var(--status-critical);
+  box-shadow: 0 0 14px rgba(239, 68, 68, 0.25);
+}
+
+.idText { min-width: 0; }
+.name {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.model { font-size: 12px; color: var(--text-muted); margin-top: 1px; }
+
+.pill {
+  font-size: 12px;
+  font-weight: 600;
+  padding: 3px 10px;
+  border-radius: 12px;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.pillOnline  { background: var(--status-online-bg); color: var(--status-online); }
+.pillWarning { background: var(--status-warning-bg); color: var(--status-warning); }
+.pillOffline { background: var(--status-critical-bg); color: var(--status-critical); }
+
+.liveMini {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  color: var(--status-online);
+  border: 1px solid rgba(16, 185, 129, 0.35);
+  background: var(--status-online-bg);
+  padding: 2px 7px;
+  border-radius: 10px;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+/* ── Sections ── */
+.section { margin-bottom: 16px; }
+.section:last-child { margin-bottom: 0; }
+
+.sectionTitle {
+  font-size: 12px;
+  letter-spacing: 0.6px;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  font-weight: 700;
+  margin-bottom: 8px;
+}
+
+/* Quick facts */
+.facts {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+}
+.fact {
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+  padding: 8px 10px;
+  min-width: 0;
+}
+.factKey {
+  font-size: 12px;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  margin-bottom: 3px;
+}
+.factVal {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Metrics */
+.metricRow {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
+  gap: 8px;
+}
+
+/* Time range chips */
+.rangeRow { display: flex; gap: 4px; margin-bottom: 10px; }
+.chip {
+  height: 26px;
+  padding: 0 11px;
+  border-radius: 6px;
+  font-size: 12px;
+  color: var(--text-muted);
+  background: var(--bg-elevated);
+  border: 1px solid transparent;
+  cursor: pointer;
+  transition: color 0.12s, background 0.12s, border-color 0.12s;
+}
+.chip:hover { color: var(--text-primary); }
+.chipActive {
+  background: var(--accent-subtle);
+  color: var(--accent-primary);
+  border-color: var(--accent-primary);
+  font-weight: 600;
+}
+
+/* Actions */
+.actionRow { display: flex; gap: 8px; flex-wrap: wrap; }
+.actBtn {
+  height: 32px;
+  padding: 0 14px;
+  border-radius: 7px;
+  border: 1px solid var(--border-default);
+  background: var(--bg-elevated);
+  color: var(--text-primary);
+  font-size: 12px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  transition: border-color 0.12s, color 0.12s;
+  white-space: nowrap;
+}
+.actBtn:hover { border-color: var(--accent-primary); color: var(--accent-primary); }
+
+/* Footer */
+.spacer { flex: 1; }
+.footerLockBtn {
+  height: 34px;
+  padding: 0 16px;
+  border-radius: 7px;
+  border: 1px solid rgba(250, 204, 21, 0.45);
+  background: var(--status-warning-bg);
+  color: var(--status-warning);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.12s;
+}
+.footerLockBtn:hover { background: rgba(250, 204, 21, 0.22); }
+
+.footerPrimary {
+  height: 34px;
+  padding: 0 16px;
+  border-radius: 7px;
+  border: 1px solid var(--accent-primary);
+  background: var(--accent-primary);
+  color: #ffffff;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.12s, opacity 0.12s;
+}
+.footerPrimary:hover { opacity: 0.9; }
+
+/* ── Diagnostic Banner ── */
+.diagBanner {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  font-size: 12.5px;
+  line-height: 1.45;
+  margin-bottom: 14px;
+}
+.diagOffline {
+  background: rgba(239, 68, 68, 0.1);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  color: var(--status-critical);
+}
+.diagWarning {
+  background: rgba(245, 158, 11, 0.1);
+  border: 1px solid rgba(245, 158, 11, 0.3);
+  color: var(--status-warning);
+}
+.diagIcon {
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+/* ── Copyable Fact ── */
+.factCopyWrap {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 4px;
+}
+.copyBtn {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: 2px 4px;
+  border-radius: 4px;
+  display: inline-flex;
+  align-items: center;
+  transition: color 0.12s, background 0.12s;
+}
+.copyBtn:hover {
+  color: var(--accent-primary);
+  background: var(--bg-surface);
+}
+.copySuccess {
+  color: var(--status-online) !important;
+}
+
