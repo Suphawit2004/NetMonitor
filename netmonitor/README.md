@@ -1,75 +1,60 @@
-# React + TypeScript + Vite
+# NetMonitor Frontend Client
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+Modern, responsive web interface for NetMonitor built with **React 19**, **TypeScript**, **Vite**, and **Lucide React**.
 
-Currently, two official plugins are available:
+## 🚀 Getting Started
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+### Prerequisites
+- Node.js 18+
+- npm or pnpm
 
-## React Compiler
+### Installation & Run
+```bash
+# Install dependencies
+npm install
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+# Start development server (Port 5173)
+npm run dev
+```
+Open `http://localhost:5173` in your browser.
 
-## Expanding the ESLint configuration
-
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
-
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
-
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
-
+### Build for Production
+```bash
+npm run build
 ```
 
-You can also install [eslint-plugin-react-x](https://npmx.dev/package/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://npmx.dev/package/eslint-plugin-react-dom) for React-specific lint rules:
+---
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
+## 🧪 Testing
 
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+### Playwright End-to-End (E2E) Test Suite
+The frontend includes 10 comprehensive E2E test scenarios verifying critical flows across all pages:
+```bash
+# Run headless E2E tests
+npm run test:e2e
 
+# Run with interactive UI Dashboard
+npm run test:e2e:ui
+```
+
+---
+
+## 📂 Key Directory Layout
+
+```text
+src/
+├── components/
+│   ├── detail/          # DeviceInfoModal, TrafficChart, MetricCard
+│   ├── discovery/       # NetworkScanModal (Scan & inline name editing)
+│   ├── floor/           # FloorCanvas (2D), FloorMapOverlay (Satellite Map), DevicePin
+│   ├── layout/          # Navbar, NavbarSearch (Ctrl+K Command Palette)
+│   └── ui/              # Modal, ConfirmDialog, Toast
+├── context/             # NetworkContext, SimulationContext, SettingsContext
+├── pages/
+│   ├── FloorPlanPage.tsx   # 2D Floor Plan & Satellite Map with floor selector
+│   ├── DeviceListPage.tsx  # Device table with search, filter, and quick actions
+│   ├── DeviceDetailPage.tsx# Full device spec, interfaces, VLANs, and telemetry
+│   └── ReportsPage.tsx     # Network health overview, alerts, and acknowledge flow
+├── services/            # api.ts, mapGeo.ts, detailFactory.ts, traffic.ts, roomStore.ts
+└── types/               # TypeScript models and interfaces
 ```
