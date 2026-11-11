@@ -122,7 +122,7 @@ export default function NavbarSearch({
           aria-expanded={isDropdownVisible}
           aria-autocomplete="list"
         />
-        {searchQuery ? (
+        {searchQuery && (
           <button
             type="button"
             className={styles.searchClearBtn}
@@ -135,8 +135,6 @@ export default function NavbarSearch({
           >
             <X size={12} />
           </button>
-        ) : (
-          <kbd className={styles.searchKbd}>Ctrl+K</kbd>
         )}
       </div>
 

@@ -235,7 +235,7 @@ export default function FloorCanvas({
       const scaleX = cw / PLAN_W
       const scaleY = ch / PLAN_H
       const bestScale = Math.min(scaleX, scaleY, 1.0)
-      const clampedScale = Number(Math.max(0.7, bestScale).toFixed(2))
+      const clampedScale = Number(Math.max(0.4, bestScale).toFixed(2))
       setScale(clampedScale)
       setPan({ x: 0, y: 0 })
     }

@@ -65,19 +65,6 @@
   color: var(--text-primary);
 }
 
-.searchKbd {
-  font-size: 12px;
-  color: var(--text-muted);
-  background: var(--bg-elevated);
-  border: 1px solid var(--border-subtle);
-  border-radius: 4px;
-  padding: 1px 5px;
-  font-family: inherit;
-  font-weight: 500;
-  white-space: nowrap;
-  pointer-events: none;
-}
-
 /* ── Anchored Search Dropdown (อยู่ใต้บาร์ search ไม่เด้ง popup) ── */
 .searchDropdown {
   position: absolute;

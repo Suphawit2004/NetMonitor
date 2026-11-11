@@ -229,13 +229,24 @@ export function getBuildingRealDimensions(bounds: BuildingBounds = getStoredBuil
   const heightMeters = Number(gpsDistanceMeters(corners.nw, corners.sw).toFixed(1))
   const aspectRatio = Number((widthMeters / Math.max(1, heightMeters)).toFixed(2))
 
-  // ปรับขนาด Canvas ให้ตรงตามสัดส่วนอาคารจริง
-  let canvasW: number
-  let canvasH = Math.round(900 / Math.max(0.3, aspectRatio))
+  // ปรับขนาด Canvas ให้ตรงตามสัดส่วนอาคารจริง โดยยึดกรอบอ้างอิงมาตรฐาน 900 x 600
+  // รักษาอัตราส่วนจริง (Aspect Ratio) 100% และไม่ดันขนาดให้บวมเกินตัวอาคาร
+  const MAX_W = 900
+  const MAX_H = 600
+  const refRatio = MAX_W / MAX_H // 1.5
 
-  canvasH = Math.max(540, Math.min(800, canvasH))
-  canvasW = Math.round(canvasH * aspectRatio)
-  canvasW = Math.max(840, Math.min(1200, canvasW))
+  let canvasW: number
+  let canvasH: number
+
+  if (aspectRatio >= refRatio) {
+    // อาคารแนวนอนกว้าง (Wide building เช่น 34.2 ม. x 15.6 ม.)
+    canvasW = MAX_W
+    canvasH = Math.max(360, Math.min(MAX_H, Math.round(MAX_W / Math.max(0.3, aspectRatio))))
+  } else {
+    // อาคารแนวสูงหรือจัตุรัส (Tall / Square building)
+    canvasH = MAX_H
+    canvasW = Math.max(450, Math.min(MAX_W, Math.round(MAX_H * aspectRatio)))
+  }
 
   return {
     widthMeters,
