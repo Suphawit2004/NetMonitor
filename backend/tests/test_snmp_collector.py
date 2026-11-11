@@ -64,7 +64,31 @@ async def test_db_interface_sync_and_series():
     assert 1 in if_id_map
     assert 2 in if_id_map
 
-    # Query series
+    # 1. Query series before samples are inserted -> has_snmp is False
+    series_empty = await get_device_traffic_series(pool, device_id=dev_id, interface_id="all", time_range="15m")
+    assert series_empty["has_snmp"] is False
+    assert len(series_empty["inbound"]) == 60
+    assert len(series_empty["outbound"]) == 60
+
+    # 2. Insert mock samples to verify telemetry calculation
+    from datetime import datetime, timezone, timedelta
+    now = datetime.now(timezone.utc)
+    target_if_id = if_id_map[1]
+    async with pool.acquire() as conn:
+        await conn.execute(
+            """
+            INSERT INTO interface_samples (interface_id, sampled_at, in_octets, out_octets)
+            VALUES 
+                ($1, $2, 100000000, 50000000),
+                ($1, $3, 150000000, 75000000)
+            ON CONFLICT DO NOTHING
+            """,
+            target_if_id,
+            now - timedelta(seconds=10),
+            now
+        )
+
+    # 3. Query series after samples are inserted -> has_snmp is True
     series = await get_device_traffic_series(pool, device_id=dev_id, interface_id="all", time_range="15m")
     assert series["has_snmp"] is True
     assert len(series["inbound"]) == 60

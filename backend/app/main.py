@@ -84,20 +84,21 @@ async def background_snmp_poller():
             await asyncio.sleep(30)
             pool = await get_db_pool()
             # Enforce single-poller execution across multiple Uvicorn workers
-            has_lock = await pool.fetchval("SELECT pg_try_advisory_lock($1)", ADVISORY_LOCK_ID)
-            if not has_lock:
-                logger.debug("Another worker is running SNMP poller. Skipping.")
-                continue
+            async with pool.acquire() as lock_conn:
+                has_lock = await lock_conn.fetchval("SELECT pg_try_advisory_lock($1)", ADVISORY_LOCK_ID)
+                if not has_lock:
+                    logger.debug("Another worker is running SNMP poller. Skipping.")
+                    continue
 
-            try:
-                dev_rows = await pool.fetch(
-                    "SELECT id, host(management_ip) as ip, credential_ref, snmp_port, snmp_version FROM devices WHERE enabled = true AND management_ip IS NOT NULL"
-                )
-                tasks = [poll_dev(pool, dev) for dev in dev_rows if dev["ip"]]
-                if tasks:
-                    await asyncio.gather(*tasks, return_exceptions=True)
-            finally:
-                await pool.execute("SELECT pg_advisory_unlock($1)", ADVISORY_LOCK_ID)
+                try:
+                    dev_rows = await lock_conn.fetch(
+                        "SELECT id, host(management_ip) as ip, credential_ref, snmp_port, snmp_version FROM devices WHERE enabled = true AND management_ip IS NOT NULL"
+                    )
+                    tasks = [poll_dev(pool, dev) for dev in dev_rows if dev["ip"]]
+                    if tasks:
+                        await asyncio.gather(*tasks, return_exceptions=True)
+                finally:
+                    await lock_conn.execute("SELECT pg_advisory_unlock($1)", ADVISORY_LOCK_ID)
         except asyncio.CancelledError:
             logger.info("Background SNMP archive poller stopped.")
             break
@@ -854,9 +855,7 @@ async def clear_database():
     try:
         async with pool.acquire() as conn:
             async with conn.transaction():
-                await conn.execute("TRUNCATE TABLE alerts, poll_runs, interface_samples, device_metric_samples, interfaces, devices CASCADE;")
-                await conn.execute("ALTER SEQUENCE IF EXISTS devices_id_seq RESTART WITH 1;")
-                await conn.execute("ALTER SEQUENCE IF EXISTS alerts_id_seq RESTART WITH 1;")
+                await conn.execute("TRUNCATE TABLE alerts, poll_runs, interface_samples, device_metric_samples, interfaces, devices RESTART IDENTITY CASCADE;")
         return {"success": True, "message": "All devices and related data have been cleared completely from database"}
     except Exception as e:
         logger.error(f"Clear failed: {e}")
@@ -876,9 +875,7 @@ async def reset_database():
 
         async with pool.acquire() as conn:
             async with conn.transaction():
-                await conn.execute("TRUNCATE TABLE alerts, poll_runs, interface_samples, device_metric_samples, interfaces, devices CASCADE;")
-                await conn.execute("ALTER SEQUENCE IF EXISTS devices_id_seq RESTART WITH 1;")
-                await conn.execute("ALTER SEQUENCE IF EXISTS alerts_id_seq RESTART WITH 1;")
+                await conn.execute("TRUNCATE TABLE alerts, poll_runs, interface_samples, device_metric_samples, interfaces, devices RESTART IDENTITY CASCADE;")
                 await conn.execute(seed_sql)
         return {"success": True, "message": "Database successfully reset to initial seed data"}
     except Exception as e:

@@ -430,18 +430,25 @@ async def get_device_traffic_series(
                     bucket_in[b_idx].setdefault(if_id, []).append(mbps_in)
                     bucket_out[b_idx].setdefault(if_id, []).append(mbps_out)
 
+        measured_buckets = set()
         for b in range(point_count):
             if interface_id == "all":
-                inbound[b] = sum(sum(rates) / len(rates) for rates in bucket_in[b].values() if rates)
-                outbound[b] = sum(sum(rates) / len(rates) for rates in bucket_out[b].values() if rates)
+                rates_in = [r for if_rates in bucket_in[b].values() for r in if_rates]
+                rates_out = [r for if_rates in bucket_out[b].values() for r in if_rates]
+                if rates_in or rates_out:
+                    measured_buckets.add(b)
+                inbound[b] = (sum(rates_in) / len(rates_in)) if rates_in else 0.0
+                outbound[b] = (sum(rates_out) / len(rates_out)) if rates_out else 0.0
             else:
                 in_rates = bucket_in[b].get(target_if_id, [])
                 out_rates = bucket_out[b].get(target_if_id, [])
+                if in_rates or out_rates:
+                    measured_buckets.add(b)
                 inbound[b] = (sum(in_rates) / len(in_rates)) if in_rates else 0.0
                 outbound[b] = (sum(out_rates) / len(out_rates)) if out_rates else 0.0
 
     # Fill gaps between measured buckets (Linear Interpolation)
-    measured_indices = [i for i in range(point_count) if inbound[i] > 0 or outbound[i] > 0]
+    measured_indices = sorted(measured_buckets) if sample_rows else []
     if len(measured_indices) > 1:
         for k in range(len(measured_indices) - 1):
             idx1 = measured_indices[k]
@@ -454,19 +461,18 @@ async def get_device_traffic_series(
                     outbound[idx1 + step] = round(outbound[idx1] + frac * (outbound[idx2] - outbound[idx1]), 2)
 
     has_snmp = False
-    if dev_row["enabled"]:
-        if measured_indices:
-            has_snmp = True
-            # Forward-fill latest measured rate up to current moment (now)
-            last_idx = measured_indices[-1]
-            if last_idx < point_count - 1:
-                for b in range(last_idx + 1, point_count):
-                    inbound[b] = inbound[last_idx]
-                    outbound[b] = outbound[last_idx]
-        else:
-            has_snmp = False
-            inbound = [0.0] * point_count
-            outbound = [0.0] * point_count
+    if dev_row["enabled"] and measured_indices:
+        has_snmp = True
+        # Forward-fill latest measured rate up to current moment (now)
+        last_idx = measured_indices[-1]
+        if last_idx < point_count - 1:
+            for b in range(last_idx + 1, point_count):
+                inbound[b] = inbound[last_idx]
+                outbound[b] = outbound[last_idx]
+    else:
+        has_snmp = False
+        inbound = [0.0] * point_count
+        outbound = [0.0] * point_count
 
     # Final rounding and stats
     inbound = [round(v, 2) for v in inbound]
