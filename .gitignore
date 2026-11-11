@@ -57,3 +57,9 @@ video/
 
 # Agent review & audit reports
 *_report.md
+
+# Playwright Test Artifacts
+test-results/
+**/test-results/
+playwright-report/
+**/playwright-report/

@@ -1,5 +1,6 @@
 import asyncio
 import logging
+from datetime import datetime, timezone
 from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import List, Optional
@@ -9,6 +10,7 @@ import asyncpg
 
 from .config import settings
 from .database import init_db, close_db, get_db_pool
+from . import repository
 from .models import (
     DeviceCreate,
     DeviceUpdate,
@@ -42,13 +44,12 @@ logger = logging.getLogger("netmonitor.api")
 
 async def background_snmp_poller():
     """
-    Background worker that runs every 30 seconds to archive
+    Background worker that runs every SNMP_POLL_INTERVAL_S seconds to archive
     genuine historical SNMP samples in PostgreSQL for all enabled devices.
     Uses PostgreSQL advisory lock to prevent duplicate polling across multiple Uvicorn worker processes.
     """
     logger.info("Background SNMP archive poller started.")
-    sem = asyncio.Semaphore(5)
-    ADVISORY_LOCK_ID = 0x534E4D50  # 'SNMP'
+    sem = asyncio.Semaphore(settings.SNMP_MAX_CONCURRENT_POLLS)
 
     async def poll_dev(pool, dev):
         async with sem:
@@ -59,45 +60,33 @@ async def background_snmp_poller():
                 res = await poll_and_calculate_device_traffic(pool, dev["id"], dev["ip"], comm, dev["snmp_port"], ver)
                 status = "succeeded" if res.get("success") else "failed"
                 err_msg = None if res.get("success") else "SNMP poll failed or device unreachable"
-                await pool.execute(
-                    """
-                    INSERT INTO poll_runs (device_id, started_at, finished_at, status, error_message)
-                    VALUES ($1, $2, now(), $3, $4)
-                    """,
-                    dev["id"], started_at, status, err_msg
-                )
+                await repository.record_poll_run(pool, dev["id"], started_at, status, err_msg)
             except Exception as e:
                 logger.debug(f"Background poll failed for {dev['ip']}: {e}")
-                try:
-                    await pool.execute(
-                        """
-                        INSERT INTO poll_runs (device_id, started_at, finished_at, status, error_message)
-                        VALUES ($1, $2, now(), 'failed', $3)
-                        """,
-                        dev["id"], started_at, str(e)
-                    )
-                except Exception as db_err:
-                    logger.error(f"Failed to record poll_run for {dev['ip']}: {db_err}")
+                await repository.record_poll_run(pool, dev["id"], started_at, "failed", str(e))
 
     while True:
         try:
-            await asyncio.sleep(30)
+            await asyncio.sleep(settings.SNMP_POLL_INTERVAL_S)
             pool = await get_db_pool()
             # Enforce single-poller execution across multiple Uvicorn workers
-            has_lock = await pool.fetchval("SELECT pg_try_advisory_lock($1)", ADVISORY_LOCK_ID)
-            if not has_lock:
-                logger.debug("Another worker is running SNMP poller. Skipping.")
-                continue
-
-            try:
-                dev_rows = await pool.fetch(
-                    "SELECT id, host(management_ip) as ip, credential_ref, snmp_port, snmp_version FROM devices WHERE enabled = true AND management_ip IS NOT NULL"
+            async with pool.acquire() as lock_conn:
+                has_lock = await lock_conn.fetchval(
+                    "SELECT pg_try_advisory_lock($1)", settings.ADVISORY_LOCK_SNMP_POLLER
                 )
-                tasks = [poll_dev(pool, dev) for dev in dev_rows if dev["ip"]]
-                if tasks:
-                    await asyncio.gather(*tasks, return_exceptions=True)
-            finally:
-                await pool.execute("SELECT pg_advisory_unlock($1)", ADVISORY_LOCK_ID)
+                if not has_lock:
+                    logger.debug("Another worker is running SNMP poller. Skipping.")
+                    continue
+
+                try:
+                    dev_rows = await repository.fetch_pollable_devices(lock_conn)
+                    tasks = [poll_dev(pool, dev) for dev in dev_rows if dev["ip"]]
+                    if tasks:
+                        await asyncio.gather(*tasks, return_exceptions=True)
+                finally:
+                    await lock_conn.execute(
+                        "SELECT pg_advisory_unlock($1)", settings.ADVISORY_LOCK_SNMP_POLLER
+                    )
         except asyncio.CancelledError:
             logger.info("Background SNMP archive poller stopped.")
             break
@@ -852,11 +841,7 @@ async def clear_database():
     """
     pool = await get_db_pool()
     try:
-        async with pool.acquire() as conn:
-            async with conn.transaction():
-                await conn.execute("TRUNCATE TABLE alerts, poll_runs, interface_samples, device_metric_samples, interfaces, devices CASCADE;")
-                await conn.execute("ALTER SEQUENCE IF EXISTS devices_id_seq RESTART WITH 1;")
-                await conn.execute("ALTER SEQUENCE IF EXISTS alerts_id_seq RESTART WITH 1;")
+        await repository.clear_database_records(pool)
         return {"success": True, "message": "All devices and related data have been cleared completely from database"}
     except Exception as e:
         logger.error(f"Clear failed: {e}")
@@ -868,18 +853,12 @@ async def reset_database():
     Resets devices and related tables back to default seed state
     """
     pool = await get_db_pool()
-    # Read seed sql and execute
     try:
         base_dir = Path(__file__).resolve().parents[2]
         with open(base_dir / "seed_mock_data.sql", "r", encoding="utf-8") as f:
             seed_sql = f.read()
 
-        async with pool.acquire() as conn:
-            async with conn.transaction():
-                await conn.execute("TRUNCATE TABLE alerts, poll_runs, interface_samples, device_metric_samples, interfaces, devices CASCADE;")
-                await conn.execute("ALTER SEQUENCE IF EXISTS devices_id_seq RESTART WITH 1;")
-                await conn.execute("ALTER SEQUENCE IF EXISTS alerts_id_seq RESTART WITH 1;")
-                await conn.execute(seed_sql)
+        await repository.reset_database_to_seed(pool, seed_sql)
         return {"success": True, "message": "Database successfully reset to initial seed data"}
     except Exception as e:
         logger.error(f"Reset failed: {e}")

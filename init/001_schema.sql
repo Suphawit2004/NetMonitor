@@ -9,6 +9,15 @@ CREATE TABLE devices (
     poll_interval_s INTEGER NOT NULL DEFAULT 60 CHECK (poll_interval_s > 0),
     location        TEXT,
     enabled         BOOLEAN NOT NULL DEFAULT TRUE,
+    dtype           TEXT NOT NULL DEFAULT 'switch',
+    floor           INTEGER NOT NULL DEFAULT 1,
+    x               DOUBLE PRECISION,
+    y               DOUBLE PRECISION,
+    locked          BOOLEAN NOT NULL DEFAULT true,
+    model           TEXT,
+    latitude        DOUBLE PRECISION,
+    longitude       DOUBLE PRECISION,
+    altitude        DOUBLE PRECISION,
     created_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
     updated_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
     UNIQUE (management_ip, snmp_port)
@@ -33,7 +42,7 @@ CREATE TABLE poll_runs (
     device_id       BIGINT NOT NULL REFERENCES devices(id) ON DELETE CASCADE,
     started_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
     finished_at     TIMESTAMPTZ,
-    status          TEXT NOT NULL CHECK (status IN ('running', 'succeeded', 'failed')),
+    status          TEXT NOT NULL CHECK (status IN ('running', 'succeeded', 'failed', 'warning')),
     error_message   TEXT
 );
 
@@ -60,7 +69,23 @@ CREATE TABLE device_metric_samples (
     PRIMARY KEY (device_id, sampled_at, oid, labels)
 );
 
+CREATE TABLE alerts (
+    id              SERIAL PRIMARY KEY,
+    device_id       BIGINT NOT NULL REFERENCES devices(id) ON DELETE CASCADE,
+    severity        VARCHAR(10) NOT NULL CHECK (severity IN ('info', 'warn', 'crit')),
+    icon            VARCHAR(50) DEFAULT '',
+    title           VARCHAR(255) NOT NULL,
+    description     TEXT,
+    created_at      TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+    acknowledged    BOOLEAN NOT NULL DEFAULT FALSE,
+    acknowledged_by VARCHAR(100)
+);
+
 CREATE INDEX poll_runs_device_started_idx ON poll_runs (device_id, started_at DESC);
 CREATE INDEX interface_samples_sampled_at_idx ON interface_samples (sampled_at DESC);
 CREATE INDEX device_metric_samples_name_time_idx ON device_metric_samples (device_id, metric_name, sampled_at DESC);
 CREATE INDEX device_metric_samples_labels_idx ON device_metric_samples USING GIN (labels);
+CREATE INDEX idx_alerts_device_id ON alerts (device_id);
+CREATE INDEX idx_alerts_created_at ON alerts (created_at DESC);
+CREATE INDEX idx_devices_floor ON devices (floor);
+CREATE INDEX idx_devices_enabled ON devices (enabled);
