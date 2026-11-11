@@ -6,12 +6,23 @@ from app.collector import (
     get_device_traffic_series,
 )
 from app.database import init_db, close_db, get_db_pool
+from app.discovery import ping_ip
+
+SWITCH_IP = "192.168.22.254"
+
+async def check_switch_reachable() -> bool:
+    try:
+        return await ping_ip(SWITCH_IP, timeout=1.0)
+    except Exception:
+        return False
 
 @pytest.mark.asyncio
 async def test_live_aruba_switch_interfaces():
-    ip = "192.168.22.254"
-    ifaces = await collect_device_interfaces(ip, community="public")
-    print(f"\nDiscovered {len(ifaces)} interfaces from live Aruba switch {ip}")
+    if not await check_switch_reachable():
+        pytest.skip(f"Live Aruba switch at {SWITCH_IP} is not reachable in current environment")
+
+    ifaces = await collect_device_interfaces(SWITCH_IP, community="public")
+    print(f"\nDiscovered {len(ifaces)} interfaces from live Aruba switch {SWITCH_IP}")
     assert len(ifaces) >= 24, f"Expected >= 24 interfaces, got {len(ifaces)}"
 
     # Show first few ports
@@ -22,17 +33,19 @@ async def test_live_aruba_switch_interfaces():
 
 @pytest.mark.asyncio
 async def test_live_aruba_traffic_delta():
+    if not await check_switch_reachable():
+        pytest.skip(f"Live Aruba switch at {SWITCH_IP} is not reachable in current environment")
+
     await init_db()
     pool = await get_db_pool()
     async with pool.acquire() as conn:
-        dev_id = await conn.fetchval("SELECT id FROM devices WHERE management_ip = '192.168.22.254'")
+        dev_id = await conn.fetchval("SELECT id FROM devices WHERE management_ip = $1", SWITCH_IP)
         if not dev_id:
             dev_id = await conn.fetchval("SELECT id FROM devices ORDER BY id LIMIT 1")
     assert dev_id is not None
-    ip = "192.168.22.254"
 
     # Poll 1
-    res1 = await poll_and_calculate_device_traffic(pool, device_id=dev_id, ip=ip, community="public")
+    res1 = await poll_and_calculate_device_traffic(pool, device_id=dev_id, ip=SWITCH_IP, community="public")
     assert res1["success"] is True
     assert res1["has_snmp"] is True
     print(f"\nPoll 1: {res1['interfaces_polled']} interfaces, In: {res1['total_in_mbps']} Mbps, Out: {res1['total_out_mbps']} Mbps")
@@ -41,7 +54,7 @@ async def test_live_aruba_traffic_delta():
     await asyncio.sleep(2)
 
     # Poll 2
-    res2 = await poll_and_calculate_device_traffic(pool, device_id=dev_id, ip=ip, community="public")
+    res2 = await poll_and_calculate_device_traffic(pool, device_id=dev_id, ip=SWITCH_IP, community="public")
     assert res2["success"] is True
     assert res2["has_snmp"] is True
     print(f"Poll 2: {res2['interfaces_polled']} interfaces, In: {res2['total_in_mbps']} Mbps, Out: {res2['total_out_mbps']} Mbps")

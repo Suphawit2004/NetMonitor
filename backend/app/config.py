@@ -18,5 +18,10 @@ class Settings(BaseModel):
     API_KEY: str = os.getenv("API_KEY", "")
     MAP_API_KEY: str = os.getenv("MAP_API_KEY", "")
 
-settings = Settings()
+    # Telemetry & Polling Settings
+    SNMP_POLL_INTERVAL_S: int = int(os.getenv("SNMP_POLL_INTERVAL_S", "30"))
+    SNMP_MAX_CONCURRENT_POLLS: int = int(os.getenv("SNMP_MAX_CONCURRENT_POLLS", "5"))
+    TELEMETRY_DEFAULT_POINTS: int = int(os.getenv("TELEMETRY_DEFAULT_POINTS", "60"))
+    ADVISORY_LOCK_SNMP_POLLER: int = 0x534E4D50  # Hex for 'SNMP'
 
+settings = Settings()

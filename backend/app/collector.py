@@ -6,6 +6,7 @@ import math
 import logging
 from typing import Optional, Dict, Any, Tuple, List
 from datetime import datetime, timezone, timedelta
+from .config import settings
 
 logger = logging.getLogger("netmonitor.collector")
 
@@ -329,12 +330,12 @@ async def get_device_traffic_series(
     }.get(time_range, 15 * 60)
 
     point_count = {
-        "15m": 60,
-        "1h": 60,
+        "15m": settings.TELEMETRY_DEFAULT_POINTS,
+        "1h": settings.TELEMETRY_DEFAULT_POINTS,
         "6h": 36,
         "24h": 48,
         "7d": 56,
-    }.get(time_range, 60)
+    }.get(time_range, settings.TELEMETRY_DEFAULT_POINTS)
 
     labels_map = {
         "15m": ["-15m", "-10m", "-5m", "now"],
