@@ -50,14 +50,16 @@
   background: #1e293b;
   border: 1px solid #475569;
   color: #f8fafc;
-  font-size: 11.5px;
+  font-size: 12px;
   font-weight: 600;
-  padding: 5px 10px;
+  min-height: 36px;
+  padding: 6px 12px;
   border-radius: 6px;
   cursor: pointer;
   display: flex;
   align-items: center;
   gap: 5px;
+  touch-action: manipulation;
   transition: all 0.15s ease;
 }
 
@@ -91,7 +93,7 @@
   color: #fef3c7;
   padding: 8px 14px;
   border-radius: 8px;
-  font-size: 11.5px;
+  font-size: 12px;
   font-weight: 500;
   display: flex;
   flex-direction: column;
@@ -163,7 +165,7 @@
   border: 1px solid rgba(56, 189, 248, 0.35);
   color: #38bdf8;
   font-family: monospace;
-  font-size: 11.5px;
+  font-size: 12px;
   font-weight: 600;
   padding: 4px 8px;
   border-radius: 6px;
@@ -400,7 +402,7 @@
 }
 
 :global(.pinEmoji) {
-  font-size: 11.5px;
+  font-size: 12px;
   line-height: 1;
   display: flex;
   align-items: center;
@@ -534,14 +536,16 @@
   color: #ffffff;
   border: none;
   border-radius: 6px;
+  min-height: 36px;
   padding: 6px 12px;
-  font-size: 11.5px;
+  font-size: 12px;
   font-weight: 600;
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
   gap: 6px;
+  touch-action: manipulation;
   transition: opacity 0.15s ease;
 }
 
@@ -686,7 +690,7 @@
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  font-size: 10.5px;
+  font-size: 12px;
   line-height: 1.4;
 }
 

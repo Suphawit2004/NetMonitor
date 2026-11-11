@@ -10,7 +10,6 @@ import {
   SlidersHorizontal,
   ChevronLeft,
   ChevronRight,
-  Layers,
   Map,
   LayoutGrid,
   Lock,
@@ -152,137 +151,130 @@ export default function FloorPlanPage({
       />
 
       <div className={styles.main}>
-        {/* Toolbar */}
+        {/* ── Unified Sub-Header Toolbar ── */}
         <div className={styles.toolbar}>
-          {/* Toggle Sidebar Button */}
-          <button
-            className={`${styles.sidebarToggle} ${sidebarOpen ? styles.sidebarToggleOpen : styles.sidebarToggleCollapsed}`}
-            onClick={() => setSidebarOpen(prev => !prev)}
-            title={sidebarOpen ? t('floor.collapseSidebar') : t('floor.expandSidebar')}
-            aria-label={sidebarOpen ? t('floor.collapseSidebar') : t('floor.expandSidebar')}
-          >
-            <SlidersHorizontal size={16} className={styles.filterIconImg} />
-            <span className={styles.toggleArrow}>{sidebarOpen ? <ChevronLeft size={13} /> : <ChevronRight size={13} />}</span>
-          </button>
-
-          <span className={styles.toolLabel} style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-            <Layers size={16} />
-            <span>{t('floor.title')}</span>
-          </span>
-          <div className={styles.divider} />
-
-          {/* Floor switcher */}
-          <div className={styles.floorTabs}>
-            {([1, 2] as const).map(f => (
-              <button
-                key={f}
-                className={`${styles.floorTab} ${currentFloor === f ? styles.floorTabActive : ''}`}
-                onClick={() => handleFloorChange(f)}
-              >
-                {t('floor.tab', { floor: f })}
-              </button>
-            ))}
-          </div>
-
-          {/* View mode switcher */}
-          <div className={styles.viewModeToggle}>
+          {/* Group 1: Sidebar Toggle & Controls */}
+          <div className={styles.toolbarLeft}>
             <button
-              className={`${styles.viewBtn} ${viewMode === 'map' ? styles.viewBtnActive : ''}`}
-              onClick={() => handleViewModeChange('map')}
-              title={t('floor.viewMap')}
+              className={`${styles.sidebarToggle} ${sidebarOpen ? styles.sidebarToggleOpen : styles.sidebarToggleCollapsed}`}
+              onClick={() => setSidebarOpen(prev => !prev)}
+              title={sidebarOpen ? t('floor.collapseSidebar') : t('floor.expandSidebar')}
+              aria-label={sidebarOpen ? t('floor.collapseSidebar') : t('floor.expandSidebar')}
+              type="button"
             >
-              <Map size={15} />
-              <span>{t('floor.viewMap')}</span>
-            </button>
-            <button
-              className={`${styles.viewBtn} ${viewMode === 'canvas' ? styles.viewBtnActive : ''}`}
-              onClick={() => handleViewModeChange('canvas')}
-              title={t('floor.viewCanvas')}
-            >
-              <LayoutGrid size={15} />
-              <span>{t('floor.viewCanvas')}</span>
-            </button>
-          </div>
-
-          <button
-            className={`${styles.moveModeBtn} ${isMoveMode ? styles.moveModeActive : ''}`}
-            onClick={handleToggleMoveMode}
-            title={isMoveMode ? t('floor.lockPositionsTitle') : t('floor.moveModeTitle')}
-            style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}
-          >
-            {isMoveMode ? <Lock size={14} /> : <Unlock size={14} />}
-            <span>{isMoveMode ? t('floor.lockPositions') : t('floor.moveMode')}</span>
-          </button>
-
-          <button
-            className={styles.scanBtn}
-            onClick={() => setScanOpen(true)}
-            style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}
-          >
-            <Scan size={14} />
-            <span>{t('scan.button')}</span>
-          </button>
-        </div>
-
-        {/* Floor badge & Quick Status Filter */}
-        <div className={styles.floorBadge}>
-          <span>{t('floor.buildingA', { floor: currentFloor })}</span>
-
-          {floorDevices.length > 0 && (
-            <div className={styles.floorStatusPillGroup}>
-              <button
-                type="button"
-                className={`${styles.floorStatusPill} ${filterStatus === 'online' ? styles.pillActiveOnline : ''}`}
-                onClick={() => setFilterStatus(filterStatus === 'online' ? 'all' : 'online')}
-                title="กรองเฉพาะอุปกรณ์ออนไลน์"
-              >
-                <CheckCircle2 size={12} style={{ color: 'var(--status-online)' }} />
-                <span>{floorCounts.online} {t('status.online')}</span>
-              </button>
-              {floorCounts.warning > 0 && (
-                <button
-                  type="button"
-                  className={`${styles.floorStatusPill} ${filterStatus === 'warning' ? styles.pillActiveWarning : ''}`}
-                  onClick={() => setFilterStatus(filterStatus === 'warning' ? 'all' : 'warning')}
-                  title="กรองเฉพาะอุปกรณ์เตือน"
-                >
-                  <AlertTriangle size={12} style={{ color: 'var(--status-warning)' }} />
-                  <span>{floorCounts.warning} {t('status.warning')}</span>
-                </button>
-              )}
-              {floorCounts.offline > 0 && (
-                <button
-                  type="button"
-                  className={`${styles.floorStatusPill} ${filterStatus === 'offline' ? styles.pillActiveOffline : ''}`}
-                  onClick={() => setFilterStatus(filterStatus === 'offline' ? 'all' : 'offline')}
-                  title="กรองเฉพาะอุปกรณ์ออฟไลน์"
-                >
-                  <XCircle size={12} style={{ color: 'var(--status-critical)' }} />
-                  <span>{floorCounts.offline} {t('status.offline')}</span>
-                </button>
-              )}
-            </div>
-          )}
-
-          {isMoveMode && (
-            <span className={styles.moveModeHintBadge}>
-              {t('floor.moveModeHint')}
-            </span>
-          )}
-          {loading && <span className={styles.emptyHint}>{t('common.loading')}</span>}
-          {hasActiveFilter && (
-            <>
-              <span className={styles.resultBadge}>
-                {t('common.showing', { shown: visibleDevices.length, total: floorDevices.length })}
+              <SlidersHorizontal size={14} className={styles.filterIconImg} />
+              <span>{t('floor.devicesSidebar') || 'อุปกรณ์'}</span>
+              <span className={styles.toggleArrow}>
+                {sidebarOpen ? <ChevronLeft size={13} /> : <ChevronRight size={13} />}
               </span>
-              <button className={styles.clearFilters} onClick={handleClearFilters}>
-                {t('floor.clearFilters')}
+            </button>
+
+            <div className={styles.divider} />
+
+            {/* Floor switcher */}
+            <div className={styles.floorTabs} role="tablist">
+              {([1, 2] as const).map(f => (
+                <button
+                  key={f}
+                  className={`${styles.floorTab} ${currentFloor === f ? styles.floorTabActive : ''}`}
+                  onClick={() => handleFloorChange(f)}
+                  type="button"
+                  role="tab"
+                  aria-selected={currentFloor === f}
+                >
+                  {t('floor.tab', { floor: f })}
+                </button>
+              ))}
+            </div>
+
+            {/* View mode switcher */}
+            <div className={styles.viewModeToggle} role="group" aria-label="View Mode">
+              <button
+                className={`${styles.viewBtn} ${viewMode === 'canvas' ? styles.viewBtnActive : ''}`}
+                onClick={() => handleViewModeChange('canvas')}
+                title={t('floor.viewCanvas')}
+                type="button"
+              >
+                <LayoutGrid size={13} />
+                <span>2D</span>
               </button>
-            </>
-          )}
-          {!loading && floorDevices.length === 0 && (
-            <span className={styles.emptyHint}> {t('floor.noDevicesHint')}</span>
-          )}
+              <button
+                className={`${styles.viewBtn} ${viewMode === 'map' ? styles.viewBtnActive : ''}`}
+                onClick={() => handleViewModeChange('map')}
+                title={t('floor.viewMap')}
+                type="button"
+              >
+                <Map size={13} />
+                <span>{t('floor.viewMap')}</span>
+              </button>
+            </div>
+          </div>
+
+          {/* Group 2: Quick Status Filters */}
+          <div className={styles.toolbarCenter}>
+            {floorDevices.length > 0 && (
+              <div className={styles.floorStatusPillGroup}>
+                <button
+                  type="button"
+                  className={`${styles.floorStatusPill} ${filterStatus === 'online' ? styles.pillActiveOnline : ''}`}
+                  onClick={() => setFilterStatus(filterStatus === 'online' ? 'all' : 'online')}
+                  title="กรองเฉพาะอุปกรณ์ออนไลน์"
+                >
+                  <CheckCircle2 size={12} style={{ color: 'var(--status-online)' }} />
+                  <span>{floorCounts.online} {t('status.online')}</span>
+                </button>
+                {floorCounts.warning > 0 && (
+                  <button
+                    type="button"
+                    className={`${styles.floorStatusPill} ${filterStatus === 'warning' ? styles.pillActiveWarning : ''}`}
+                    onClick={() => setFilterStatus(filterStatus === 'warning' ? 'all' : 'warning')}
+                    title="กรองเฉพาะอุปกรณ์เตือน"
+                  >
+                    <AlertTriangle size={12} style={{ color: 'var(--status-warning)' }} />
+                    <span>{floorCounts.warning} {t('status.warning')}</span>
+                  </button>
+                )}
+                {floorCounts.offline > 0 && (
+                  <button
+                    type="button"
+                    className={`${styles.floorStatusPill} ${filterStatus === 'offline' ? styles.pillActiveOffline : ''}`}
+                    onClick={() => setFilterStatus(filterStatus === 'offline' ? 'all' : 'offline')}
+                    title="กรองเฉพาะอุปกรณ์ออฟไลน์"
+                  >
+                    <XCircle size={12} style={{ color: 'var(--status-critical)' }} />
+                    <span>{floorCounts.offline} {t('status.offline')}</span>
+                  </button>
+                )}
+                {hasActiveFilter && (
+                  <button className={styles.clearFilters} onClick={handleClearFilters} type="button">
+                    {t('floor.clearFilters')}
+                  </button>
+                )}
+              </div>
+            )}
+          </div>
+
+          {/* Group 3: Right Action Buttons */}
+          <div className={styles.toolbarRight}>
+            <button
+              className={`${styles.moveModeBtn} ${isMoveMode ? styles.moveModeActive : ''}`}
+              onClick={handleToggleMoveMode}
+              title={isMoveMode ? t('floor.lockPositionsTitle') : t('floor.moveModeTitle')}
+              type="button"
+            >
+              {isMoveMode ? <Lock size={13} /> : <Unlock size={13} />}
+              <span>{isMoveMode ? t('floor.lockPositions') : t('floor.moveMode')}</span>
+            </button>
+
+            <button
+              className={styles.scanBtn}
+              onClick={() => setScanOpen(true)}
+              type="button"
+            >
+              <Scan size={13} />
+              <span>{t('scan.button')}</span>
+            </button>
+          </div>
         </div>
 
         <div className={styles.canvasArea}>

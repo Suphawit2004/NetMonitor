@@ -44,29 +44,60 @@ async def background_snmp_poller():
     """
     Background worker that runs every 30 seconds to archive
     genuine historical SNMP samples in PostgreSQL for all enabled devices.
+    Uses PostgreSQL advisory lock to prevent duplicate polling across multiple Uvicorn worker processes.
     """
     logger.info("Background SNMP archive poller started.")
     sem = asyncio.Semaphore(5)
+    ADVISORY_LOCK_ID = 0x534E4D50  # 'SNMP'
 
     async def poll_dev(pool, dev):
         async with sem:
             comm = dev["credential_ref"] or settings.SNMP_COMMUNITY
             ver = "2c" if dev["snmp_version"] == "v2c" else "1"
+            started_at = datetime.now(timezone.utc)
             try:
-                await poll_and_calculate_device_traffic(pool, dev["id"], dev["ip"], comm, dev["snmp_port"], ver)
+                res = await poll_and_calculate_device_traffic(pool, dev["id"], dev["ip"], comm, dev["snmp_port"], ver)
+                status = "succeeded" if res.get("success") else "failed"
+                err_msg = None if res.get("success") else "SNMP poll failed or device unreachable"
+                await pool.execute(
+                    """
+                    INSERT INTO poll_runs (device_id, started_at, finished_at, status, error_message)
+                    VALUES ($1, $2, now(), $3, $4)
+                    """,
+                    dev["id"], started_at, status, err_msg
+                )
             except Exception as e:
                 logger.debug(f"Background poll failed for {dev['ip']}: {e}")
+                try:
+                    await pool.execute(
+                        """
+                        INSERT INTO poll_runs (device_id, started_at, finished_at, status, error_message)
+                        VALUES ($1, $2, now(), 'failed', $3)
+                        """,
+                        dev["id"], started_at, str(e)
+                    )
+                except Exception as db_err:
+                    logger.error(f"Failed to record poll_run for {dev['ip']}: {db_err}")
 
     while True:
         try:
             await asyncio.sleep(30)
             pool = await get_db_pool()
-            dev_rows = await pool.fetch(
-                "SELECT id, host(management_ip) as ip, credential_ref, snmp_port, snmp_version FROM devices WHERE enabled = true AND management_ip IS NOT NULL"
-            )
-            tasks = [poll_dev(pool, dev) for dev in dev_rows if dev["ip"]]
-            if tasks:
-                await asyncio.gather(*tasks, return_exceptions=True)
+            # Enforce single-poller execution across multiple Uvicorn workers
+            has_lock = await pool.fetchval("SELECT pg_try_advisory_lock($1)", ADVISORY_LOCK_ID)
+            if not has_lock:
+                logger.debug("Another worker is running SNMP poller. Skipping.")
+                continue
+
+            try:
+                dev_rows = await pool.fetch(
+                    "SELECT id, host(management_ip) as ip, credential_ref, snmp_port, snmp_version FROM devices WHERE enabled = true AND management_ip IS NOT NULL"
+                )
+                tasks = [poll_dev(pool, dev) for dev in dev_rows if dev["ip"]]
+                if tasks:
+                    await asyncio.gather(*tasks, return_exceptions=True)
+            finally:
+                await pool.execute("SELECT pg_advisory_unlock($1)", ADVISORY_LOCK_ID)
         except asyncio.CancelledError:
             logger.info("Background SNMP archive poller stopped.")
             break
@@ -845,7 +876,9 @@ async def reset_database():
 
         async with pool.acquire() as conn:
             async with conn.transaction():
-                await conn.execute("TRUNCATE TABLE poll_runs, interface_samples, device_metric_samples, interfaces, devices CASCADE;")
+                await conn.execute("TRUNCATE TABLE alerts, poll_runs, interface_samples, device_metric_samples, interfaces, devices CASCADE;")
+                await conn.execute("ALTER SEQUENCE IF EXISTS devices_id_seq RESTART WITH 1;")
+                await conn.execute("ALTER SEQUENCE IF EXISTS alerts_id_seq RESTART WITH 1;")
                 await conn.execute(seed_sql)
         return {"success": True, "message": "Database successfully reset to initial seed data"}
     except Exception as e:

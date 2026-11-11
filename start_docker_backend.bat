@@ -7,7 +7,7 @@ echo ========================================================
 echo.
 
 echo [1/3] Starting PostgreSQL Container via Docker...
-docker compose -f "%LOCALAPPDATA%\Docker\docker-compose.yml" up -d
+docker compose up -d
 if %errorlevel% neq 0 (
     echo.
     echo [!] Docker engine is not running yet.

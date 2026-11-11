@@ -1,22 +1,27 @@
 import pytest
 from httpx import AsyncClient, ASGITransport
 from app.main import app
-from app.database import init_db, close_db
+from app.database import init_db, close_db, get_db_pool
 
 @pytest.mark.asyncio
 async def test_traffic_endpoints():
     await init_db()
+    pool = await get_db_pool()
+    async with pool.acquire() as conn:
+        dev_id = await conn.fetchval("SELECT id FROM devices ORDER BY id LIMIT 1")
+    assert dev_id is not None, "At least one device must exist in DB for testing"
+
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as ac:
-        # 1. Test get interfaces for device 1
-        res = await ac.get("/api/v1/devices/1/interfaces")
+        # 1. Test get interfaces for existing device
+        res = await ac.get(f"/api/v1/devices/{dev_id}/interfaces")
         assert res.status_code == 200
         ifaces = res.json()
         assert isinstance(ifaces, list)
         print("GET /interfaces count:", len(ifaces))
 
         # 2. Test get traffic series
-        res = await ac.get("/api/v1/devices/1/traffic?interface_id=all&range=15m")
+        res = await ac.get(f"/api/v1/devices/{dev_id}/traffic?interface_id=all&range=15m")
         assert res.status_code == 200
         data = res.json()
         assert "has_snmp" in data

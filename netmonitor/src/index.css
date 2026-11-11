@@ -86,7 +86,8 @@
 }
 
 html {
-  zoom: 1.5;
+  zoom: 1;
+  font-size: 15px;
 }
 
 html[data-ui-scale="100%"] {
@@ -94,11 +95,11 @@ html[data-ui-scale="100%"] {
 }
 
 html[data-ui-scale="125%"] {
-  zoom: 1.25;
+  zoom: 1.15;
 }
 
 html[data-ui-scale="150%"] {
-  zoom: 1.5;
+  zoom: 1.25;
 }
 
 html, body, #root {
@@ -148,12 +149,13 @@ code, kbd, samp, pre {
   outline-offset: 2px;
 }
 
-/* Reduced motion */
+/* Reduced motion: intentional motion hierarchy preserving visual state changes */
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
-    transition-duration: 0.01ms !important;
+    transition-property: opacity, color, background-color, border-color !important;
+    transition-duration: 150ms !important;
     scroll-behavior: auto !important;
   }
 }

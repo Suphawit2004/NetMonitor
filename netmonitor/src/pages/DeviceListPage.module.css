@@ -4,19 +4,105 @@
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  background: var(--bg-canvas);
+}
+
+/* ── KPI Ribbon ── */
+.kpiRibbon {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px;
+  padding: 14px 20px 10px;
+  background: var(--bg-surface);
+  border-bottom: 1px solid var(--border-subtle);
+  flex-shrink: 0;
+}
+
+.kpiCard {
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+  padding: 10px 14px;
+  cursor: pointer;
+  text-align: left;
+  transition: all 0.15s ease;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.kpiCard:hover {
+  border-color: var(--border-hover);
+  background: var(--bg-subtle);
+}
+
+.kpiCardActive {
+  border-color: var(--accent-primary) !important;
+  background: var(--accent-subtle) !important;
+}
+.kpiCardActiveOnline {
+  border-color: rgba(16, 185, 129, 0.4) !important;
+  background: var(--status-online-bg) !important;
+}
+.kpiCardActiveWarning {
+  border-color: rgba(245, 158, 11, 0.4) !important;
+  background: var(--status-warning-bg) !important;
+}
+.kpiCardActiveOffline {
+  border-color: rgba(239, 68, 68, 0.4) !important;
+  background: var(--status-critical-bg) !important;
+}
+
+.kpiHeader {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.kpiDot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+}
+.kpiLabel {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+.kpiValue {
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--text-primary);
+  font-variant-numeric: tabular-nums;
+  line-height: 1.2;
 }
 
 /* ── Toolbar ── */
 .toolbar {
-  height: 52px;
+  min-height: 48px;
   background: var(--bg-surface);
   border-bottom: 1px solid var(--border-subtle);
   display: flex;
   align-items: center;
+  justify-content: space-between;
   gap: 12px;
-  padding: 0 20px;
+  padding: 6px 20px;
   flex-shrink: 0;
   transition: background-color 0.2s ease, border-color 0.2s ease;
+  flex-wrap: wrap;
+}
+
+.toolbarLeft {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.toolbarRight {
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 
 .title {
@@ -56,11 +142,11 @@
 }
 
 .count {
-  margin-left: auto;
   font-size: 12px;
   font-weight: 600;
   color: var(--text-muted);
   white-space: nowrap;
+  padding: 0 4px;
 }
 
 /* ── Table Search Bar & Floor Filter ── */
@@ -166,9 +252,9 @@
   height: 30px;
   padding: 0 12px;
   border-radius: 6px;
-  border: 1px solid #0d9488;
-  background: #0f3d3e;
-  color: #2dd4bf;
+  border: 1px solid var(--border-default);
+  background: var(--bg-elevated);
+  color: var(--text-secondary);
   font-size: 12px;
   font-weight: 600;
   cursor: pointer;
@@ -176,35 +262,20 @@
   display: flex;
   align-items: center;
   gap: 6px;
-  box-shadow: 0 2px 8px rgba(13, 148, 136, 0.3);
   transition: all 0.15s ease;
 }
 .scanBtn:hover {
-  background: #134e4a;
-  border-color: #2dd4bf;
-  color: #ffffff;
-  box-shadow: 0 0 12px rgba(45, 212, 191, 0.5);
-}
-
-:global([data-theme="light"]) .scanBtn {
-  background: #0d9488;
-  border-color: #0f766e;
-  color: #ffffff;
-  box-shadow: 0 2px 6px rgba(13, 148, 136, 0.25);
-}
-:global([data-theme="light"]) .scanBtn:hover {
-  background: #0f766e;
-  border-color: #115e59;
-  color: #ffffff;
-  box-shadow: 0 4px 10px rgba(13, 148, 136, 0.35);
+  background: var(--bg-subtle);
+  border-color: var(--accent-primary);
+  color: var(--text-primary);
 }
 
 .addBtn {
   height: 30px;
   padding: 0 12px;
   border-radius: 6px;
-  border: 1px solid #2563eb;
-  background: #1d4ed8;
+  border: 1px solid var(--accent-primary);
+  background: var(--accent-primary);
   color: #ffffff;
   font-size: 12px;
   font-weight: 600;
@@ -213,50 +284,34 @@
   display: flex;
   align-items: center;
   gap: 6px;
-  box-shadow: 0 2px 8px rgba(37, 99, 235, 0.35);
+  box-shadow: var(--shadow-sm);
   transition: all 0.15s ease;
 }
 .addBtn:hover {
-  background: #2563eb;
-  border-color: #60a5fa;
-  box-shadow: 0 0 12px rgba(59, 130, 246, 0.5);
+  background: var(--accent-hover);
+  border-color: var(--accent-hover);
 }
 
 .clearDevicesBtn {
   height: 30px;
   padding: 0 10px;
   border-radius: 6px;
-  border: 1px solid #dc2626;
-  background: #7f1d1d;
-  color: #fecaca;
+  border: 1px solid var(--border-subtle);
+  background: transparent;
+  color: var(--text-muted);
   font-size: 12px;
-  font-weight: 600;
+  font-weight: 500;
   cursor: pointer;
   white-space: nowrap;
   display: flex;
   align-items: center;
   gap: 5px;
-  box-shadow: 0 2px 8px rgba(220, 38, 38, 0.3);
   transition: all 0.15s ease;
 }
 .clearDevicesBtn:hover {
-  background: #991b1b;
-  border-color: #ef4444;
-  color: #ffffff;
-  box-shadow: 0 0 12px rgba(239, 68, 68, 0.5);
-}
-
-:global([data-theme="light"]) .clearDevicesBtn {
-  background: rgba(220, 38, 38, 0.08);
-  border-color: rgba(220, 38, 38, 0.35);
-  color: #dc2626;
-  box-shadow: 0 1px 3px rgba(220, 38, 38, 0.1);
-}
-:global([data-theme="light"]) .clearDevicesBtn:hover {
-  background: #dc2626;
-  border-color: #b91c1c;
-  color: #ffffff;
-  box-shadow: 0 2px 8px rgba(220, 38, 38, 0.3);
+  background: var(--status-critical-bg);
+  border-color: var(--status-critical);
+  color: var(--status-critical);
 }
 
 .delBtn {

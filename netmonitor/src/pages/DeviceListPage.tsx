@@ -5,7 +5,6 @@ import { useNetwork } from '../context/networkContext'
 import { useToast } from '../components/ui/toast-context'
 import { DEVICE_ICON } from '../constants/deviceMeta'
 import {
-  Server,
   Scan,
   Plus,
   Trash2,
@@ -46,6 +45,10 @@ export default function DeviceListPage({ onDeviceClick }: Props) {
   const [scanOpen, setScanOpen] = useState(false)
   const [deletingDevice, setDeletingDevice] = useState<Device | null>(null)
   const [confirmClearOpen, setConfirmClearOpen] = useState(false)
+
+  const onlineCount = useMemo(() => devices.filter(d => d.status === 'online').length, [devices])
+  const warningCount = useMemo(() => devices.filter(d => d.status === 'warning').length, [devices])
+  const offlineCount = useMemo(() => devices.filter(d => d.status === 'offline').length, [devices])
 
   const rows = useMemo(() => {
     const q = searchQuery.trim().toLowerCase()
@@ -127,95 +130,131 @@ export default function DeviceListPage({ onDeviceClick }: Props) {
     }
   }
 
-  const FILTERS: { key: StatusFilter; label: string }[] = [
-    { key: 'all',     label: t('common.all') },
-    { key: 'online',  label: t('status.online') },
-    { key: 'warning', label: t('status.warning') },
-    { key: 'offline', label: t('status.offline') },
-  ]
-
   return (
     <div className={styles.page}>
-      <div className={styles.toolbar}>
-        <span className={styles.title} style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
-          <Server size={20} />
-          <span>{t('list.title')}</span>
-        </span>
+      {/* ── Summary KPI Ribbon ── */}
+      <div className={styles.kpiRibbon}>
+        <button
+          type="button"
+          className={`${styles.kpiCard} ${statusFilter === 'all' ? styles.kpiCardActive : ''}`}
+          onClick={() => setStatusFilter('all')}
+        >
+          <div className={styles.kpiHeader}>
+            <span className={styles.kpiLabel}>{t('common.all')}</span>
+          </div>
+          <div className={styles.kpiValue}>{devices.length}</div>
+        </button>
 
-        {/* Live Search Input */}
-        <div className={styles.searchWrap}>
-          <Search size={14} className={styles.searchIcon} />
-          <input
-            type="text"
-            className={styles.searchInput}
-            placeholder={t('list.searchPlaceholder')}
-            value={searchQuery}
-            onChange={e => setSearchQuery(e.target.value)}
-          />
-          {searchQuery && (
+        <button
+          type="button"
+          className={`${styles.kpiCard} ${statusFilter === 'online' ? styles.kpiCardActiveOnline : ''}`}
+          onClick={() => setStatusFilter(statusFilter === 'online' ? 'all' : 'online')}
+        >
+          <div className={styles.kpiHeader}>
+            <span className={styles.kpiDot} style={{ background: 'var(--status-online)' }} />
+            <span className={styles.kpiLabel}>{t('status.online')}</span>
+          </div>
+          <div className={styles.kpiValue} style={{ color: 'var(--status-online)' }}>
+            {onlineCount}
+          </div>
+        </button>
+
+        <button
+          type="button"
+          className={`${styles.kpiCard} ${statusFilter === 'warning' ? styles.kpiCardActiveWarning : ''}`}
+          onClick={() => setStatusFilter(statusFilter === 'warning' ? 'all' : 'warning')}
+        >
+          <div className={styles.kpiHeader}>
+            <span className={styles.kpiDot} style={{ background: 'var(--status-warning)' }} />
+            <span className={styles.kpiLabel}>{t('status.warning')}</span>
+          </div>
+          <div className={styles.kpiValue} style={{ color: 'var(--status-warning)' }}>
+            {warningCount}
+          </div>
+        </button>
+
+        <button
+          type="button"
+          className={`${styles.kpiCard} ${statusFilter === 'offline' ? styles.kpiCardActiveOffline : ''}`}
+          onClick={() => setStatusFilter(statusFilter === 'offline' ? 'all' : 'offline')}
+        >
+          <div className={styles.kpiHeader}>
+            <span className={styles.kpiDot} style={{ background: 'var(--status-critical)' }} />
+            <span className={styles.kpiLabel}>{t('status.offline')}</span>
+          </div>
+          <div className={styles.kpiValue} style={{ color: 'var(--status-critical)' }}>
+            {offlineCount}
+          </div>
+        </button>
+      </div>
+
+      {/* ── Action & Filter Toolbar ── */}
+      <div className={styles.toolbar}>
+        <div className={styles.toolbarLeft}>
+          {/* Live Search Input */}
+          <div className={styles.searchWrap}>
+            <Search size={14} className={styles.searchIcon} />
+            <input
+              type="text"
+              className={styles.searchInput}
+              placeholder={t('list.searchPlaceholder')}
+              value={searchQuery}
+              onChange={e => setSearchQuery(e.target.value)}
+            />
+            {searchQuery && (
+              <button
+                type="button"
+                className={styles.clearSearchBtn}
+                onClick={() => setSearchQuery('')}
+                title="ล้างคำค้นหา"
+              >
+                <X size={12} />
+              </button>
+            )}
+          </div>
+
+          {/* Floor Dropdown Filter */}
+          <select
+            className={styles.floorSelect}
+            value={floorFilter}
+            onChange={e => setFloorFilter(e.target.value as 'all' | '1' | '2')}
+            title="กรองตามชั้น"
+          >
+            <option value="all">{t('list.filterFloorAll')}</option>
+            <option value="1">{t('floor.tab', { floor: 1 })}</option>
+            <option value="2">{t('floor.tab', { floor: 2 })}</option>
+          </select>
+
+          <span className={styles.count}>{t('common.showing', { shown: rows.length, total: devices.length })}</span>
+        </div>
+
+        <div className={styles.toolbarRight}>
+          <button
+            className={styles.scanBtn}
+            onClick={() => setScanOpen(true)}
+            type="button"
+          >
+            <Scan size={14} />
+            <span>{t('scan.button')}</span>
+          </button>
+
+          <button className={styles.addBtn} onClick={() => setAddOpen(true)} type="button">
+            <Plus size={14} />
+            <span>{t('addDevice.title')}</span>
+          </button>
+
+          {devices.length > 0 && (
             <button
+              className={styles.clearDevicesBtn}
+              onClick={() => setConfirmClearOpen(true)}
+              title={t('settings.clearDevicesHint') || 'เคลียร์อุปกรณ์ทั้งหมดออกจากระบบ'}
               type="button"
-              className={styles.clearSearchBtn}
-              onClick={() => setSearchQuery('')}
-              title="ล้างคำค้นหา"
             >
-              <X size={12} />
+              <Trash2 size={13} />
+              <span>{t('settings.clearDevicesBtn') || 'เคลียร์อุปกรณ์'}</span>
             </button>
           )}
         </div>
-
-        {/* Floor Dropdown Filter */}
-        <select
-          className={styles.floorSelect}
-          value={floorFilter}
-          onChange={e => setFloorFilter(e.target.value as 'all' | '1' | '2')}
-          title="กรองตามชั้น"
-        >
-          <option value="all">{t('list.filterFloorAll')}</option>
-          <option value="1">{t('floor.tab', { floor: 1 })}</option>
-          <option value="2">{t('floor.tab', { floor: 2 })}</option>
-        </select>
-
-        {/* Status Chips */}
-        <div className={styles.filters}>
-          {FILTERS.map(f => (
-            <button
-              key={f.key}
-              className={`${styles.chip} ${statusFilter === f.key ? styles.chipActive : ''}`}
-              onClick={() => setStatusFilter(f.key)}
-            >
-              {f.label}
-            </button>
-          ))}
-        </div>
-
-        <button
-          className={styles.scanBtn}
-          onClick={() => setScanOpen(true)}
-          style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}
-        >
-          <Scan size={14} />
-          <span>{t('scan.button')}</span>
-        </button>
-
-        <button className={styles.addBtn} onClick={() => setAddOpen(true)}>
-          <Plus size={14} />
-          <span>{t('addDevice.title')}</span>
-        </button>
-
-        {devices.length > 0 && (
-          <button
-            className={styles.clearDevicesBtn}
-            onClick={() => setConfirmClearOpen(true)}
-            title={t('settings.clearDevicesHint') || 'เคลียร์อุปกรณ์ทั้งหมดออกจากระบบ'}
-            style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}
-          >
-            <Trash2 size={13} />
-            <span>{t('settings.clearDevicesBtn') || 'เคลียร์อุปกรณ์'}</span>
-          </button>
-        )}
-
-        <span className={styles.count}>{t('common.showing', { shown: rows.length, total: devices.length })}</span>
       </div>
 
       <div className={styles.tableWrap}>

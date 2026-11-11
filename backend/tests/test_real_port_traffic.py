@@ -24,7 +24,11 @@ async def test_live_aruba_switch_interfaces():
 async def test_live_aruba_traffic_delta():
     await init_db()
     pool = await get_db_pool()
-    dev_id = 1
+    async with pool.acquire() as conn:
+        dev_id = await conn.fetchval("SELECT id FROM devices WHERE management_ip = '192.168.22.254'")
+        if not dev_id:
+            dev_id = await conn.fetchval("SELECT id FROM devices ORDER BY id LIMIT 1")
+    assert dev_id is not None
     ip = "192.168.22.254"
 
     # Poll 1

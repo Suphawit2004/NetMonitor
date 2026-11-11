@@ -235,7 +235,7 @@ export default function FloorCanvas({
       const scaleX = cw / PLAN_W
       const scaleY = ch / PLAN_H
       const bestScale = Math.min(scaleX, scaleY, 1.0)
-      const clampedScale = Number(Math.max(0.3, bestScale).toFixed(2))
+      const clampedScale = Number(Math.max(0.7, bestScale).toFixed(2))
       setScale(clampedScale)
       setPan({ x: 0, y: 0 })
     }
@@ -332,7 +332,7 @@ export default function FloorCanvas({
   useEffect(() => () => clearPopupTimers(), [clearPopupTimers])
 
   const zoom = useCallback((delta: number) => {
-    setScale(s => Math.min(3, Math.max(0.3, +(s + delta).toFixed(2))))
+    setScale(s => Math.min(6, Math.max(0.4, +(s + delta).toFixed(2))))
   }, [])
 
   useEffect(() => {
@@ -340,7 +340,7 @@ export default function FloorCanvas({
     if (!el) return
     function onWheel(e: WheelEvent) {
       e.preventDefault()
-      zoom(e.deltaY < 0 ? 0.1 : -0.1)
+      zoom(e.deltaY < 0 ? 0.08 : -0.08)
     }
     el.addEventListener('wheel', onWheel, { passive: false })
     return () => el.removeEventListener('wheel', onWheel)

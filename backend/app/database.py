@@ -17,9 +17,80 @@ async def init_db():
         min_size=2,
         max_size=10,
     )
-    # Ensure migrations are automatically applied on startup
+    # Ensure base schema and migrations are automatically applied on startup
     async with pool.acquire() as conn:
         await conn.execute("""
+            CREATE TABLE IF NOT EXISTS devices (
+                id              BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+                name            TEXT NOT NULL,
+                hostname        TEXT NOT NULL,
+                management_ip   INET NOT NULL,
+                snmp_port       INTEGER NOT NULL DEFAULT 161 CHECK (snmp_port BETWEEN 1 AND 65535),
+                snmp_version    TEXT NOT NULL CHECK (snmp_version IN ('v1', 'v2c', 'v3')),
+                credential_ref  TEXT,
+                poll_interval_s INTEGER NOT NULL DEFAULT 60 CHECK (poll_interval_s > 0),
+                location        TEXT,
+                enabled         BOOLEAN NOT NULL DEFAULT TRUE,
+                dtype           TEXT NOT NULL DEFAULT 'switch',
+                floor           INTEGER NOT NULL DEFAULT 1,
+                x               DOUBLE PRECISION,
+                y               DOUBLE PRECISION,
+                locked          BOOLEAN NOT NULL DEFAULT true,
+                model           TEXT,
+                latitude        DOUBLE PRECISION,
+                longitude       DOUBLE PRECISION,
+                altitude        DOUBLE PRECISION,
+                created_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
+                updated_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
+                UNIQUE (management_ip, snmp_port)
+            );
+
+            CREATE TABLE IF NOT EXISTS interfaces (
+                id              BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+                device_id       BIGINT NOT NULL REFERENCES devices(id) ON DELETE CASCADE,
+                if_index        INTEGER NOT NULL CHECK (if_index >= 0),
+                name            TEXT NOT NULL,
+                description     TEXT,
+                mac_address     TEXT,
+                speed_bps       BIGINT CHECK (speed_bps >= 0),
+                admin_status    TEXT,
+                oper_status     TEXT,
+                discovered_at   TIMESTAMPTZ NOT NULL DEFAULT now(),
+                UNIQUE (device_id, if_index)
+            );
+
+            CREATE TABLE IF NOT EXISTS poll_runs (
+                id              BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+                device_id       BIGINT NOT NULL REFERENCES devices(id) ON DELETE CASCADE,
+                started_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
+                finished_at     TIMESTAMPTZ,
+                status          TEXT NOT NULL DEFAULT 'running',
+                error_message   TEXT
+            );
+
+            CREATE TABLE IF NOT EXISTS interface_samples (
+                interface_id    BIGINT NOT NULL REFERENCES interfaces(id) ON DELETE CASCADE,
+                sampled_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
+                in_octets       NUMERIC(20, 0),
+                out_octets      NUMERIC(20, 0),
+                in_errors       BIGINT,
+                out_errors      BIGINT,
+                in_discards     BIGINT,
+                out_discards    BIGINT,
+                PRIMARY KEY (interface_id, sampled_at)
+            );
+
+            CREATE TABLE IF NOT EXISTS device_metric_samples (
+                device_id       BIGINT NOT NULL REFERENCES devices(id) ON DELETE CASCADE,
+                sampled_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
+                oid             TEXT NOT NULL,
+                metric_name     TEXT NOT NULL,
+                numeric_value   DOUBLE PRECISION,
+                text_value      TEXT,
+                labels          JSONB NOT NULL DEFAULT '{}'::jsonb,
+                PRIMARY KEY (device_id, sampled_at, oid, labels)
+            );
+
             ALTER TABLE devices
             ADD COLUMN IF NOT EXISTS dtype TEXT NOT NULL DEFAULT 'switch',
             ADD COLUMN IF NOT EXISTS floor INTEGER NOT NULL DEFAULT 1,
@@ -55,7 +126,10 @@ async def init_db():
 async def close_db():
     global pool
     if pool:
-        await pool.close()
+        try:
+            await pool.close()
+        finally:
+            pool = None
 
 async def get_db_pool() -> asyncpg.Pool:
     global pool

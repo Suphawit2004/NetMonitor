@@ -58,6 +58,7 @@ const en = {
   floor: {
     title: 'Floor Plan',
     sidebarTitle: 'Device Filters',
+    devicesSidebar: 'Devices',
     collapseSidebar: 'Collapse filter sidebar',
     expandSidebar: 'Expand filter sidebar',
     filtersTab: 'Filters',
@@ -135,6 +136,7 @@ const en = {
     focusBuildingTitle: 'Zoom to building location',
     coordTitle: 'WGS84 coordinates of current building center',
     layerSelectTitle: 'Select base map layer',
+    tileCarto: 'Carto Map (Theme)',
     tileDark: 'Dark Theme (Carto)',
     tileLight: 'Light Theme (Carto)',
     tileSatellite: 'Satellite Imagery',

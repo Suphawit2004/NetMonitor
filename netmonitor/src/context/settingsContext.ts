@@ -17,7 +17,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   simIntervalSec: 5,
   language: 'th',
   theme: 'dark',
-  uiScale: '150%',
+  uiScale: '100%',
 }
 
 export interface SettingsContextValue {

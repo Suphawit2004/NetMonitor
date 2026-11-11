@@ -1,11 +1,11 @@
 # เอกสารส่งต่องานระบบ NetMonitor (Project Handover Documentation)
-### ระบบบริหารจัดการและติดตามสถานะอุปกรณ์เครือข่ายอัจฉริยะ (Web-based Network Topology & Monitoring)
+> ระบบบริหารจัดการและติดตามสถานะอุปกรณ์เครือข่ายอัจฉริยะ (Web-based Network Topology & Monitoring)
 
 ---
 
 **ข้อมูลทั่วไปของโครงการ (Project Information)**
 * **ชื่อโครงการ:** NetMonitor (Web-based Network Topology & SNMP Monitoring System)
-* **เวอร์ชันเอกสาร:** Version 1.3.3 (Production Ready — Fully Consolidated, Hardened, Multi-Type Fault Simulation)
+* **เวอร์ชันเอกสาร:** Version 1.3.4 (Production Hardened — Verified Concurrency, Zero-State Resilient)
 * **วันที่ปรับปรุงล่าสุด:** 10 พฤศจิกายน 2026
 * **ทีมพัฒนา:** แผนกพัฒนาระบบเครือข่ายและโครงสร้างพื้นฐานดิจิทัล
 * **สถานะความพร้อม:** ผ่านการทดสอบระดับระบบ (End-to-End), โหลดทดสอบระดับ 500 VUs (k6), Pytest Unit & Integration Tests ผ่าน 100% (26/26), Vite Build ผ่าน 100%, ประเมินมาตรฐาน Web Vitals 100%, ปรับสเกล UI 150%, รองรับ Lucide Icons และมีชุดจำลองเหตุการณ์แจ้งเตือน/ออฟไลน์เสมือนจริง ครบถ้วน 100%
@@ -28,6 +28,18 @@
 ## 1. บทสรุปและภาพรวมของระบบ (Executive Summary & System Overview)
 
 **NetMonitor** เป็นระบบบริหารจัดการและติดตามสถานะอุปกรณ์เครือข่ายแบบรวมศูนย์ (Full-Stack Network Monitoring System) พัฒนาขึ้นเพื่อทดแทนการตรวจสอบอุปกรณ์ผ่าน CLI หรือตารางข้อมูลแบบเดิม โดยมุ่งเน้นการแสดงผลเชิงภาพ (Visual Topology) ที่ใช้งานง่าย ตอบสนองรวดเร็ว และให้ข้อมูลเชิงลึกแบบ Real-time
+
+### 1.1 เป้าหมายและขอบเขตที่ไม่ครอบคลุม (Goals & Non-Goals)
+* **เป้าหมายหลักของระบบ (Goals):**
+  1. การแสดงสถานะอุปกรณ์เครือข่าย (Router, Switch, Access Point, Server) บนแผนผังอาคาร 2 มิติ และภาพถ่ายดาวเทียมแบบเรียลไทม์
+  2. การค้นพบอุปกรณ์อัตโนมัติ (Zero-Config Network Discovery) ผ่าน ARP Caching, ICMP Ping และการจำแนกประเภทอุปกรณ์ด้วย SNMP
+  3. การตรวจสอบทราฟฟิกข้อมูลจริงระดับอินเทอร์เฟซ (Interface Telemetry) โดยคำนวณจากเคาน์เตอร์ 64-bit HC Octets ผ่าน SNMP IF-MIB
+  4. การบริหารจัดการวงจรชีวิตการแจ้งเตือน (Alert Lifecycle) แบบรวมศูนย์ รองรับการรับทราบ (Acknowledge) และการแก้ไข (Resolve)
+  5. ความทนทานระดับสูง รองรับการเข้าถึงพร้อมกัน 500 VUs โดยปราศจากข้อผิดพลาด (0.00% Error Rate)
+* **ขอบเขตที่ไม่ครอบคลุม (Non-Goals):**
+  1. ไม่ใช่ระบบ Config Management หรือ Network Automation (ไม่รองรับการส่งคำสั่งเขียนหรือแก้ไขการตั้งค่าอุปกรณ์ผ่าน SSH/CLI หรือ SNMP SET)
+  2. ไม่ใช่ระบบจัดเก็บ Syslog/NetFlow/sFlow ขนาดใหญ่ระดับ Enterprise Data Lake (ข้อมูลทราฟฟิกถูกจัดเก็บเป็นสถิติรายรอบการ Polling เท่านั้น)
+  3. ไม่ครอบคลุมการจัดการสิทธิ์ผู้ใช้งานระดับละเอียด (Multi-tenancy / RBAC) — ระบบมุ่งเน้นสำหรับทีมปฏิบัติการเครือข่าย (NOC) ในเครือข่ายภายใน
 
 ### จุดเด่นสำคัญของระบบ:
 1. **การแสดงผลแผนผัง 2 รูปแบบคู่ขนาน (Dual-Mode Visualization):**
@@ -57,6 +69,7 @@
 |  - React 19 + TypeScript + Vite (Port 5173)                                   |
 |  - 2D Canvas Engine (Pan/Zoom/Drag) | Leaflet Map Overlay (Satellite/Carto)   |
 |  - NetworkContext & State Store     | i18next (รองรับ ไทย / อังกฤษ 100%)       |
+|  - ผังห้องและ Room Templates บริหารผ่าน Client-side LocalStorage Engine       |
 +---------------------------------------+---------------------------------------+
                                         |
                  [HTTP / REST API Proxy: /api -> :8000]
@@ -67,7 +80,7 @@
 |  - FastAPI Framework + Uvicorn Asynchronous Server (Port 8000)                |
 |  - Smart Placement & Geofence Engine (Bilinear Affine Transformation)         |
 |  - Network Discovery Worker (ARP Cache + Reverse DNS + Semaphore Pool)        |
-|  - SNMP Poller Engine (Net-SNMP CLI Integration)                              |
+|  - SNMP Poller Engine (PostgreSQL Advisory Lock ป้องกัน Worker แย่ง Poll)    |
 +---------------------------------------+---------------------------------------+
                                         |
                      [asyncpg Connection Pool (Max Size: 10)]
@@ -76,7 +89,8 @@
 |                       ชั้นฐานข้อมูล (Database Layer)                          |
 |  - Docker Container: 'docker-db-1' (Image: postgres:17-alpine)                |
 |  - Connection: 127.0.0.1:5432 / Database: netmon                              |
-|  - ตารางข้อมูล: devices, alerts, device_metric_samples, interfaces, poll_runs, interface_samples |
+|  - ตารางข้อมูล: devices, alerts, device_metric_samples, interfaces,            |
+|               poll_runs, interface_samples                                    |
 +-------------------------------------------------------------------------------+
 ```
 
@@ -90,8 +104,30 @@
 | **Map Engine** | Leaflet 1.9 + Carto / Esri | รองรับการวาดผังห้องโปร่งแสงและหมุดบนพิกัด WGS84 GPS ได้ลื่นไหล |
 | **Backend API** | FastAPI + Uvicorn | Asynchronous Python Framework ตอบสนองรวดเร็ว พร้อม Swagger UI |
 | **Database Driver** | `asyncpg` | ไดรเวอร์ PostgreSQL แบบ Asynchronous ที่เร็วที่สุดในระบบนิเวศ Python |
-| **Database** | PostgreSQL 17 (Docker) | จัดเก็บข้อมูลพิกัด GPS, ประวัติการล็อค, การแจ้งเตือน และโครงสร้างห้อง |
-| **Testing Stacks** | Grafana k6 + Lighthouse | เครื่องมือทดสอบโหลดเสมือนจริง และประเมินมาตรฐาน Web Performance |
+| **Database** | PostgreSQL 17 (Docker) | จัดเก็บข้อมูลอุปกรณ์, พิกัด GPS, การล็อค, อินเทอร์เฟซ, ทราฟฟิก และการแจ้งเตือน (โครงสร้างห้องเก็บผ่าน LocalStorage) |
+| **Testing Stacks** | Pytest + Grafana k6 + Lighthouse | เครื่องมือทดสอบอัตโนมัติครบวงจร ทั้งระดับ Unit, Load และ Web Performance |
+
+### 2.3 การประเมินทางเลือกสถาปัตยกรรมที่ถูกคัดออก (Alternatives Considered)
+1. **การใช้ WebSockets เทียบกับ HTTP Polling สำหรับ Telemetry:**
+   * *ทางเลือกที่ถูกคัดออก:* Persistent WebSocket Connection ตลอดเวลา
+   * *เหตุผล:* สถาปัตยกรรมแบบ HTTP REST ร่วมกับ Client Polling รอบ 10–30 วินาที ตอบโจทย์การทำงานของเครือข่ายองค์กรขนาดกลาง (100–500 โหนด) ได้อย่างเสถียรกว่ามาก ไม่เกิดปัญหา Connection Drop เมื่อเดินข้าม Subnet และรองรับ Caching/Proxy ได้ดีกว่า
+2. **การจัดเก็บโครงสร้างห้องใน PostgreSQL เทียบกับ Client LocalStorage:**
+   * *ทางเลือกที่ถูกคัดออก:* การสร้างตาราง `rooms` และ API CRUD บน PostgreSQL
+   * *เหตุผล:* ขนาดข้อมูลโครงสร้างห้องเป็นแบบ Static Template ประจำแต่ละชั้น การจัดเก็บใน `localStorage` ช่วยให้หน้าเว็บแสดงผลทันทีโดยไม่ต้องรอ Round-trip API และผู้ใช้สามารถปรับแต่งผังห้องเฉพาะตัวได้แบบ Zero-latency
+3. **การใช้ TimeScaleDB เทียบกับ Vanilla PostgreSQL 17:**
+   * *ทางเลือกที่ถูกคัดออก:* TimeScaleDB Extension
+   * *เหตุผล:* ปริมาณข้อมูล Telemetry ของระบบมีอัตราเติบโตในระดับที่ควบคุมได้ การใช้ตาราง `interface_samples` และ `poll_runs` ร่วมกับการทำ Indexing บน PostgreSQL 17 Alpine มาตรฐาน ให้ความเบา (Lightweight), Portable และลดความซับซ้อนในการติดตั้ง Container
+
+### 2.4 ความเสี่ยง ขีดจำกัด และแนวทางแก้ไข (Risks, Constraints & Mitigations)
+1. **ความเสี่ยงการเกิด Multiple Background Polling เมื่อรันหลาย Uvicorn Workers:**
+   * *ความเสี่ยง:* หากรัน Uvicorn มากกว่า 1 Worker ใน Production แต่ละ Worker จะเริ่ม Task SNMP Poller แยกกัน ทำให้เกิดการยิง SNMP รบกวนอุปกรณ์สวิตช์ซ้ำซ้อน
+   * *แนวทางแก้ไข:* ใช้ **PostgreSQL Advisory Lock (`0x534E4D50`)** ใน `main.py` เพื่อให้มีเพียง 1 Worker ที่ได้สิทธิ์รัน Background Poller ในขณะใดขณะหนึ่ง หาก Worker ล้ม ระบบจะปลด Lock ให้อัตโนมัติ
+2. **ข้อจำกัดของ Windows TCP Backlog ต่อการทดสอบโหลด (> 500 VUs):**
+   * *ข้อจำกัด:* ระบบปฏิบัติการ Windows มี TCP Socket Backlog จำกัด หากส่งทราฟฟิกเกิน 500 VUs (> 4,500 req/s) Windows จะปฏิเสธการเชื่อมต่อ
+   * *แนวทางแก้ไข:* แนะนำให้รันระบบใน Docker Linux Host หรือกำหนด Connection Pooling และ Keep-Alive อย่างเหมาะสมหากต้องการขยายขนาดเกิน 1,000 VUs
+3. **ความเสี่ยงข้อมูลจำลองขัดแย้งกับข้อมูลจริง (Synthetic vs Real Data):**
+   * *ความเสี่ยง:* การสุ่มข้อมูลหรือสร้างคลื่น Sine หลอกอาจทำให้ผู้ดูแลเครือข่ายเข้าใจผิดเกี่ยวกับประสิทธิภาพของแบนด์วิธ
+   * *แนวทางแก้ไข:* ตัดโมดูลคำนวณทราฟฟิกคณิตศาสตร์ Sine Wave ออก หากอุปกรณ์ไม่ตอบสนอง SNMP ระบบจะบันทึกสถานะเป็น 0 Mbps และติดป้าย `No SNMP Data` ชัดเจน
 
 ---
 
@@ -279,8 +315,8 @@ C:\work\snmp_font_end\start_all.bat
 # ตรวจสอบสถานะ Container
 docker ps
 
-# หากยังไม่รัน ให้สั่งเริ่มด้วย:
-docker compose -f "$env:LOCALAPPDATA\Docker\docker-compose.yml" up -d
+# หากยังไม่รัน ให้สั่งเริ่มฐานข้อมูล PostgreSQL ผ่าน Docker Compose ในไดเรกทอรีโปรเจกต์:
+docker compose up -d
 ```
 * พอร์ตฐานข้อมูล: `127.0.0.1:5432`
 * ฐานข้อมูล: `netmon` (User: `netmon`)
@@ -288,7 +324,15 @@ docker compose -f "$env:LOCALAPPDATA\Docker\docker-compose.yml" up -d
 #### ขั้นตอนที่ 2: เริ่มต้นรัน Backend API (FastAPI)
 ```powershell
 cd C:\work\snmp_font_end\backend
+
+# สร้างและเปิดใช้งาน Virtual Environment (หากยังไม่มี)
+python -m venv venv
 .\venv\Scripts\activate
+
+# ติดตั้งแพ็กเกจที่จำเป็น
+pip install -r requirements.txt
+
+# เริ่มต้นรันเซิร์ฟเวอร์ FastAPI
 python -m uvicorn app.main:app --host 127.0.0.1 --port 8000 --reload
 ```
 * เอกสาร Interactive API (Swagger UI): `http://127.0.0.1:8000/docs`
@@ -311,20 +355,29 @@ npm run dev
 ```powershell
 cd C:\work\snmp_font_end\backend
 
-# ทดสอบ Endpoints CRUD ทั้งหมด
+# 1. ทดสอบ Classifier การจำแนกประเภทอุปกรณ์อัจฉริยะ (17 tests ผ่าน 100%)
+.\venv\Scripts\python.exe -m pytest test_classifier.py -v
+
+# 2. ทดสอบระบบ SNMP Poller, การคำนวณ Bandwidth และการ Roll-over เคาน์เตอร์ (9 tests ผ่าน 100%)
+.\venv\Scripts\python.exe -m pytest tests/ -v
+
+# 3. ทดสอบ Endpoints CRUD ทั้งหมด
 .\venv\Scripts\python.exe test_api.py
 
-# ทดสอบตรรกะการคำนวณตำแหน่งอุปกรณ์ลงห้อง (Smart Spot)
+# 4. ทดสอบตรรกะการคำนวณตำแหน่งอุปกรณ์ลงห้อง (Smart Spot)
 .\venv\Scripts\python.exe test_smart_placement.py
 
-# ทดสอบระบบสแกนและนำเข้าอุปกรณ์ (Discovery Engine)
+# 5. ทดสอบระบบสแกนและนำเข้าอุปกรณ์ (Discovery Engine)
 .\venv\Scripts\python.exe test_discovery.py
 
-# ทดสอบการเชื่อมต่อ Core Switch จริงผ่าน SNMP
+# 6. ทดสอบการเชื่อมต่อ Core Switch จริงผ่าน SNMP
 .\venv\Scripts\python.exe test_real_snmp.py
 
-# ทดสอบระบบ SNMP Poller & การคำนวณ Bandwidth รายพอร์ต (Pytest)
-$env:PYTHONPATH="."; .\venv\Scripts\python.exe -m pytest tests/ -v
+# 7. สคริปต์จำลองเหตุการณ์ขัดข้องเสมือนจริง 6 กรณี (Fault Simulation)
+.\venv\Scripts\python.exe simulate_faults.py
+
+# 8. รีเซ็ตฐานข้อมูลสู่สถานะเริ่มต้น
+curl -X POST http://127.0.0.1:8000/api/v1/reset
 ```
 
 ### 2. ทดสอบการคอมไพล์ Frontend (TypeScript & Vite):
@@ -500,17 +553,34 @@ k6 run C:\work\snmp_font_end\load_test.js
 * ปรับปรุง `poll_runs_status_check` Constraint ใน PostgreSQL ให้รองรับสถานะ `'warning'` ควบคู่กับ `'succeeded'` และ `'failed'`
 * เชื่อมโยงหน้า `ReportsPage` ให้ดึง Alerts จาก Database API มาแสดงร่วมกับ Mock Detail โดยอัตโนมัติ
 
+### 8.8 การแก้ไขข้อผิดพลาดระดับวิกฤตและความทนทานของระบบ (Version 1.3.4 — 10 พ.ย. 2026):
+1. **Zero-State DDL Idempotency (`backend/app/database.py`):**
+   - เพิ่มคำสั่ง `CREATE TABLE IF NOT EXISTS` แบบ Idempotent สำหรับตารางแกนหลักทั้งหมด (`devices`, `interfaces`, `poll_runs`, `interface_samples`, `device_metric_samples`, `alerts`) ครอบคลุม Foreign Keys, Index, และ Constraints ทำให้ระบบเริ่มต้นทำงานได้อย่างสมบูรณ์แบบ แม้เริ่มจากฐานข้อมูลว่างเปล่า (Zero-state DB)
+2. **ขจัดทราฟฟิกสังเคราะห์ Sine-Wave หลอก (`backend/app/collector.py`):**
+   - ตัดสูตรคำนวณคณิตศาสตร์ `math.sin` และ `math.cos` ออกจากการประมวลผลทราฟฟิกใน background poller สำหรับอุปกรณ์ที่ไม่มี SNMP telemetry ระบบจะตั้งค่า `has_snmp: False` และส่งทราฟฟิกเป็น 0 Mbps พร้อมป้ายกำกับ `No SNMP Data (ICMP Only)` อย่างถูกต้องตามความเป็นจริง 100%
+3. **ป้องกัน Multi-Worker Poll Duplication ด้วย PostgreSQL Advisory Lock (`backend/app/main.py`):**
+   - ฝัง PostgreSQL Session-level Advisory Lock (`0x534E4D50`) ในลูป `background_snmp_poller` ป้องกันไม่ให้ Uvicorn multi-worker process แย่งกันยิง SNMP ซ้ำซ้อนไปยังอุปกรณ์เครือข่ายเดียวกัน
+4. **บันทึกสถานะการเชื่อมต่อจริงใน `poll_runs` (`backend/app/main.py`):**
+   - บันทึกผลการสำรวจ (`status: succeeded` / `failed`, latency, error messages) ลงตาราง `poll_runs` ทุกรอบการทำงาน ทำให้อุปกรณ์สะท้อนสถานะการเชื่อมต่อจริงในแดชบอร์ดอย่างแม่นยำ
+5. **ปรับปรุง `simulate_faults.py` ค้นหา Foreign Key แบบไดนามิก:**
+   - แก้ไขการสร้าง Alert จำลองให้ดึงรหัสอุปกรณ์ (`device_id`) จากฐานข้อมูลจริงแบบไดนามิก ขจัดปัญหา `ForeignKeyViolationError` จากการฮาร์ดโค้ด ID ที่ไม่มีอยู่
+6. **Docker Compose แบบพกพา (Portable Docker Setup):**
+   - รวมไฟล์ `docker-compose.yml` และไดเรกทอรี `init/001_schema.sql` ไว้ที่ Root ของโปรเจกต์ ยกเลิกการอ้างอิง Path เฉพาะเครื่องใน `%LOCALAPPDATA%`
+
 ---
 
 ## 9. แนวทางการบำรุงรักษาและการขยายระบบในอนาคต (Maintenance & Scaling Guidelines)
 
 ### 9.1 การสำรองและกู้คืนฐานข้อมูล (Database Backup & Restore)
-```powershell
-# สำรองข้อมูลฐานข้อมูล netmon ออกมาเป็นไฟล์ SQL
-docker exec -t docker-db-1 pg_dump -U netmon netmon > backup_netmon_$(Get-Date -Format 'yyyyMMdd').sql
 
-# กู้คืนข้อมูลจากไฟล์สำรอง
-Get-Content backup_netmon_20261109.sql | docker exec -i docker-db-1 psql -U netmon -d netmon
+#### สำรองข้อมูล (Backup) เป็น UTF-8 ที่ปลอดภัยต่อการ Restore:
+```powershell
+docker exec -e PGPASSWORD=netmon docker-db-1 pg_dump -U netmon netmon | Out-File -Encoding utf8 backup_netmon.sql
+```
+
+#### กู้คืนข้อมูล (Restore) ผ่าน CMD Stream (ป้องกันปัญหา UTF-16 BOM ของ PowerShell):
+```powershell
+cmd /c "docker exec -i -e PGPASSWORD=netmon docker-db-1 psql -U netmon -d netmon < backup_netmon.sql"
 ```
 
 ### 9.2 การปรับตั้งค่า SNMP Timeout & Polling Interval

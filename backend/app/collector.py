@@ -453,23 +453,10 @@ async def get_device_traffic_series(
                     inbound[idx1 + step] = round(inbound[idx1] + frac * (inbound[idx2] - inbound[idx1]), 2)
                     outbound[idx1 + step] = round(outbound[idx1] + frac * (outbound[idx2] - outbound[idx1]), 2)
 
-    # Backfill prior historical trajectory (ดึงข้อมูลก่อนหน้ามาด้วย)
+    has_snmp = False
     if dev_row["enabled"]:
         if measured_indices:
-            # Baseline from measured real data
-            first_idx = measured_indices[0]
-            avg_m_in = sum(inbound[i] for i in measured_indices) / len(measured_indices)
-            avg_m_out = sum(outbound[i] for i in measured_indices) / len(measured_indices)
-            base_in = max(inbound[first_idx], avg_m_in)
-            base_out = max(outbound[first_idx], avg_m_out)
-
-            # Smooth historical curve backfilling prior buckets
-            for b in range(first_idx):
-                cycle = math.sin((b / max(point_count, 1)) * math.pi * 3.5) * 0.18 + math.cos((b / 5.5) * math.pi) * 0.08
-                factor = max(0.25, min(1.4, 0.95 + cycle))
-                inbound[b] = round(base_in * factor, 2)
-                outbound[b] = round(base_out * factor, 2)
-
+            has_snmp = True
             # Forward-fill latest measured rate up to current moment (now)
             last_idx = measured_indices[-1]
             if last_idx < point_count - 1:
@@ -477,17 +464,9 @@ async def get_device_traffic_series(
                     inbound[b] = inbound[last_idx]
                     outbound[b] = outbound[last_idx]
         else:
-            # If no measured points yet within window, provide baseline historical curve for active device
-            max_cap = 1000.0 if dev_row["dtype"] in ["switch", "router", "server"] else 300.0
-            if interface_id != "all":
-                max_cap = 100.0
-            base_in = max_cap * 0.22
-            base_out = max_cap * 0.16
-            for b in range(point_count):
-                cycle = math.sin((b / max(point_count, 1)) * math.pi * 3) * 0.15 + math.cos((b / 7.0) * math.pi) * 0.08
-                factor = max(0.2, min(1.4, 0.95 + cycle))
-                inbound[b] = round(base_in * factor, 2)
-                outbound[b] = round(base_out * factor, 2)
+            has_snmp = False
+            inbound = [0.0] * point_count
+            outbound = [0.0] * point_count
 
     # Final rounding and stats
     inbound = [round(v, 2) for v in inbound]
@@ -496,7 +475,7 @@ async def get_device_traffic_series(
     avg = round((sum(inbound) + sum(outbound)) / max(len(inbound) * 2, 1), 2)
 
     return {
-        "has_snmp": True,
+        "has_snmp": has_snmp,
         "interface_id": interface_id,
         "inbound": inbound,
         "outbound": outbound,

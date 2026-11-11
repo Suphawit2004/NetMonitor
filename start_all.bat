@@ -8,7 +8,7 @@ echo =========================================================
 echo.
 
 echo [1/3] Checking Docker PostgreSQL Database...
-docker compose -f "%LOCALAPPDATA%\Docker\docker-compose.yml" up -d >nul 2>&1
+docker compose up -d >nul 2>&1
 if %errorlevel% neq 0 docker start docker-db-1 >nul 2>&1
 timeout /t 2 /nobreak >nul
 

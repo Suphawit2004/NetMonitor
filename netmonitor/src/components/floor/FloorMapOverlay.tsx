@@ -43,7 +43,7 @@ interface Props {
   onToggleLock: (id: string) => void
 }
 
-type TileType = 'dark' | 'light' | 'satellite'
+type TileType = 'carto' | 'satellite'
 
 const mapApiKey = (import.meta.env.VITE_MAP_API_KEY || import.meta.env.VITE_API_KEY || 'cb1_52gf_1_09bb94a002ffbe18afbfb80e') as string
 
@@ -54,7 +54,7 @@ interface TileConfig {
   subdomains?: string
 }
 
-const TILE_CONFIGS: Record<TileType, TileConfig> = {
+const TILE_CONFIGS = {
   dark: {
     url: `https://{s}.basemaps.cartocdn.com/rastertiles/dark_all/{z}/{x}/{y}.png?key=${mapApiKey}`,
     attribution: '&copy; CartoDB &copy; CARTO',
@@ -72,6 +72,11 @@ const TILE_CONFIGS: Record<TileType, TileConfig> = {
     attribution: 'Tiles &copy; Esri &mdash; Source: Esri, i-cubed, USDA, USGS, AEX, GeoEye, Getmapping, Aerogrid, IGN, IGP, UPR-EGP, and the GIS User Community',
     maxNativeZoom: 19,
   },
+}
+
+function getTileConfig(tileType: TileType, isLight: boolean): TileConfig {
+  if (tileType === 'satellite') return TILE_CONFIGS.satellite
+  return isLight ? TILE_CONFIGS.light : TILE_CONFIGS.dark
 }
 
 const DEVICE_SVG_MAP: Record<DeviceType, string> = {
@@ -123,24 +128,13 @@ export default function FloorMapOverlay({
 
   const [isEditingBuilding, setIsEditingBuilding] = useState<boolean>(false)
   const [tileType, setTileType] = useState<TileType>(() => {
-    const saved = localStorage.getItem('netmonitor_map_tile') as TileType
-    if (saved === 'dark' || saved === 'satellite' || saved === 'light') return saved
-    return isLight ? 'light' : 'satellite'
+    const saved = localStorage.getItem('netmonitor_map_tile')
+    if (saved === 'satellite') return 'satellite'
+    return 'carto'
   })
-
-  // เมื่อเปลี่ยนธีมสว่าง/มืด ให้ซิงค์แผนที่ Carto ตามธีม (หากไม่ใช่โหมดภาพถ่ายดาวเทียม)
-  useEffect(() => {
-    if (tileType === 'dark' && isLight) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect
-      setTileType('light')
-    } else if (tileType === 'light' && !isLight) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect
-      setTileType('dark')
-    }
-  }, [isLight, tileType])
   const [overlayOpacity, setOverlayOpacity] = useState<number>(0.75)
   const [mapReady, setMapReady] = useState(false)
-  const [zoomLevel, setZoomLevel] = useState<number>(20.5)
+  const [zoomLevel, setZoomLevel] = useState<number>(20)
   const [isLocating, setIsLocating] = useState(false)
 
   // คำนวณพิกัดกึ่งกลางตัวอาคาร (รองรับทั้ง 4 มุมหมุนเอียงและกรอบสี่เหลี่ยม)
@@ -198,21 +192,24 @@ export default function FloorMapOverlay({
 
     const map = L.map(container, {
       center: buildingCenter,
-      zoom: 20.5,
-      minZoom: 18,
-      maxZoom: 22,
+      zoom: 20,
+      minZoom: 18.0,
+      maxZoom: 23,
+      zoomSnap: 0.25,
+      zoomDelta: 0.25,
+      wheelPxPerZoomLevel: 180,
       zoomControl: false,
     })
 
     L.control.zoom({ position: 'bottomright' }).addTo(map)
 
     // Base Tile Layer
-    const cfg = TILE_CONFIGS[tileType]
+    const cfg = getTileConfig(tileType, isLight)
     const tileLayer = L.tileLayer(cfg.url, {
       attribution: cfg.attribution,
       subdomains: cfg.subdomains || 'abc',
       maxNativeZoom: cfg.maxNativeZoom,
-      maxZoom: 22,
+      maxZoom: 23,
     }).addTo(map)
     tileLayerRef.current = tileLayer
 
@@ -432,17 +429,17 @@ export default function FloorMapOverlay({
     group.addLayer(handleCenter)
   }, [mapReady, isEditingBuilding, syncLayersToBounds, t])
 
-  // ── 4. สลับ Tile Layer (Dark / Satellite) ─────────────
+  // ── 4. สลับ Tile Layer (Carto ตามธีม / Satellite) ─────────────
   useEffect(() => {
     localStorage.setItem('netmonitor_map_tile', tileType)
     if (!mapRef.current || !tileLayerRef.current) return
-    const cfg = TILE_CONFIGS[tileType]
+    const cfg = getTileConfig(tileType, isLight)
     tileLayerRef.current.setUrl(cfg.url)
     tileLayerRef.current.options.maxNativeZoom = cfg.maxNativeZoom
     if (cfg.subdomains) {
       tileLayerRef.current.options.subdomains = cfg.subdomains
     }
-  }, [tileType])
+  }, [tileType, isLight])
 
   // ── 5. เรนเดอร์ผังห้อง (Room Overlay Polygons & Labels - เอียงตามอาคารจริง) ────
   useEffect(() => {
@@ -539,8 +536,8 @@ export default function FloorMapOverlay({
     // ในขณะกำลังปรับขนาดและตำแหน่งผัง ให้ซ่อนหมุดอุปกรณ์
     if (isEditingBuilding) return
 
-    const pinScale = Math.max(0.40, Math.min(1.15, Math.pow(1.22, zoomLevel - 20.5)))
-    const showNameTag = zoomLevel >= 20.0
+    const pinScale = Math.max(0.40, Math.min(1.20, Math.pow(1.10, zoomLevel - 20.0)))
+    const showNameTag = zoomLevel >= 19.5
 
     devices.forEach(device => {
       const hasCanvasPos = typeof device.x === 'number' && typeof device.y === 'number'
@@ -703,7 +700,7 @@ export default function FloorMapOverlay({
 
         // เลื่อนมุมมองแผนที่ไปยังพิกัดปัจจุบัน โดยไม่ต้องปรับกรอบแผนผังอาคาร
         if (mapRef.current) {
-          mapRef.current.flyTo([lat, lon], Math.max(mapRef.current.getZoom(), 19), { duration: 1.2 })
+          mapRef.current.flyTo([lat, lon], 20, { duration: 1.2 })
 
           // แสดงหมุดพิกัดปัจจุบันสีฟ้า (Current Location Pin)
           if (userLocationMarkerRef.current) {
@@ -789,7 +786,7 @@ export default function FloorMapOverlay({
 
         <div className={styles.toolDivider} />
 
-        {/* Map Tile Layer Selector (Dark / Light / Satellite) */}
+        {/* Map Tile Layer Selector (Carto Auto Theme / Satellite) */}
         <select
           className={styles.layerSelect}
           value={tileType}
@@ -800,9 +797,8 @@ export default function FloorMapOverlay({
           }}
           title={t('floor.layerSelectTitle')}
         >
+          <option value="carto">{t('floor.tileCarto')}</option>
           <option value="satellite">{t('floor.tileSatellite')}</option>
-          <option value="dark">{t('floor.tileDark')}</option>
-          <option value="light">{t('floor.tileLight')}</option>
         </select>
 
         <div className={styles.toolDivider} />
