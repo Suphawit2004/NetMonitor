@@ -458,6 +458,26 @@ async def trigger_poll(device_id: int):
     if not dev:
         raise HTTPException(status_code=404, detail="Device not found")
 
+    # If this is a simulated device, handle poll without crashing on real network
+    if dev["credential_ref"] in ("simulated", "mock", "demo"):
+        # Check if device currently has critical alerts
+        crit_alert = await pool.fetchval(
+            "SELECT title FROM alerts WHERE device_id = $1 AND severity = 'crit' AND acknowledged = false LIMIT 1",
+            device_id
+        )
+        sim_status = "failed" if crit_alert else "succeeded"
+        sim_err = f"Simulated fault: {crit_alert}" if crit_alert else None
+        await repository.record_poll_run(
+            pool, device_id, datetime.now(timezone.utc), sim_status, sim_err
+        )
+        return {
+            "device_id": device_id,
+            "success": sim_status == "succeeded",
+            "uptime_raw": 0 if sim_status == "failed" else 4523000,
+            "error": sim_err,
+            "status": sim_status,
+        }
+
     community = dev["credential_ref"] or settings.SNMP_COMMUNITY
     version = dev["snmp_version"]
     if version == "v2c":
@@ -474,9 +494,8 @@ async def trigger_poll(device_id: int):
     )
 
     poll_status = "succeeded" if success else "failed"
-    await pool.execute(
-        "INSERT INTO poll_runs (device_id, status, error_message, finished_at) VALUES ($1, $2, $3, now())",
-        device_id, poll_status, err
+    await repository.record_poll_run(
+        pool, device_id, datetime.now(timezone.utc), poll_status, err
     )
 
     return {
@@ -536,6 +555,33 @@ async def poll_device_traffic(device_id: int):
     dev = await pool.fetchrow("SELECT id, host(management_ip) AS ip, credential_ref, snmp_port, snmp_version FROM devices WHERE id = $1", device_id)
     if not dev:
         raise HTTPException(status_code=404, detail="Device not found")
+
+    if dev.get("credential_ref") in ("simulated", "mock", "demo"):
+        if_rows = await repository.fetch_device_interfaces(pool, device_id)
+        interfaces_out = [
+            InterfaceTrafficOut(
+                id=str(r["id"]),
+                if_index=r["if_index"],
+                name=r["name"],
+                description=r["description"],
+                speed_bps=r["speed_bps"],
+                oper_status=r["oper_status"],
+                in_mbps=18.4 if r["oper_status"] == "up" else 0.0,
+                out_mbps=9.7 if r["oper_status"] == "up" else 0.0,
+            )
+            for r in if_rows
+        ]
+        total_in = sum(i.in_mbps for i in interfaces_out)
+        total_out = sum(i.out_mbps for i in interfaces_out)
+        return PollTrafficResult(
+            success=True,
+            has_snmp=True,
+            interfaces_polled=len(interfaces_out),
+            total_in_mbps=total_in,
+            total_out_mbps=total_out,
+            timestamp=datetime.now(timezone.utc).isoformat(),
+            interfaces=interfaces_out
+        )
 
     community = dev["credential_ref"] or settings.SNMP_COMMUNITY
     version = "2c" if dev["snmp_version"] == "v2c" else "1"
@@ -925,10 +971,7 @@ async def create_device_alert(device_id: str, payload: AlertCreate):
 async def acknowledge_alert(alert_id: int):
     pool = await get_db_pool()
     try:
-        res = await pool.execute(
-            "UPDATE alerts SET acknowledged = true, acknowledged_by = 'admin' WHERE id = $1",
-            alert_id,
-        )
+        res = await repository.acknowledge_alert(pool, alert_id)
         if res == "UPDATE 0":
             raise HTTPException(status_code=404, detail="Alert not found")
         return {"success": True, "alert_id": alert_id, "acknowledged": True}

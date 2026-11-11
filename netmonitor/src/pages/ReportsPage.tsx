@@ -5,10 +5,10 @@ import { useNetwork } from '../context/networkContext'
 import { useSimulation } from '../context/simulationContext'
 import { useToast } from '../components/ui/toast-context'
 import { buildDeviceDetail } from '../services/detailFactory'
-import { fetchAlerts } from '../services/api'
+import { fetchAlerts, acknowledgeAlert } from '../services/api'
 import { formatTimeAgo } from '../i18n/format'
 import { DEVICE_ICON } from '../constants/deviceMeta'
-import { BarChart3, Download, AlertOctagon, AlertTriangle, Info } from 'lucide-react'
+import { BarChart3, Download, AlertOctagon, AlertTriangle, Info, Check } from 'lucide-react'
 import styles from './ReportsPage.module.css'
 
 const TYPE_LABEL_KEYS: Record<DeviceType, string> = {
@@ -31,10 +31,22 @@ interface Props {
 
 export default function ReportsPage({ onDeviceInfo }: Props) {
   const { t } = useTranslation()
-  const { devices } = useNetwork()
+  const { devices, retryDevices } = useNetwork()
   const { tick } = useSimulation()
   const { showToast } = useToast()
   const [dbAlerts, setDbAlerts] = useState<Alert[]>([])
+
+  async function handleAcknowledge(e: React.MouseEvent, alertId: string | number) {
+    e.stopPropagation()
+    const ok = await acknowledgeAlert(alertId)
+    if (ok) {
+      showToast('รับทราบการแจ้งเตือนแล้ว', 'success')
+      setDbAlerts(prev => prev.filter(a => String(a.id) !== String(alertId)))
+      retryDevices()
+    } else {
+      showToast('ไม่สามารถรับทราบการแจ้งเตือนได้', 'error')
+    }
+  }
 
   useEffect(() => {
     fetchAlerts().then(list => {
@@ -250,6 +262,17 @@ export default function ReportsPage({ onDeviceInfo }: Props) {
                 <span className={`${styles.sev} ${alert.severity === 'crit' ? styles.crit : styles.warn}`}>
                   {alert.severity.toUpperCase()}
                 </span>
+                {alert.id && (
+                  <button
+                    type="button"
+                    className={styles.ackBtn}
+                    onClick={e => handleAcknowledge(e, alert.id)}
+                    title="กดเพื่อรับทราบการแจ้งเตือน"
+                  >
+                    <Check size={12} />
+                    <span>รับทราบ</span>
+                  </button>
+                )}
               </button>
             )
           })

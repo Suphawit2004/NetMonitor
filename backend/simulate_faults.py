@@ -8,9 +8,77 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import asyncio
+import json
 from datetime import datetime, timezone
 import asyncpg
 from app.database import get_db_pool, close_db
+
+
+async def ensure_simulated_interfaces_and_metrics(pool: asyncpg.Pool, dev_id: int, dtype: str, name: str, status: str):
+    """Ensures realistic interfaces, telemetry metrics, and traffic samples exist for simulated devices."""
+    has_if = await pool.fetchval("SELECT count(*) FROM interfaces WHERE device_id = $1", dev_id)
+    if has_if == 0:
+        if dtype == "router":
+            ifs = [
+                (1, "GigabitEthernet0/0/0", "WAN Fiber Internet (ISP-1)", "00:50:56:A1:B2:01", 1000000000, "up", "up" if status != "offline" else "down"),
+                (2, "GigabitEthernet0/0/1", "WAN Backup 5G (ISP-2)", "00:50:56:A1:B2:02", 1000000000, "up", "up" if status != "offline" else "down"),
+                (3, "TenGigabitEthernet0/1/0", "LAN Downlink to Core Switch", "00:50:56:A1:B2:03", 10000000000, "up", "up" if status != "offline" else "down"),
+            ]
+        elif dtype == "ap":
+            ifs = [
+                (1, "eth0", "PoE Gigabit Uplink", "00:50:56:B2:C3:01", 1000000000, "up", "up" if status != "offline" else "down"),
+                (2, "wifi0", "Radio 5GHz 802.11ax", "00:50:56:B2:C3:02", 2400000000, "up", "up" if status != "offline" else "down"),
+                (3, "wifi1", "Radio 2.4GHz 802.11ax", "00:50:56:B2:C3:03", 574000000, "up", "up" if status != "offline" else "down"),
+            ]
+        elif dtype == "server":
+            ifs = [
+                (1, "eth0", "Primary NIC 10GbE", "00:50:56:C3:D4:01", 10000000000, "up", "up" if status != "offline" else "down"),
+                (2, "eth1", "Management iDRAC", "00:50:56:C3:D4:02", 1000000000, "up", "up" if status != "offline" else "down"),
+            ]
+        else: # switch
+            ifs = [
+                (1, "GigabitEthernet1/0/1", "Trunk Uplink to Core", "00:50:56:D4:E5:01", 10000000000, "up", "up" if status != "offline" else "down"),
+                (2, "GigabitEthernet1/0/2", "Access Port - Workstations", "00:50:56:D4:E5:02", 1000000000, "up", "up" if status != "offline" else "down"),
+                (3, "GigabitEthernet1/0/3", "Access Port - Printers", "00:50:56:D4:E5:03", 1000000000, "up", "up" if status != "offline" else "down"),
+            ]
+        for if_idx, if_name, if_desc, mac, speed, adm, oper in ifs:
+            await pool.execute("""
+                INSERT INTO interfaces (device_id, if_index, name, description, mac_address, speed_bps, admin_status, oper_status)
+                VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+                ON CONFLICT (device_id, if_index) DO NOTHING
+            """, dev_id, if_idx, if_name, if_desc, mac, speed, adm, oper)
+
+    # 2. Insert metrics (CPU, Memory, Temp)
+    cpu_val = 88.5 if status == "warning" and dtype == "router" else (78.0 if status == "warning" else (22.5 if status == "online" else 0.0))
+    mem_val = 74.2 if status == "warning" else (48.0 if status == "online" else 0.0)
+    temp_val = 68.0 if status == "warning" and dtype == "switch" else (46.0 if status == "online" else 25.0)
+
+    for metric_name, val, oid, unit in [
+        ("cpu_usage_percent", cpu_val, ".1.3.6.1.4.1.9.9.109.1.1.1.1.5.1", "%"),
+        ("memory_usage_percent", mem_val, ".1.3.6.1.4.1.9.9.48.1.1.1.5.1", "%"),
+        ("chassis_temperature_c", temp_val, ".1.3.6.1.4.1.9.9.13.1.3.1.3.1", "Celsius"),
+    ]:
+        await pool.execute("""
+            INSERT INTO device_metric_samples (device_id, sampled_at, oid, metric_name, numeric_value, text_value, labels)
+            VALUES ($1, now(), $2, $3, $4, NULL, $5::jsonb)
+            ON CONFLICT (device_id, sampled_at, oid, labels) DO NOTHING
+        """, dev_id, oid, metric_name, val, json.dumps({"unit": unit}))
+
+    # 3. Insert historical interface samples for traffic charts
+    if status != "offline":
+        if_id = await pool.fetchval("SELECT id FROM interfaces WHERE device_id = $1 ORDER BY if_index ASC LIMIT 1", dev_id)
+        if if_id:
+            await pool.execute("""
+                INSERT INTO interface_samples (interface_id, sampled_at, in_octets, out_octets, in_errors, out_errors, in_discards, out_discards)
+                SELECT 
+                    $1, 
+                    now() - (s.n * INTERVAL '30 second'), 
+                    (50000000000 + (s.n * 125000000))::numeric(20, 0),
+                    (25000000000 + (s.n * 85000000))::numeric(20, 0),
+                    0, 0, 0, 0
+                FROM generate_series(0, 10) AS s(n)
+                ON CONFLICT (interface_id, sampled_at) DO NOTHING;
+            """, if_id)
 
 
 async def apply_sample_statuses(pool: asyncpg.Pool) -> dict:
@@ -203,6 +271,11 @@ async def apply_sample_statuses(pool: asyncpg.Pool) -> dict:
         # Tag device as simulated so background poller won't overwrite it
         if dev_id != (sw_core["id"] if sw_core else None):
             await pool.execute("UPDATE devices SET credential_ref = 'simulated', enabled = true WHERE id = $1", dev_id)
+
+        # Ensure realistic interfaces and metrics for simulated device
+        dtype_val = await pool.fetchval("SELECT dtype FROM devices WHERE id = $1", dev_id)
+        if dtype_val:
+            await ensure_simulated_interfaces_and_metrics(pool, dev_id, dtype_val, s["name"], s["status"])
 
         # Clear old warn/crit alerts for this device
         await pool.execute("DELETE FROM alerts WHERE device_id = $1 AND severity IN ('warn', 'crit')", dev_id)

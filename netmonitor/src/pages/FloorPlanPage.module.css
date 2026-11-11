@@ -164,6 +164,31 @@
   font-weight: 500;
 }
 
+.sampleStatusBtn {
+  height: 30px;
+  padding: 0 10px;
+  border-radius: 6px;
+  border: 1px solid rgba(245, 158, 11, 0.4);
+  background: rgba(245, 158, 11, 0.1);
+  color: #d97706;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  transition: all 0.15s ease;
+}
+.sampleStatusBtn:hover {
+  background: rgba(245, 158, 11, 0.2);
+  border-color: #d97706;
+}
+.sampleStatusBtn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
 .scanBtn {
   height: 30px;
   padding: 0 10px;

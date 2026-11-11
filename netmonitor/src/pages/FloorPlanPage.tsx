@@ -15,6 +15,7 @@ import {
   Lock,
   Unlock,
   Scan,
+  Sparkles,
   CheckCircle2,
   AlertTriangle,
   XCircle,
@@ -41,9 +42,22 @@ export default function FloorPlanPage({
   const { t } = useTranslation()
   const {
     devices, loading,
-    moveDevice, commitDevicePosition, toggleLock, setFloorLockAll,
+    moveDevice, commitDevicePosition, toggleLock, setFloorLockAll, simulateSampleStatuses,
   } = useNetwork()
   const { showToast } = useToast()
+  const [simulating, setSimulating] = useState(false)
+
+  const handleLoadSampleStatuses = async () => {
+    try {
+      setSimulating(true)
+      await simulateSampleStatuses()
+      showToast('นำเข้าตัวอย่างสถานะสำเร็จ (Online, Warning, Offline)', 'success')
+    } catch {
+      showToast('ไม่สามารถนำเข้าตัวอย่างสถานะได้', 'error')
+    } finally {
+      setSimulating(false)
+    }
+  }
 
   const [localFloor, setLocalFloor] = useState<1 | 2>(() => {
     const saved = localStorage.getItem('netmonitor_floor')
@@ -264,6 +278,17 @@ export default function FloorPlanPage({
             >
               {isMoveMode ? <Lock size={13} /> : <Unlock size={13} />}
               <span>{isMoveMode ? t('floor.lockPositions') : t('floor.moveMode')}</span>
+            </button>
+
+            <button
+              className={styles.sampleStatusBtn}
+              onClick={handleLoadSampleStatuses}
+              disabled={simulating}
+              title="นำเข้าตัวอย่างสถานะ (Online, Warning, Offline)"
+              type="button"
+            >
+              <Sparkles size={13} />
+              <span>{simulating ? 'กำลังนำเข้า...' : 'ตัวอย่างสถานะ'}</span>
             </button>
 
             <button

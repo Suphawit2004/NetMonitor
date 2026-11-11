@@ -41,7 +41,7 @@ export default function DeviceDetailPage({
   onViewAllAlerts,
 }: Props) {
   const { t } = useTranslation()
-  const { devices, connectDevice } = useNetwork()
+  const { devices, connectDevice, retryDevices } = useNetwork()
   const { live, intervalSec } = useSimulation()
   const { showToast } = useToast()
   const [tab, setTab] = useState<Tab>('ports')
@@ -146,6 +146,7 @@ export default function DeviceDetailPage({
     const ok = await acknowledgeAlert(alertId)
     if (ok) {
       showToast(t('alerts.ackSuccess'), 'success')
+      retryDevices()
     }
   }
 

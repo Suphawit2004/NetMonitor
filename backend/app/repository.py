@@ -253,3 +253,10 @@ async def fetch_alerts(
     query += f" LIMIT ${len(params)}"
 
     return await pool.fetch(query, *params)
+
+async def acknowledge_alert(pool: asyncpg.Pool, alert_id: int, acknowledged_by: str = "admin") -> str:
+    """Marks an alert as acknowledged and records the acknowledger."""
+    return await pool.execute(
+        "UPDATE alerts SET acknowledged = true, acknowledged_by = $1 WHERE id = $2",
+        acknowledged_by, alert_id
+    )
