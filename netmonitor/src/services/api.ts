@@ -205,6 +205,22 @@ export async function deleteDevice(id: string): Promise<boolean> {
   return db.length < before
 }
 
+export async function simulateSampleStatuses(): Promise<Device[]> {
+  try {
+    const res = await fetch(`${API_BASE}/simulate/sample-statuses`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: '{}',
+    })
+    if (res.ok) {
+      return await fetchDevices()
+    }
+  } catch (err) {
+    console.warn('Backend simulate API unavailable', err)
+  }
+  return await fetchDevices()
+}
+
 export async function resetDevices(): Promise<Device[]> {
   try {
     const res = await fetch(`${API_BASE}/reset`, {

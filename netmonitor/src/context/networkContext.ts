@@ -19,6 +19,7 @@ export interface NetworkContextValue {
   removeDevice: (id: string) => Promise<void>
   resetDevices: () => Promise<void>
   clearDevices: () => Promise<void>
+  simulateSampleStatuses: () => Promise<void>
   connectDevice: (id: string) => Promise<ConnectResult>
   importDiscovered: (items: Array<{
     name: string

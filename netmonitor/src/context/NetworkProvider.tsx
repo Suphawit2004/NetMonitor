@@ -146,6 +146,12 @@ export default function NetworkProvider({ children }: { children: ReactNode }) {
     setSelectedDeviceId(null)
   }, [])
 
+  const simulateSampleStatuses = useCallback(async () => {
+    const list = await api.simulateSampleStatuses()
+    setDevices(list)
+    setSelectedDeviceId(null)
+  }, [])
+
   const connectDevice = useCallback(async (id: string): Promise<ConnectResult> => {
     const res = await api.connectDevice(id)
     if (res.success) {
@@ -183,12 +189,12 @@ export default function NetworkProvider({ children }: { children: ReactNode }) {
     devices, loading, error,
     selectedDeviceId, selectedDevice,
     selectDevice, retryDevices, addDevice, updateDevice, moveDevice, commitDevicePosition,
-    toggleLock, setLockMany, setFloorLockAll, removeDevice, resetDevices, clearDevices, connectDevice, importDiscovered,
+    toggleLock, setLockMany, setFloorLockAll, removeDevice, resetDevices, clearDevices, simulateSampleStatuses, connectDevice, importDiscovered,
   }), [
     devices, loading, error,
     selectedDeviceId, selectedDevice,
     selectDevice, retryDevices, addDevice, updateDevice, moveDevice, commitDevicePosition,
-    toggleLock, setLockMany, setFloorLockAll, removeDevice, resetDevices, clearDevices, connectDevice, importDiscovered,
+    toggleLock, setLockMany, setFloorLockAll, removeDevice, resetDevices, clearDevices, simulateSampleStatuses, connectDevice, importDiscovered,
   ])
 
   return <NetworkContext.Provider value={value}>{children}</NetworkContext.Provider>

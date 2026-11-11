@@ -8,6 +8,7 @@ import {
   Scan,
   Plus,
   Trash2,
+  Sparkles,
   Search,
   X,
   Copy,
@@ -33,8 +34,9 @@ interface Props {
 
 export default function DeviceListPage({ onDeviceClick }: Props) {
   const { t } = useTranslation()
-  const { devices, loading, addDevice, removeDevice, clearDevices } = useNetwork()
+  const { devices, loading, addDevice, removeDevice, clearDevices, simulateSampleStatuses } = useNetwork()
   const { showToast } = useToast()
+  const [simulating, setSimulating] = useState(false)
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all')
   const [floorFilter, setFloorFilter] = useState<'all' | '1' | '2'>('all')
   const [searchQuery, setSearchQuery] = useState('')
@@ -127,6 +129,18 @@ export default function DeviceListPage({ onDeviceClick }: Props) {
       showToast(t('common.error'), 'error')
     } finally {
       setDeletingDevice(null)
+    }
+  }
+
+  async function handleLoadSampleStatuses() {
+    try {
+      setSimulating(true)
+      await simulateSampleStatuses()
+      showToast('นำเข้าตัวอย่างสถานะสำเร็จ (Online, Warning, Offline)', 'success')
+    } catch {
+      showToast('ไม่สามารถนำเข้าตัวอย่างสถานะได้', 'error')
+    } finally {
+      setSimulating(false)
     }
   }
 
@@ -229,6 +243,17 @@ export default function DeviceListPage({ onDeviceClick }: Props) {
         </div>
 
         <div className={styles.toolbarRight}>
+          <button
+            className={styles.sampleStatusBtn}
+            onClick={handleLoadSampleStatuses}
+            disabled={simulating}
+            title="นำเข้าตัวอย่างสถานะอุปกรณ์ทุกประเภท (Online, Warning, Offline)"
+            type="button"
+          >
+            <Sparkles size={14} />
+            <span>{simulating ? 'กำลังนำเข้า...' : 'นำเข้าตัวอย่างสถานะ'}</span>
+          </button>
+
           <button
             className={styles.scanBtn}
             onClick={() => setScanOpen(true)}

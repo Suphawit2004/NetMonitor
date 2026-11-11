@@ -126,13 +126,18 @@ app.add_middleware(
 def compute_device_status(row: asyncpg.Record) -> DeviceStatus:
     if not row["enabled"]:
         return "offline"
+    alert_sev = row.get("alert_severity")
+    if alert_sev == "crit":
+        return "offline"
     poll_status = row.get("latest_poll_status")
-    # If unverified (no poll runs) or failed -> always offline
+    # If unverified (no poll runs) or failed -> offline
     if not poll_status or poll_status == "failed":
         return "offline"
-    if poll_status == "warning":
+    if alert_sev == "warn" or poll_status == "warning":
         return "warning"
-    return "online"
+    if poll_status == "succeeded":
+        return "online"
+    return "offline"
 
 @app.get("/health")
 async def health_check():
@@ -149,24 +154,7 @@ async def api_health_check():
 @app.get("/api/v1/devices", response_model=List[DeviceOut])
 async def list_devices():
     pool = await get_db_pool()
-    query = """
-        SELECT 
-            d.id, d.name, d.hostname, host(d.management_ip) AS ip, 
-            d.snmp_port, d.snmp_version, d.poll_interval_s, 
-            d.location, d.enabled, d.dtype, d.floor, d.x, d.y, 
-            d.locked, d.model, d.latitude, d.longitude, d.altitude,
-            p.status AS latest_poll_status
-        FROM devices d
-        LEFT JOIN LATERAL (
-            SELECT status 
-            FROM poll_runs 
-            WHERE device_id = d.id 
-            ORDER BY started_at DESC 
-            LIMIT 1
-        ) p ON TRUE
-        ORDER BY d.id ASC;
-    """
-    rows = await pool.fetch(query)
+    rows = await repository.fetch_devices_with_telemetry(pool)
     
     devices_data = []
     need_placement = []
@@ -191,10 +179,7 @@ async def list_devices():
             devices_data.append(d)
             # Update coordinate and room location back to DB
             location_str = f"Floor {d['floor']} – {room_label}"
-            await pool.execute(
-                "UPDATE devices SET x = $1, y = $2, location = $3 WHERE id = $4",
-                gx, gy, location_str, d["id"]
-            )
+            await repository.update_device_placement(pool, d["id"], gx, gy, location_str)
 
     return [
         DeviceOut(
@@ -220,7 +205,7 @@ async def create_device(payload: DeviceCreate):
     pool = await get_db_pool()
     
     # Check duplicate name
-    existing_name = await pool.fetchval("SELECT id FROM devices WHERE LOWER(name) = LOWER($1)", payload.name)
+    existing_name = await repository.check_device_name_exists(pool, payload.name)
     if existing_name:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -237,8 +222,7 @@ async def create_device(payload: DeviceCreate):
             x = gx
             y = gy
         else:
-            all_devs = await pool.fetch("SELECT floor, x, y FROM devices WHERE x IS NOT NULL AND y IS NOT NULL")
-            placed_list = [dict(r) for r in all_devs]
+            placed_list = await repository.fetch_placed_device_coords(pool)
             gx, gy, room_label = pick_smart_spot(placed_list, payload.floor, payload.dtype)
             x = x if x is not None else gx
             y = y if y is not None else gy
@@ -249,36 +233,27 @@ async def create_device(payload: DeviceCreate):
     ip = payload.ip or "192.168.1.100"
     hostname = f"{payload.name.lower().replace(' ', '-')}.corp.local"
 
-    insert_query = """
-        INSERT INTO devices (
-            name, hostname, management_ip, snmp_port, snmp_version, 
-            credential_ref, poll_interval_s, location, enabled,
-            dtype, floor, x, y, locked, model, latitude, longitude, altitude
-        )
-        VALUES ($1, $2, $3::inet, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)
-        RETURNING id, name, dtype, floor, x, y, locked, host(management_ip) AS ip, model, latitude, longitude, altitude;
-    """
     try:
-        row = await pool.fetchrow(
-            insert_query,
-            payload.name,
-            hostname,
-            ip,
-            payload.snmp_port,
-            payload.snmp_version,
-            payload.credential_ref,
-            payload.poll_interval_s,
-            location_str,
-            payload.enabled,
-            payload.dtype,
-            payload.floor,
-            x,
-            y,
-            payload.locked if payload.locked is not None else True,
-            payload.model,
-            payload.latitude,
-            payload.longitude,
-            payload.altitude,
+        row = await repository.insert_device(
+            pool=pool,
+            name=payload.name,
+            hostname=hostname,
+            ip=ip,
+            snmp_port=payload.snmp_port,
+            snmp_version=payload.snmp_version,
+            credential_ref=payload.credential_ref,
+            poll_interval_s=payload.poll_interval_s,
+            location_str=location_str,
+            enabled=payload.enabled,
+            dtype=payload.dtype,
+            floor=payload.floor,
+            x=x,
+            y=y,
+            locked=payload.locked if payload.locked is not None else True,
+            model=payload.model,
+            latitude=payload.latitude,
+            longitude=payload.longitude,
+            altitude=payload.altitude,
         )
     except asyncpg.UniqueViolationError:
         raise HTTPException(
@@ -287,9 +262,12 @@ async def create_device(payload: DeviceCreate):
         )
 
     # Insert initial unverified poll run (starts as offline)
-    await pool.execute(
-        "INSERT INTO poll_runs (device_id, status, error_message) VALUES ($1, 'failed', 'Awaiting connection verification')",
+    await repository.record_poll_run(
+        pool,
         row["id"],
+        datetime.now(timezone.utc),
+        "failed",
+        "Awaiting connection verification"
     )
 
     return DeviceOut(
@@ -311,24 +289,7 @@ async def create_device(payload: DeviceCreate):
 @app.get("/api/v1/devices/{device_id}", response_model=DeviceDetailOut)
 async def get_device_detail(device_id: int):
     pool = await get_db_pool()
-    dev_row = await pool.fetchrow(
-        """
-        SELECT 
-            d.id, d.name, d.hostname, host(d.management_ip) AS ip, 
-            d.snmp_port, d.snmp_version, d.poll_interval_s, 
-            d.location, d.enabled, d.dtype, d.floor, d.x, d.y, 
-            d.locked, d.model, d.latitude, d.longitude, d.altitude,
-            p.status AS latest_poll_status
-        FROM devices d
-        LEFT JOIN LATERAL (
-            SELECT status FROM poll_runs 
-            WHERE device_id = d.id 
-            ORDER BY started_at DESC LIMIT 1
-        ) p ON TRUE
-        WHERE d.id = $1
-        """,
-        device_id,
-    )
+    dev_row = await repository.fetch_device_detail_by_id(pool, device_id)
     if not dev_row:
         raise HTTPException(status_code=404, detail="Device not found")
 
@@ -348,10 +309,7 @@ async def get_device_detail(device_id: int):
         altitude=dev_row["altitude"],
     )
 
-    if_rows = await pool.fetch(
-        "SELECT id, device_id, if_index, name, description, mac_address, speed_bps, admin_status, oper_status FROM interfaces WHERE device_id = $1 ORDER BY if_index ASC",
-        device_id,
-    )
+    if_rows = await repository.fetch_device_interfaces(pool, device_id)
     interfaces = [
         InterfaceOut(
             id=str(r["id"]),
@@ -367,15 +325,7 @@ async def get_device_detail(device_id: int):
         for r in if_rows
     ]
 
-    metric_rows = await pool.fetch(
-        """
-        SELECT DISTINCT ON (metric_name) metric_name, numeric_value, sampled_at
-        FROM device_metric_samples
-        WHERE device_id = $1
-        ORDER BY metric_name, sampled_at DESC
-        """,
-        device_id,
-    )
+    metric_rows = await repository.fetch_device_latest_metrics(pool, device_id)
     metrics = {r["metric_name"]: r["numeric_value"] for r in metric_rows}
 
     return DeviceDetailOut(
@@ -457,13 +407,21 @@ async def update_device(device_id: int, payload: DeviceUpdate):
             d.id, d.name, d.dtype, d.floor, d.x, d.y, d.locked, 
             host(d.management_ip) AS ip, d.model, d.enabled,
             d.latitude, d.longitude, d.altitude,
-            p.status AS latest_poll_status
+            p.status AS latest_poll_status,
+            a.highest_severity AS alert_severity
         FROM devices d
         LEFT JOIN LATERAL (
             SELECT status FROM poll_runs 
             WHERE device_id = d.id 
             ORDER BY started_at DESC LIMIT 1
         ) p ON TRUE
+        LEFT JOIN LATERAL (
+            SELECT severity AS highest_severity
+            FROM alerts
+            WHERE device_id = d.id AND acknowledged = false
+            ORDER BY CASE severity WHEN 'crit' THEN 1 WHEN 'warn' THEN 2 ELSE 3 END ASC
+            LIMIT 1
+        ) a ON TRUE
         WHERE d.id = $1
         """,
         device_id,
@@ -488,7 +446,7 @@ async def update_device(device_id: int, payload: DeviceUpdate):
 @app.delete("/api/v1/devices/{device_id}", status_code=status.HTTP_200_OK)
 async def delete_device(device_id: int):
     pool = await get_db_pool()
-    result = await pool.execute("DELETE FROM devices WHERE id = $1", device_id)
+    result = await repository.delete_device(pool, device_id)
     if result == "DELETE 0":
         raise HTTPException(status_code=404, detail="Device not found")
     return {"success": True, "deleted_id": device_id}
@@ -864,6 +822,25 @@ async def reset_database():
         logger.error(f"Reset failed: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
+@app.post("/api/v1/simulate/sample-statuses")
+async def simulate_sample_statuses():
+    """
+    Populates diverse sample statuses (Online, Warning, Offline) across all device types
+    (Router, Switch, AP, Server) on Floor 1 and Floor 2 with corresponding alerts.
+    """
+    pool = await get_db_pool()
+    try:
+        from simulate_faults import apply_sample_statuses
+        summary = await apply_sample_statuses(pool)
+        return {
+            "success": True,
+            "message": "Sample device statuses and alerts applied successfully",
+            "summary": summary
+        }
+    except Exception as e:
+        logger.error(f"Simulate statuses failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
 # ── Alert API Endpoints ─────────────────────────────────────
 
 @app.get("/api/v1/alerts", response_model=List[AlertOut])
@@ -877,32 +854,21 @@ async def list_alerts(
     Returns alerts from database, optionally filtered by device_id, severity, or unacknowledged status.
     """
     pool = await get_db_pool()
-    query = """
-        SELECT id, device_id, severity, icon, title, description,
-               to_char(created_at, 'YYYY-MM-DD"T"HH24:MI:SSZ') AS created_at,
-               acknowledged, acknowledged_by
-        FROM alerts
-        WHERE 1=1
-    """
-    params = []
+    dev_id_int: Optional[int] = None
     if device_id:
         try:
-            params.append(int(device_id))
-            query += f" AND device_id = ${len(params)}"
+            dev_id_int = int(device_id)
         except ValueError:
             return []
-    if severity:
-        params.append(severity)
-        query += f" AND severity = ${len(params)}"
-    if unack_only:
-        query += " AND acknowledged = false"
-
-    query += " ORDER BY created_at DESC"
-    params.append(limit)
-    query += f" LIMIT ${len(params)}"
 
     try:
-        rows = await pool.fetch(query, *params)
+        rows = await repository.fetch_alerts(
+            pool=pool,
+            device_id=dev_id_int,
+            severity=severity,
+            unack_only=unack_only,
+            limit=limit,
+        )
         return [
             AlertOut(
                 id=r["id"],
