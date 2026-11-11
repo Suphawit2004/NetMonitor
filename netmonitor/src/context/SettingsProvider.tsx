@@ -41,9 +41,9 @@ export default function SettingsProvider({ children }: { children: ReactNode }) 
 
   // sync uiScale กับ <html data-ui-scale> และ style.zoom
   useEffect(() => {
-    const scale = settings.uiScale || '150%'
+    const scale = settings.uiScale || '100%'
     document.documentElement.setAttribute('data-ui-scale', scale)
-    const numericZoom = scale === '100%' ? '1' : scale === '125%' ? '1.25' : '1.5'
+    const numericZoom = scale === '100%' ? '1' : scale === '125%' ? '1.15' : '1.25'
     document.documentElement.style.zoom = numericZoom
   }, [settings.uiScale])
 

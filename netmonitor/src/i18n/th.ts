@@ -58,6 +58,7 @@ const th = {
   floor: {
     title: 'แผนผังพื้นที่',
     sidebarTitle: 'ตัวกรองอุปกรณ์',
+    devicesSidebar: 'อุปกรณ์',
     collapseSidebar: 'พับเก็บแถบตัวกรอง',
     expandSidebar: 'เปิดแถบตัวกรอง',
     filtersTab: 'ตัวกรอง',
@@ -135,6 +136,7 @@ const th = {
     focusBuildingTitle: 'ซูมกลับไปยังตำแหน่งตัวอาคาร',
     coordTitle: 'พิกัด WGS84 จุดกึ่งกลางอาคารปัจจุบัน',
     layerSelectTitle: 'เลือกชั้นแผนที่พื้นหลัง',
+    tileCarto: 'แผนที่ Carto (ตามธีม)',
     tileDark: 'Dark Theme (Carto)',
     tileLight: 'Light Theme (Carto)',
     tileSatellite: 'ภาพดาวเทียม (Satellite)',

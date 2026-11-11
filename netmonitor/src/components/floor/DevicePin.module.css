@@ -52,21 +52,21 @@
 /* Status colours */
 .online {
   background: rgba(15, 23, 42, 0.95);
-  border: 2px solid #22c55e;
-  color: #22c55e;
-  box-shadow: 0 0 12px rgba(34, 197, 94, 0.5);
+  border: 2px solid var(--status-online, #22c55e);
+  color: var(--status-online, #22c55e);
+  box-shadow: 0 0 12px var(--status-online-bg, rgba(34, 197, 94, 0.5));
 }
 .warning {
   background: rgba(15, 23, 42, 0.95);
-  border: 2px solid #f59e0b;
-  color: #f59e0b;
-  box-shadow: 0 0 12px rgba(245, 158, 11, 0.5);
+  border: 2px solid var(--status-warning, #f59e0b);
+  color: var(--status-warning, #f59e0b);
+  box-shadow: 0 0 12px var(--status-warning-bg, rgba(245, 158, 11, 0.5));
 }
 .offline {
   background: rgba(15, 23, 42, 0.95);
-  border: 2px solid #ef4444;
-  color: #ef4444;
-  box-shadow: 0 0 12px rgba(239, 68, 68, 0.5);
+  border: 2px solid var(--status-critical, #ef4444);
+  color: var(--status-critical, #ef4444);
+  box-shadow: 0 0 12px var(--status-critical-bg, rgba(239, 68, 68, 0.5));
 }
 
 /* ── Status dot pulse ── */
@@ -78,9 +78,9 @@
   height: 8px;
   border-radius: 50%;
 }
-.dot_online  { background: #22c55e; box-shadow: 0 0 8px #22c55e; animation: blink 2s infinite; }
-.dot_warning { background: #f59e0b; box-shadow: 0 0 8px #f59e0b; }
-.dot_offline { background: #ef4444; box-shadow: 0 0 8px #ef4444; }
+.dot_online  { background: var(--status-online, #22c55e); box-shadow: 0 0 8px var(--status-online, #22c55e); animation: blink 2s infinite; }
+.dot_warning { background: var(--status-warning, #f59e0b); box-shadow: 0 0 8px var(--status-warning, #f59e0b); }
+.dot_offline { background: var(--status-critical, #ef4444); box-shadow: 0 0 8px var(--status-critical, #ef4444); }
 
 @keyframes blink {
   0%, 100% { opacity: 1; }
@@ -93,7 +93,7 @@
   top: -6px;
   right: -6px;
   background: rgba(15, 23, 42, 0.92);
-  border: 1px solid #64748b;
+  border: 1px solid var(--border-default, #64748b);
   border-radius: 50%;
   width: 14px;
   height: 14px;
@@ -107,16 +107,16 @@
 }
 
 .online .lockBadge {
-  border-color: #22c55e;
-  color: #22c55e;
+  border-color: var(--status-online, #22c55e);
+  color: var(--status-online, #22c55e);
 }
 .warning .lockBadge {
-  border-color: #f59e0b;
-  color: #f59e0b;
+  border-color: var(--status-warning, #f59e0b);
+  color: var(--status-warning, #f59e0b);
 }
 .offline .lockBadge {
-  border-color: #ef4444;
-  color: #ef4444;
+  border-color: var(--status-critical, #ef4444);
+  color: var(--status-critical, #ef4444);
 }
 
 .lockIcon {

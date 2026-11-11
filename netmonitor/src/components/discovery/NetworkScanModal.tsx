@@ -490,7 +490,7 @@ export default function NetworkScanModal({ open, defaultFloor = 1, onClose }: Pr
                             ) : /Core/i.test(d.floor_reason) ? (
                               <Building2 size={10} style={{ flexShrink: 0 }} />
                             ) : null}
-                            <span>{d.floor_reason.replace(/^[🏷🛰📍🏢]\s*/, '')}</span>
+                            <span>{d.floor_reason.replace(/^[🏷🛰📍🏢]\s*/u, '')}</span>
                           </div>
                         )}
                       </td>

@@ -47,11 +47,14 @@ RFC1213-MIB::ifOperStatus.2 = INTEGER: down(2)
 
 @pytest.mark.asyncio
 async def test_db_interface_sync_and_series():
-    from app.database import get_db_pool
+    from app.database import init_db, close_db, get_db_pool
     from app.collector import sync_device_interfaces, get_device_traffic_series
+    await init_db()
     pool = await get_db_pool()
+    async with pool.acquire() as conn:
+        dev_id = await conn.fetchval("SELECT id FROM devices ORDER BY id LIMIT 1")
+    assert dev_id is not None
 
-    dev_id = 1
     mock_ifaces = [
         {"if_index": 1, "name": "Port 1", "description": "GigabitEthernet1", "speed_bps": 1_000_000_000, "oper_status": "up"},
         {"if_index": 2, "name": "Port 2", "description": "GigabitEthernet2", "speed_bps": 1_000_000_000, "oper_status": "down"}
@@ -66,3 +69,4 @@ async def test_db_interface_sync_and_series():
     assert series["has_snmp"] is True
     assert len(series["inbound"]) == 60
     assert len(series["outbound"]) == 60
+    await close_db()

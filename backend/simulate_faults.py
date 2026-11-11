@@ -59,14 +59,26 @@ async def simulate():
         """, rtr2_id)
         print(f"[*] Updated RTR-BRANCH-02 (ID: {rtr2_id})")
 
-    # 3. Locate existing Switch, AP, Server devices
-    sw_warn = await pool.fetchrow("SELECT id FROM devices WHERE name = 'SW-42-B73C' OR id = 5")
-    sw_off  = await pool.fetchrow("SELECT id FROM devices WHERE name = 'SW-112-B3C3' OR id = 16")
-    ap_warn = await pool.fetchrow("SELECT id FROM devices WHERE name = 'Ubiquiti-AP-239' OR id = 17")
-    srv_off = await pool.fetchrow("SELECT id FROM devices WHERE name = 'SRV-44-F9FF' OR id = 6")
+    # 3. Dynamically resolve existing Switch, AP, Server devices without hardcoded nonexistent IDs
+    async def get_or_fallback_device(preferred_name, dtype, default_name):
+        row = await pool.fetchrow("SELECT id, name FROM devices WHERE name = $1", preferred_name)
+        if row:
+            return row
+        row = await pool.fetchrow("SELECT id, name FROM devices WHERE name = $1", default_name)
+        if row:
+            return row
+        row = await pool.fetchrow("SELECT id, name FROM devices WHERE dtype = $1 ORDER BY id ASC LIMIT 1", dtype)
+        if row:
+            return row
+        return await pool.fetchrow("SELECT id, name FROM devices ORDER BY id ASC LIMIT 1")
 
-    # Move SW-112-B3C3 to Floor 2 if needed
-    if sw_off:
+    sw_warn = await get_or_fallback_device('SW-42-B73C', 'switch', 'SW-CORE-01')
+    sw_off  = await get_or_fallback_device('SW-112-B3C3', 'switch', 'SW-DIST-01')
+    ap_warn = await get_or_fallback_device('Ubiquiti-AP-239', 'ap', 'AP-A1')
+    srv_off = await get_or_fallback_device('SRV-44-F9FF', 'server', 'SRV-01')
+
+    # Move SW-112-B3C3 to Floor 2 if present
+    if sw_off and sw_off.get("name") == 'SW-112-B3C3':
         await pool.execute("""
             UPDATE devices 
             SET floor = 2, x = 460.0, y = 90.0, location = 'Floor 2 – Zone F – Lab' 
@@ -74,8 +86,8 @@ async def simulate():
         """, sw_off["id"])
         print(f"[*] Positioned SW-112-B3C3 (ID: {sw_off['id']}) on Floor 2")
 
-    # Move Ubiquiti-AP-239 to clean spot on Floor 2 if needed
-    if ap_warn:
+    # Move Ubiquiti-AP-239 to clean spot on Floor 2 if present
+    if ap_warn and ap_warn.get("name") == 'Ubiquiti-AP-239':
         await pool.execute("""
             UPDATE devices 
             SET floor = 2, x = 240.0, y = 260.0, location = 'Floor 2 – Zone G – Meeting' 
@@ -103,43 +115,51 @@ async def simulate():
             "title": "WAN Link Down & Router Unreachable",
             "description": "Zero response from 192.168.22.2 (ICMP timeout & SNMP poller failed). Branch gateway unreachable."
         },
-        {
-            "device_id": sw_warn["id"] if sw_warn else 5,
-            "name": "SW-42-B73C",
+    ]
+
+    if sw_warn:
+        fault_scenarios.append({
+            "device_id": sw_warn["id"],
+            "name": sw_warn["name"],
             "poll_status": "warning",
             "poll_error": "High port saturation: Trunk Gi1/0/1 at 92.4%",
             "severity": "warn",
             "title": "Trunk Port Gi1/0/1 Utilization > 90%",
             "description": "Bandwidth saturation detected on 10G uplink trunk. Switch internal temperature reached 68°C."
-        },
-        {
-            "device_id": sw_off["id"] if sw_off else 16,
-            "name": "SW-112-B3C3",
+        })
+
+    if sw_off:
+        fault_scenarios.append({
+            "device_id": sw_off["id"],
+            "name": sw_off["name"],
             "poll_status": "failed",
             "poll_error": "Hardware failure: Power Supply Unit offline",
             "severity": "crit",
             "title": "Switch Offline - Power Supply Failure",
             "description": "Hardware PSU fault detected. Switch powered down unexpectedly. 24 edge ports offline."
-        },
-        {
-            "device_id": ap_warn["id"] if ap_warn else 17,
-            "name": "Ubiquiti-AP-239",
+        })
+
+    if ap_warn:
+        fault_scenarios.append({
+            "device_id": ap_warn["id"],
+            "name": ap_warn["name"],
             "poll_status": "warning",
             "poll_error": "Excessive channel contention & packet loss 8.7%",
             "severity": "warn",
             "title": "AP Overloaded & High Packet Loss",
             "description": "65 active wireless clients connected. Channel utilization 82%, packet drop rate at 8.7%."
-        },
-        {
-            "device_id": srv_off["id"] if srv_off else 6,
-            "name": "SRV-44-F9FF",
+        })
+
+    if srv_off:
+        fault_scenarios.append({
+            "device_id": srv_off["id"],
+            "name": srv_off["name"],
             "poll_status": "failed",
             "poll_error": "Host unreachable / kernel panic",
             "severity": "crit",
             "title": "Database Server Unresponsive (Critical Outage)",
-            "description": "Zero response from 192.168.22.44. Host kernel panic or network interface down. PostgreSQL service unreachable."
-        },
-    ]
+            "description": "Zero response from host. Kernel panic or network interface down. Service unreachable."
+        })
 
     print("\n--- Inserting Poll Runs & Alerts ---")
     for s in fault_scenarios:

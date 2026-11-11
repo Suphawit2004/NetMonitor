@@ -13,7 +13,6 @@ const DeviceListPage = lazy(() => import('./pages/DeviceListPage'))
 const ReportsPage = lazy(() => import('./pages/ReportsPage'))
 
 const DeviceInfoModal = lazy(() => import('./components/detail/DeviceInfoModal'))
-const GlobalSearch = lazy(() => import('./components/layout/GlobalSearch'))
 
 type Page = NavPage | 'detail'
 
@@ -60,7 +59,6 @@ export default function App() {
   const [currentFloor, setCurrentFloor] = useState<1 | 2>(initialRoute.floor)
   const [pendingDeviceId, setPendingDeviceId] = useState<string | null>(initialRoute.deviceId)
   const [infoDeviceId, setInfoDeviceId] = useState<string | null>(null)
-  const [searchOpen, setSearchOpen] = useState(false)
 
   const infoDevice = infoDeviceId
     ? devices.find(d => d.id === infoDeviceId) ?? null
@@ -97,18 +95,6 @@ export default function App() {
     return () => window.removeEventListener('hashchange', onHashChange)
   }, [currentFloor, selectDevice])
 
-  // Ctrl+K / Cmd+K → เปิด-ปิด global search
-  useEffect(() => {
-    function onKey(e: KeyboardEvent) {
-      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
-        e.preventDefault()
-        setSearchOpen(v => !v)
-      }
-    }
-    window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
-  }, [])
-
   function handleDeviceClick(device: Device) {
     selectDevice(device.id)
     setPendingDeviceId(device.id)
@@ -116,6 +102,11 @@ export default function App() {
     localStorage.setItem('netmonitor_page', 'detail')
     localStorage.setItem('netmonitor_selected_device_id', device.id)
     window.location.hash = `#/detail?id=${device.id}`
+  }
+
+  function handleSelectDeviceFromSearch(device: Device) {
+    setInfoDeviceId(null)
+    handleDeviceClick(device)
   }
 
   function handleNavigate(target: Page) {
@@ -149,7 +140,7 @@ export default function App() {
         activePage={page}
         devices={devices}
         onNavigate={handleNavigate}
-        onOpenSearch={() => setSearchOpen(true)}
+        onSelectDevice={handleSelectDeviceFromSearch}
       />
       {error && (
         <div className={styles.errorBanner} role="alert">
@@ -198,17 +189,6 @@ export default function App() {
               onNavigateFloor={floor => {
                 setInfoDeviceId(null)
                 handleNavigateFloor(floor)
-              }}
-            />
-          )}
-
-          {searchOpen && (
-            <GlobalSearch
-              devices={devices}
-              onClose={() => setSearchOpen(false)}
-              onSelect={dev => {
-                setSearchOpen(false)
-                openDeviceInfo(dev)
               }}
             />
           )}

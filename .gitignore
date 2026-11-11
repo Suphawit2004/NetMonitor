@@ -50,3 +50,10 @@ skills-lock.json
 .DS_Store
 Thumbs.db
 *.log
+
+# Screen captures & demo video
+floor_*.png
+video/
+
+# Agent review & audit reports
+*_report.md

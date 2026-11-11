@@ -58,6 +58,6 @@
   transition: width 0.4s ease;
 }
 
-.green  { background: linear-gradient(90deg, #10b981, #34d399); }
-.yellow { background: linear-gradient(90deg, #d97706, #fbbf24); }
-.red    { background: linear-gradient(90deg, #dc2626, #f87171); }
+.green  { background: linear-gradient(90deg, var(--status-online, #10b981), #34d399); }
+.yellow { background: linear-gradient(90deg, var(--status-warning, #d97706), #fbbf24); }
+.red    { background: linear-gradient(90deg, var(--status-critical, #dc2626), #f87171); }
