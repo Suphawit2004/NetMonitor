@@ -7,6 +7,7 @@ import 'leaflet/dist/leaflet.css'
 import type { Device, Room, DeviceType } from '../../types'
 import { useNetwork } from '../../context/networkContext'
 import { useFaultSimOptional } from '../../context/faultSimContext'
+import { buildFailureDirectionResolver } from '../../services/topologyEngine'
 import {
   Network,
   Router,
@@ -554,6 +555,14 @@ export default function FloorMapOverlay({
       return canvasToGps(40, 40, buildingBounds)
     }
 
+    const dirResolver = buildFailureDirectionResolver(
+      allDevices,
+      faultSim.links,
+      faultSim.impactReport,
+      faultSim.downLinkIds,
+      isSimMode,
+    )
+
     faultSim.links.forEach(link => {
       const src = deviceMap.get(link.source_device_id)
       const dst = deviceMap.get(link.target_device_id)
@@ -565,8 +574,13 @@ export default function FloorMapOverlay({
         state = 'isolated'
       }
 
-      const p1 = getGps(src)
-      const p2 = getGps(dst)
+      const isFailureFlow = state === 'severed' || state === 'isolated'
+      const [flowSrc, flowDst] = isFailureFlow
+        ? dirResolver.orientEndpoints(link, src, dst)
+        : [src, dst]
+
+      const p1 = getGps(flowSrc)
+      const p2 = getGps(flowDst)
 
       const color =
         state === 'severed'
@@ -581,16 +595,60 @@ export default function FloorMapOverlay({
                   ? '#f59e0b'
                   : '#3b82f6'
 
-      const dashArray =
-        state === 'severed' || state === 'isolated' || state === 'failover_active' || link.is_redundant
-          ? '6, 5'
-          : undefined
+      const weight =
+        state === 'severed'
+          ? 3.6
+          : state === 'failover_active'
+            ? 3.4
+            : state === 'isolated'
+              ? 3.0
+              : link.link_type === 'wan'
+                ? 3.2
+                : link.link_type === 'trunk'
+                  ? 2.8
+                  : 2.4
+
+      const dashArray = isFailureFlow
+        ? '12, 4, 3, 5'
+        : state === 'failover_active'
+          ? '10, 4, 3, 5'
+          : link.is_redundant
+            ? '6, 5'
+            : undefined
+
+      const casing = L.polyline([p1, p2], {
+        color: isLight ? '#ffffff' : '#080c18',
+        weight: weight + 2.4,
+        opacity: isFailureFlow ? 0.68 : 0.58,
+        interactive: false,
+      })
+      group.addLayer(casing)
+
+      if (isFailureFlow) {
+        const track = L.polyline([p1, p2], {
+          color: '#ef4444',
+          weight,
+          opacity: 0.25,
+          interactive: false,
+        })
+        group.addLayer(track)
+      }
+
+      const flowClassName =
+        state === 'severed'
+          ? 'mapTopoFlowRedFast'
+          : state === 'isolated'
+            ? 'mapTopoFlowRed'
+            : state === 'failover_active'
+              ? 'mapTopoFlowWarn'
+              : undefined
 
       const polyline = L.polyline([p1, p2], {
         color,
-        weight: state === 'severed' || state === 'failover_active' ? 3.5 : 2.5,
-        opacity: state === 'isolated' ? 0.35 : 0.85,
+        weight,
+        opacity: state === 'isolated' ? 0.94 : 0.95,
         dashArray,
+        className: flowClassName,
       })
 
       polyline.bindTooltip(`${src.name} ↔ ${dst.name} (${link.bandwidth_mbps} Mbps)`, {
@@ -615,6 +673,7 @@ export default function FloorMapOverlay({
     showLinks,
     isSimMode,
     isLinkEditMode,
+    isLight,
     faultSim,
   ])
 

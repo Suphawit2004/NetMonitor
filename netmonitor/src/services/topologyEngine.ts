@@ -403,3 +403,113 @@ export function computeBlastRadius(
     spof_ranking: spofRanking.slice(0, 10),
   }
 }
+
+export interface FailureDirectionResolver {
+  isReversed: (link: TopologyLink) => boolean
+  orientEndpoints: <T>(link: TopologyLink, srcVal: T, dstVal: T) => [T, T]
+}
+
+/**
+ * Computes failure propagation direction (from root outage / cut upstream toward affected downstream nodes)
+ * consistently for both the 2D canvas SVG and Satellite Map polylines.
+ */
+export function buildFailureDirectionResolver(
+  devices: Device[],
+  links: TopologyLink[],
+  impactReport: BlastRadiusReport,
+  downLinkIds: Set<string>,
+  isSimMode: boolean,
+): FailureDirectionResolver {
+  const byId = new Map(devices.map(d => [d.id, d]))
+  const adjacency = new Map<string, AdjacencyEdge[]>()
+  for (const l of links) {
+    if (!byId.has(l.source_device_id) || !byId.has(l.target_device_id)) continue
+    const sList = adjacency.get(l.source_device_id) ?? []
+    sList.push({ neighborId: l.target_device_id, link: l })
+    adjacency.set(l.source_device_id, sList)
+    const tList = adjacency.get(l.target_device_id) ?? []
+    tList.push({ neighborId: l.source_device_id, link: l })
+    adjacency.set(l.target_device_id, tList)
+  }
+
+  const emptySet = new Set<string>()
+  const effectiveReport = isSimMode
+    ? impactReport
+    : (() => {
+        const offlineIds = new Set(devices.filter(d => d.status === 'offline').map(d => d.id))
+        return offlineIds.size > 0 ? computeBlastRadius(devices, links, offlineIds, emptySet, false) : impactReport
+      })()
+
+  const impactById = new Map(effectiveReport.device_impacts.map(item => [item.device_id, item]))
+  const roots = findRootGateways(devices, links)
+  const { dist: gatewayDist } = bfsTree(roots, adjacency, emptySet, emptySet, true)
+
+  // Multi-source BFS from root outages & severed downstream entries to determine failure hop depth
+  const cascadeDist = new Map<string, number>()
+  const queue: string[] = []
+  for (const item of effectiveReport.device_impacts) {
+    if (item.impact_state === 'root_down') {
+      cascadeDist.set(item.device_id, 0)
+      queue.push(item.device_id)
+    }
+  }
+  if (isSimMode) {
+    for (const l of links) {
+      if (!downLinkIds.has(l.id)) continue
+      const sState = impactById.get(l.source_device_id)?.impact_state ?? 'healthy'
+      const tState = impactById.get(l.target_device_id)?.impact_state ?? 'healthy'
+      if (sState === 'healthy' && (tState === 'unreachable' || tState === 'degraded') && !cascadeDist.has(l.target_device_id)) {
+        cascadeDist.set(l.target_device_id, 1)
+        queue.push(l.target_device_id)
+      } else if (tState === 'healthy' && (sState === 'unreachable' || sState === 'degraded') && !cascadeDist.has(l.source_device_id)) {
+        cascadeDist.set(l.source_device_id, 1)
+        queue.push(l.source_device_id)
+      }
+    }
+  }
+
+  let head = 0
+  while (head < queue.length) {
+    const cur = queue[head++]
+    const curD = cascadeDist.get(cur) ?? 0
+    for (const { neighborId, link } of adjacency.get(cur) ?? []) {
+      if (isSimMode && downLinkIds.has(link.id)) continue
+      if (cascadeDist.has(neighborId)) continue
+      const nbrState = impactById.get(neighborId)?.impact_state ?? 'healthy'
+      if (nbrState === 'healthy') continue
+      cascadeDist.set(neighborId, curD + 1)
+      queue.push(neighborId)
+    }
+  }
+
+  const isReversed = (link: TopologyLink): boolean => {
+    const sId = link.source_device_id
+    const tId = link.target_device_id
+    const sState = impactById.get(sId)?.impact_state ?? 'healthy'
+    const tState = impactById.get(tId)?.impact_state ?? 'healthy'
+
+    // Cut / isolated link between healthy upstream and impacted downstream flows upstream -> downstream
+    const sDownstream = sState === 'unreachable' || sState === 'degraded'
+    const tDownstream = tState === 'unreachable' || tState === 'degraded'
+    if (sState === 'healthy' && tDownstream) return false
+    if (tState === 'healthy' && sDownstream) return true
+
+    // Compare hop distance from failure origin (smaller distance = closer to fault source)
+    const ds = cascadeDist.get(sId) ?? Infinity
+    const dt = cascadeDist.get(tId) ?? Infinity
+    if (ds !== dt) return dt < ds
+
+    // Tie-breaker for adjacent failed devices: orient from gateway side outward toward leaf
+    const gs = gatewayDist.get(sId) ?? Infinity
+    const gt = gatewayDist.get(tId) ?? Infinity
+    if (gs !== gt) return gt < gs
+
+    return false
+  }
+
+  return {
+    isReversed,
+    orientEndpoints: <T>(link: TopologyLink, srcVal: T, dstVal: T): [T, T] =>
+      isReversed(link) ? [dstVal, srcVal] : [srcVal, dstVal],
+  }
+}

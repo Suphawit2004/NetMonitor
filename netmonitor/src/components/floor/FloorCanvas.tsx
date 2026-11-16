@@ -797,6 +797,8 @@ export default function FloorCanvas({
               planH={PLAN_H}
               links={faultSim.links}
               linkStates={faultSim.impactReport.link_states}
+              impactReport={faultSim.impactReport}
+              downLinkIds={faultSim.downLinkIds}
               isSimMode={isSimMode}
               isLinkEditMode={isLinkEditMode}
               onToggleLinkDown={faultSim.toggleLinkDown}

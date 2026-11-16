@@ -998,5 +998,37 @@
 :global(.mapSimBadgeCut)  { background: #7f1d1d; border: 1px solid #ef4444; }
 :global(.mapSimBadgeAlt)  { background: #d97706; }
 
+@keyframes mapTopoDashFlow {
+  from {
+    stroke-dashoffset: 0;
+  }
+  to {
+    stroke-dashoffset: -24;
+  }
+}
+
+:global(.mapTopoFlowRedFast) {
+  animation: mapTopoDashFlow 0.75s linear infinite;
+  filter: drop-shadow(0 0 4px rgba(239, 68, 68, 0.75));
+}
+
+:global(.mapTopoFlowRed) {
+  animation: mapTopoDashFlow 1.05s linear infinite;
+  filter: drop-shadow(0 0 3px rgba(248, 113, 113, 0.55));
+}
+
+:global(.mapTopoFlowWarn) {
+  animation: mapTopoDashFlow 0.95s linear infinite;
+  filter: drop-shadow(0 0 3px rgba(245, 158, 11, 0.55));
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :global(.mapTopoFlowRedFast),
+  :global(.mapTopoFlowRed),
+  :global(.mapTopoFlowWarn) {
+    animation: none;
+  }
+}
+
 
 

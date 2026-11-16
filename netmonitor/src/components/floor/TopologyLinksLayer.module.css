@@ -15,6 +15,42 @@
   cursor: pointer;
 }
 
+.lineCasing {
+  fill: none;
+  stroke: rgba(8, 12, 24, 0.78);
+  stroke-width: 5;
+  stroke-linecap: round;
+  pointer-events: none;
+}
+
+:global([data-theme="light"]) .lineCasing {
+  stroke: rgba(255, 255, 255, 0.88);
+}
+
+.lineTrackSevered {
+  fill: none;
+  stroke: rgba(239, 68, 68, 0.28);
+  stroke-width: 3.4;
+  stroke-linecap: round;
+  pointer-events: none;
+}
+
+.lineTrackIsolated {
+  fill: none;
+  stroke: rgba(239, 68, 68, 0.22);
+  stroke-width: 2.8;
+  stroke-linecap: round;
+  pointer-events: none;
+}
+
+.lineTrackFailover {
+  fill: none;
+  stroke: rgba(245, 158, 11, 0.24);
+  stroke-width: 3.2;
+  stroke-linecap: round;
+  pointer-events: none;
+}
+
 .lineBase {
   fill: none;
   stroke-linecap: round;
@@ -23,54 +59,106 @@
 
 .lineWan {
   stroke: #f59e0b;
-  stroke-width: 2.6;
-  opacity: 0.78;
+  stroke-width: 3.2;
+  opacity: 0.96;
 }
 
 .lineTrunk {
   stroke: var(--accent-primary, #3b82f6);
-  stroke-width: 2.2;
-  opacity: 0.65;
+  stroke-width: 2.8;
+  opacity: 0.9;
 }
 
 .lineAccess {
-  stroke: var(--text-muted, #94a3b8);
-  stroke-width: 1.5;
-  opacity: 0.45;
+  stroke: #60a5fa;
+  stroke-width: 2.2;
+  opacity: 0.75;
+}
+
+:global([data-theme="light"]) .lineAccess {
+  stroke: #475569;
+  opacity: 0.8;
 }
 
 .lineRedundant {
   stroke: #06b6d4;
-  stroke-width: 1.9;
-  stroke-dasharray: 5 4;
-  opacity: 0.72;
+  stroke-width: 2.4;
+  stroke-dasharray: 6 4;
+  opacity: 0.92;
 }
 
 .lineFailover {
   stroke: #f59e0b;
-  stroke-width: 3;
-  stroke-dasharray: 8 4;
-  opacity: 0.95;
-  animation: dashFlow 1.2s linear infinite;
+  stroke-width: 3.2;
+  stroke-dasharray: 10 4 3 5;
+  opacity: 1;
+  filter: drop-shadow(0 0 3px rgba(245, 158, 11, 0.55));
+  animation: dashFlow 0.95s linear infinite;
 }
 
 .lineSevered {
-  stroke: var(--status-critical, #ef4444);
-  stroke-width: 2.6;
-  stroke-dasharray: 6 4;
-  opacity: 0.95;
+  stroke: #ef4444;
+  stroke-width: 3.4;
+  stroke-dasharray: 12 4 3 5;
+  opacity: 1;
+  filter: drop-shadow(0 0 5px rgba(239, 68, 68, 0.72));
+  animation: dashFlow 0.75s linear infinite;
 }
 
 .lineIsolated {
-  stroke: var(--status-critical, #ef4444);
-  stroke-width: 1.5;
-  stroke-dasharray: 3 5;
-  opacity: 0.35;
+  stroke: #f87171;
+  stroke-width: 2.8;
+  stroke-dasharray: 10 4 3 5;
+  opacity: 0.96;
+  filter: drop-shadow(0 0 3px rgba(239, 68, 68, 0.5));
+  animation: dashFlow 1.05s linear infinite;
 }
 
 @keyframes dashFlow {
+  from {
+    stroke-dashoffset: 0;
+  }
   to {
     stroke-dashoffset: -24;
+  }
+}
+
+.flowArrowSevered,
+.flowArrowIsolated {
+  pointer-events: none;
+}
+
+.flowArrowBg {
+  fill: rgba(15, 23, 42, 0.92);
+  stroke: #ef4444;
+  stroke-width: 1.2;
+}
+
+.flowArrowIsolated .flowArrowBg {
+  stroke: #f87171;
+}
+
+:global([data-theme="light"]) .flowArrowBg {
+  fill: rgba(255, 255, 255, 0.96);
+}
+
+.flowArrowPath {
+  fill: none;
+  stroke: #fca5a5;
+  stroke-width: 1.6;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+:global([data-theme="light"]) .flowArrowPath {
+  stroke: #dc2626;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .lineFailover,
+  .lineSevered,
+  .lineIsolated {
+    animation: none;
   }
 }
 

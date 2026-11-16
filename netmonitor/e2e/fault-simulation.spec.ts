@@ -165,4 +165,46 @@ test.describe('Device-to-Device Failure Impact Simulation', () => {
       }
     }
   });
+
+  test('TC-SIM-05: Red failure lines animate from outage origin toward affected downstream devices on 2D and Map', async ({ page }) => {
+    await page.getByRole('tab', { name: /แผนผัง|Floor Plan/i }).click();
+    await page.getByRole('button', { name: /^2D$/i }).click();
+    await page.getByRole('tab', { name: /ชั้น 2|Floor 2/i }).click();
+
+    await page.getByTestId('toggle-sim-btn').click();
+    const drawer = page.getByTestId('impact-drawer');
+    await expect(drawer).toBeVisible();
+
+    // Simulate Switch-Core (id 1 on Floor 2) going down
+    await drawer.locator('select').selectOption('1');
+    const svgLayer = page.locator('svg[aria-label="Network topology links"]');
+
+    // Links connected to Switch-Core (1) on Floor 2 must flow outward from 1 -> leaf APs
+    const flowFromCore = svgLayer.locator('line[data-flow-dir^="1->"]');
+    expect(await flowFromCore.count()).toBeGreaterThanOrEqual(2);
+
+    const animInfo = await flowFromCore.first().evaluate(el => {
+      const cs = getComputedStyle(el);
+      return { animName: cs.animationName, strokeWidth: parseFloat(cs.strokeWidth) };
+    });
+    expect(animInfo.animName).not.toBe('none');
+    expect(animInfo.strokeWidth).toBeGreaterThanOrEqual(2.5);
+
+    // Directional flow chevron should also be visible on Floor 2 failure lines
+    expect(await svgLayer.locator('g[class*="flowArrow"]').count()).toBeGreaterThanOrEqual(2);
+
+    // Check Floor 1 cascaded link (14 -> 10) flows downstream when RTR-CORE-01 (16) goes down
+    await drawer.locator('select').selectOption('16');
+    await page.getByRole('tab', { name: /ชั้น 1|Floor 1/i }).click();
+    await expect(svgLayer.locator('line[data-flow-dir="14->10"]')).toBeVisible();
+
+    // Switch to Satellite Map and check animated red Leaflet paths
+    await page.getByRole('button', { name: /แผนที่|Map/i }).first().click();
+    const mapRedPaths = page.locator('.leaflet-overlay-pane path[class*="mapTopoFlowRed"]');
+    await expect(mapRedPaths.first()).toBeVisible({ timeout: 5000 });
+    const mapAnim = await mapRedPaths.first().evaluate(el => getComputedStyle(el).animationName);
+    expect(mapAnim).not.toBe('none');
+
+    await drawer.getByRole('button', { name: /เสร็จสิ้น|Done/i }).click();
+  });
 });
