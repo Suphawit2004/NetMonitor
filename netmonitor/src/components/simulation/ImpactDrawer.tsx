@@ -98,8 +98,8 @@ export default function ImpactDrawer({ onFocusDevice }: Props) {
             resetSimulation()
             setSimMode(false)
           }}
-          title={t('sim.exitSim')}
-          aria-label={t('sim.exitSim')}
+          title={t('common.close')}
+          aria-label={t('common.close')}
         >
           <X size={15} />
         </button>
