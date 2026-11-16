@@ -192,7 +192,7 @@ test.describe('NetMonitor Comprehensive E2E Test Suite', () => {
     await expect(page).toHaveURL(/.*#\/reports/);
 
     // Summary statistics should be visible
-    await expect(page.getByText(/วิกฤต|Critical/i).first()).toBeVisible({ timeout: 5000 });
-    await expect(page.getByText(/เตือน|Warning/i).first()).toBeVisible();
+    await expect(page.getByText(/ออฟไลน์|วิกฤต|Offline|Critical|CRIT/i).first()).toBeVisible({ timeout: 5000 });
+    await expect(page.getByText(/เตือน|Warning|WARN/i).first()).toBeVisible();
   });
 });

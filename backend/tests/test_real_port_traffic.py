@@ -12,7 +12,8 @@ SWITCH_IP = "192.168.22.254"
 
 async def check_switch_reachable() -> bool:
     try:
-        return await ping_ip(SWITCH_IP, timeout=1.0)
+        is_alive, _, _ = await ping_ip(SWITCH_IP, timeout_ms=1000)
+        return is_alive
     except Exception:
         return False
 

@@ -87,7 +87,7 @@ async def fetch_devices_with_telemetry(pool: asyncpg.Pool) -> List[asyncpg.Recor
     query = """
         SELECT 
             d.id, d.name, d.hostname, host(d.management_ip) AS ip, 
-            d.snmp_port, d.snmp_version, d.poll_interval_s, 
+            d.snmp_port, d.snmp_version, d.credential_ref, d.poll_interval_s, 
             d.location, d.enabled, d.dtype, d.floor, d.x, d.y, 
             d.locked, d.model, d.latitude, d.longitude, d.altitude,
             p.status AS latest_poll_status,
@@ -177,7 +177,7 @@ async def fetch_device_detail_by_id(pool: asyncpg.Pool, device_id: int) -> Optio
         """
         SELECT 
             d.id, d.name, d.hostname, host(d.management_ip) AS ip, 
-            d.snmp_port, d.snmp_version, d.poll_interval_s, 
+            d.snmp_port, d.snmp_version, d.credential_ref, d.poll_interval_s, 
             d.location, d.enabled, d.dtype, d.floor, d.x, d.y, 
             d.locked, d.model, d.latitude, d.longitude, d.altitude,
             p.status AS latest_poll_status,

@@ -127,7 +127,7 @@ export default function DeviceInfoModal({ device, onClose, onOpenFullDetail, onN
         </span>
       ) : (
         <span style={{ color: 'var(--status-online)', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-          <Zap size={13} /> {detail.ping.value} ms
+          <Zap size={13} /> {typeof detail.ping.value === 'number' ? `${detail.ping.value} ms` : detail.ping.value}
         </span>
       ),
       tooltip: device.status === 'offline' ? 'Device not responding to ICMP ping' : `Ping response time: ${detail.ping.value} ms`,
@@ -248,51 +248,51 @@ export default function DeviceInfoModal({ device, onClose, onOpenFullDetail, onN
             <MetricCard
               label="Ping (RTT)"
               value={device.status === 'offline' ? 'Timeout' : detail.ping.value}
-              unit={device.status === 'offline' ? '' : 'ms'}
+              unit={device.status === 'offline' || typeof detail.ping.value !== 'number' ? '' : 'ms'}
               change={device.status === 'offline' ? 'No response' : detail.ping.change}
               tone={device.status === 'offline' ? 'bad' : detail.ping.tone}
               fillColor={pingColors.fill}
-              fillPercent={device.status === 'offline' ? 100 : Math.min(Math.round(detail.ping.value * 1.5), 100)}
+              fillPercent={device.status === 'offline' ? 100 : typeof detail.ping.value === 'number' ? Math.min(Math.round(detail.ping.value * 1.5), 100) : 0}
               valueColor={pingColors.text}
             />
             <MetricCard
               label="CPU"
               value={detail.cpu.value}
-              unit="%"
+              unit={typeof detail.cpu.value === 'number' ? '%' : ''}
               change={detail.cpu.change}
               tone={detail.cpu.tone}
               fillColor={cpuColors.fill}
-              fillPercent={detail.cpu.value}
+              fillPercent={typeof detail.cpu.value === 'number' ? detail.cpu.value : 0}
               valueColor={cpuColors.text}
             />
             <MetricCard
               label="Memory"
               value={detail.memory.value}
-              unit="%"
+              unit={typeof detail.memory.value === 'number' ? '%' : ''}
               change={detail.memory.change}
               tone={detail.memory.tone}
               fillColor={memColors.fill}
-              fillPercent={detail.memory.value}
+              fillPercent={typeof detail.memory.value === 'number' ? detail.memory.value : 0}
               valueColor={memColors.text}
             />
             <MetricCard
               label="Temperature"
               value={detail.temperature.value}
-              unit="°C"
+              unit={typeof detail.temperature.value === 'number' ? '°C' : ''}
               change={detail.temperature.change}
               tone={detail.temperature.tone}
               fillColor={tempColors.fill}
-              fillPercent={detail.temperature.value}
+              fillPercent={typeof detail.temperature.value === 'number' ? detail.temperature.value : 0}
               valueColor={tempColors.text}
             />
             <MetricCard
               label="Packet Loss"
               value={detail.packetLoss.value}
-              unit="%"
+              unit={typeof detail.packetLoss.value === 'number' ? '%' : ''}
               change={detail.packetLoss.change}
               tone={detail.packetLoss.tone}
               fillColor={lossColors.fill}
-              fillPercent={detail.packetLoss.value * 10}
+              fillPercent={typeof detail.packetLoss.value === 'number' ? detail.packetLoss.value * 10 : 0}
               valueColor={lossColors.text}
             />
           </div>

@@ -20,6 +20,8 @@ export interface Device {
   locked?: boolean   // ← ล็อคตำแหน่ง ไม่ให้ลาก
   ip?: string
   model?: string
+  credential_ref?: string | null
+  target_room?: string | null
   latitude?: number | null
   longitude?: number | null
   altitude?: number | null
@@ -113,7 +115,7 @@ export interface Alert {
 }
 
 export interface MetricValue {
-  value: number
+  value: number | string
   change?: string            // เช่น '▲ +4%' | '▼ -2%' | '—'
   tone?: MetricTone          // good = ดีขึ้น, bad = แย่ลง
 }
@@ -134,6 +136,7 @@ export interface DeviceDetail {
   packetLoss: MetricValue
   ports: Port[]
   alerts: Alert[]
+  isRealData?: boolean
 }
 
 export interface TrafficSeries {
@@ -153,6 +156,7 @@ export interface InterfaceTrafficItem {
   if_index: number
   name: string
   description?: string
+  mac_address?: string | null
   speed_bps?: number
   oper_status?: string
   in_mbps: number
@@ -167,4 +171,10 @@ export interface PollTrafficResponse {
   total_out_mbps: number
   timestamp: string
   interfaces: InterfaceTrafficItem[]
+  uptime?: string
+  mac_address?: string
+  ping_ms?: number
+  cpu_percent?: number | null
+  memory_percent?: number | null
+  temperature_c?: number | null
 }

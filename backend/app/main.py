@@ -328,10 +328,31 @@ async def get_device_detail(device_id: int):
     metric_rows = await repository.fetch_device_latest_metrics(pool, device_id)
     metrics = {r["metric_name"]: r["numeric_value"] for r in metric_rows}
 
+    primary_mac = next((r["mac_address"] for r in if_rows if r.get("mac_address")), None)
+    cpu_val = metrics.get("cpu_usage_percent")
+    mem_val = metrics.get("memory_usage_percent")
+    temp_val = metrics.get("chassis_temperature_c")
+    ping_val = metrics.get("ping_rtt_ms")
+
+    uptime_str = None
+    if dev_row["ip"]:
+        comm = dev_row["credential_ref"] or settings.SNMP_COMMUNITY
+        ver = "2c" if dev_row["snmp_version"] == "v2c" else "1"
+        ok_up, val_up, _ = await snmp_get_oid(dev_row["ip"], OID_SYS_UPTIME, community=comm, version=ver, port=dev_row["snmp_port"])
+        if ok_up and val_up:
+            from .collector import format_uptime
+            uptime_str = format_uptime(val_up)
+
     return DeviceDetailOut(
         device=dev_out,
         interfaces=interfaces,
         latest_metrics=metrics,
+        uptime=uptime_str,
+        mac_address=primary_mac,
+        ping_ms=ping_val,
+        cpu_percent=cpu_val,
+        memory_percent=mem_val,
+        temperature_c=temp_val,
     )
 
 @app.patch("/api/v1/devices/{device_id}", response_model=DeviceOut)
@@ -600,13 +621,20 @@ async def poll_device_traffic(device_id: int):
                 if_index=i["if_index"],
                 name=i["name"],
                 description=i["description"],
+                mac_address=i.get("mac_address"),
                 speed_bps=i["speed_bps"],
                 oper_status=i["oper_status"],
                 in_mbps=i["in_mbps"],
                 out_mbps=i["out_mbps"],
             )
             for i in res.get("interfaces", [])
-        ]
+        ],
+        uptime=res.get("uptime"),
+        mac_address=res.get("mac_address"),
+        ping_ms=res.get("ping_ms"),
+        cpu_percent=res.get("cpu_percent"),
+        memory_percent=res.get("memory_percent"),
+        temperature_c=res.get("temperature_c"),
     )
 
 @app.get("/api/v1/devices/{device_id}/traffic", response_model=TrafficSeriesOut)

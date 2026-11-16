@@ -538,6 +538,28 @@ export async function acknowledgeAlert(alertId: number | string): Promise<boolea
 
 // ── Real SNMP Traffic & Interfaces API ──────────────────
 
+export async function fetchDeviceDetail(deviceId: string): Promise<{
+  device: Device
+  interfaces: InterfaceTrafficItem[]
+  latest_metrics: Record<string, number>
+  uptime?: string
+  mac_address?: string
+  ping_ms?: number
+  cpu_percent?: number | null
+  memory_percent?: number | null
+  temperature_c?: number | null
+} | null> {
+  try {
+    const res = await fetch(`${API_BASE}/devices/${deviceId}`)
+    if (res.ok) {
+      return (await res.json())
+    }
+  } catch (err) {
+    console.warn(`Failed to fetch detail for device ${deviceId}`, err)
+  }
+  return null
+}
+
 export async function fetchDeviceInterfaces(deviceId: string): Promise<InterfaceTrafficItem[]> {
   try {
     const res = await fetch(`${API_BASE}/devices/${deviceId}/interfaces`)

@@ -324,11 +324,11 @@ export function buildDeviceDetail(device: Device, allDevices: Device[], tick = 0
     ...base.ping,
     value: device.status === 'offline'
       ? 0
-      : Math.max(1, vary(base.ping.value, tick, phase + 3.8, 1.5)),
+      : Math.max(1, vary(Number(base.ping.value) || 0, tick, phase + 3.8, 1.5)),
   }
-  const cpu: MetricValue = { ...base.cpu, value: vary(base.cpu.value, tick, phase, 4) }
-  const memory: MetricValue = { ...base.memory, value: vary(base.memory.value, tick, phase + 1.3, 3) }
-  const temperature: MetricValue = { ...base.temperature, value: vary(base.temperature.value, tick, phase + 2.6, 1.5) }
+  const cpu: MetricValue = { ...base.cpu, value: vary(Number(base.cpu.value) || 0, tick, phase, 4) }
+  const memory: MetricValue = { ...base.memory, value: vary(Number(base.memory.value) || 0, tick, phase + 1.3, 3) }
+  const temperature: MetricValue = { ...base.temperature, value: vary(Number(base.temperature.value) || 0, tick, phase + 2.6, 1.5) }
   const packetLoss = base.packetLoss
 
   const uptime = device.status === 'offline'

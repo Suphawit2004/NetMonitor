@@ -49,12 +49,46 @@ def calculate_bandwidth_mbps(
 
     return max(0.0, mbps)
 
+def format_uptime(val: Optional[str]) -> Optional[str]:
+    """Formats SNMP sysUpTime string or timeticks into clean readable format (e.g. 24d 1h 30m)."""
+    if not val:
+        return None
+    val = val.strip().strip('"')
+    if not val or val == "0":
+        return None
+    if "day" in val.lower():
+        return val
+    parts = val.split(":")
+    if len(parts) >= 3:
+        try:
+            if len(parts) == 4:
+                days, hours, mins = int(parts[0]), int(parts[1]), int(parts[2])
+                return f"{days}d {hours}h {mins}m"
+            elif len(parts) == 3:
+                hours, mins = int(parts[0]), int(parts[1])
+                return f"{hours}h {mins}m"
+        except ValueError:
+            pass
+    if val.isdigit():
+        total_sec = int(val) // 100
+        days = total_sec // 86400
+        hours = (total_sec % 86400) // 3600
+        mins = (total_sec % 3600) // 60
+        if days > 0:
+            return f"{days}d {hours}h {mins}m"
+        elif hours > 0:
+            return f"{hours}h {mins}m"
+        else:
+            return f"{mins}m"
+    return val
+
 def parse_snmpwalk_output(text: str) -> Dict[int, str]:
     """
     Parses standard Net-SNMP snmpwalk output lines like:
     IF-MIB::ifDescr.1 = STRING: 1
     RFC1213-MIB::ifOperStatus.1 = INTEGER: up(1)
     .1.3.6.1.2.1.31.1.1.1.6.1 = Counter64: 19237346090
+    RFC1213-MIB::ifPhysAddress.1 = Hex-STRING: 8C 85 C1 83 92 FF
     Returns a dictionary mapping interface index (int) to clean string value.
     """
     results: Dict[int, str] = {}
@@ -70,6 +104,10 @@ def parse_snmpwalk_output(text: str) -> Dict[int, str]:
             # Clean enum format like "up(1)" -> "up"
             if "(" in val and val.endswith(")"):
                 val = val.split("(")[0].strip()
+            # If Hex-STRING MAC address e.g. "8C 85 C1 83 92 FF" -> format as "8C:85:C1:83:92:FF"
+            parts = val.split()
+            if len(parts) == 6 and all(len(p) <= 2 and all(c in "0123456789abcdefABCDEF" for c in p) for p in parts):
+                val = ":".join(p.zfill(2).upper() for p in parts)
             results[idx] = val
     return results
 
@@ -99,6 +137,7 @@ async def execute_snmpwalk(
     port: int = 161,
     version: str = "2c",
     timeout_s: int = 2,
+    extra_flags: Optional[List[str]] = None,
 ) -> Dict[int, str]:
     """
     Executes Net-SNMP CLI snmpwalk asynchronously using a worker thread
@@ -110,9 +149,13 @@ async def execute_snmpwalk(
         f"-c{community}",
         f"-t{timeout_s}",
         "-r1",
+    ]
+    if extra_flags:
+        cmd.extend(extra_flags)
+    cmd.extend([
         f"{ip}:{port}",
         oid,
-    ]
+    ])
     try:
         returncode, stdout, stderr = await asyncio.to_thread(
             _run_snmpwalk_sync, cmd, timeout_s * 2 + 1.0
@@ -145,6 +188,7 @@ async def collect_device_interfaces(
 
     oper_map = await execute_snmpwalk(ip, ".1.3.6.1.2.1.2.2.1.8", community, port, version)
     speed_map = await execute_snmpwalk(ip, ".1.3.6.1.2.1.31.1.1.1.15", community, port, version)  # HighSpeed in Mbps
+    mac_map = await execute_snmpwalk(ip, ".1.3.6.1.2.1.2.2.1.6", community, port, version, extra_flags=["-Ox"])
 
     # 2. Query 64-bit HC counters
     hc_in = await execute_snmpwalk(ip, ".1.3.6.1.2.1.31.1.1.1.6", community, port, version)
@@ -172,10 +216,14 @@ async def collect_device_interfaces(
         in_oct = int(in_oct_str) if in_oct_str.isdigit() else None
         out_oct = int(out_oct_str) if out_oct_str.isdigit() else None
 
+        raw_mac = mac_map.get(idx, "")
+        mac_addr = raw_mac if (raw_mac and ":" in raw_mac and len(raw_mac) == 17) else None
+
         interfaces.append({
             "if_index": idx,
             "name": name,
             "description": f"Port {name}",
+            "mac_address": mac_addr,
             "speed_bps": speed_bps,
             "oper_status": oper,
             "in_octets": in_oct,
@@ -192,18 +240,91 @@ async def sync_device_interfaces(pool, device_id: int, interfaces: List[Dict[str
     async with pool.acquire() as conn:
         for iface in interfaces:
             row = await conn.fetchrow("""
-                INSERT INTO interfaces (device_id, if_index, name, description, speed_bps, oper_status)
-                VALUES ($1, $2, $3, $4, $5, $6)
+                INSERT INTO interfaces (device_id, if_index, name, description, mac_address, speed_bps, oper_status)
+                VALUES ($1, $2, $3, $4, $5, $6, $7)
                 ON CONFLICT (device_id, if_index) DO UPDATE
                 SET name = EXCLUDED.name,
                     description = EXCLUDED.description,
+                    mac_address = COALESCE(EXCLUDED.mac_address, interfaces.mac_address),
                     speed_bps = EXCLUDED.speed_bps,
                     oper_status = EXCLUDED.oper_status
                 RETURNING id, if_index;
-            """, device_id, iface["if_index"], iface["name"], iface["description"], iface["speed_bps"], iface["oper_status"])
+            """, device_id, iface["if_index"], iface["name"], iface["description"], iface.get("mac_address"), iface["speed_bps"], iface["oper_status"])
             if row:
                 mapping[row["if_index"]] = row["id"]
     return mapping
+
+async def collect_device_real_telemetry(
+    ip: str,
+    community: str = "public",
+    port: int = 161,
+    version: str = "2c",
+) -> Dict[str, Any]:
+    from .discovery import ping_ip
+    from .snmp import snmp_get_oid, OID_SYS_UPTIME
+
+    # 1. Real ICMP Ping test
+    is_alive, ping_ms, _ = await ping_ip(ip, timeout_ms=500)
+    packet_loss = 0.0 if is_alive else 100.0
+
+    # 2. Real Uptime via SNMP
+    uptime_raw = None
+    formatted_uptime = None
+    if is_alive:
+        ok, val, _ = await snmp_get_oid(ip, OID_SYS_UPTIME, community=community, version=version, port=port)
+        if ok and val:
+            uptime_raw = val
+            formatted_uptime = format_uptime(val)
+
+    # 3. Real CPU, Memory, and Temp via SNMP
+    cpu_pct = None
+    mem_pct = None
+    temp_c = None
+
+    if is_alive:
+        # A. Try HP/Aruba OIDs
+        ok_cpu, val_cpu, _ = await snmp_get_oid(ip, ".1.3.6.1.4.1.11.2.14.11.5.1.9.6.1.0", community, version, port)
+        if ok_cpu and val_cpu and val_cpu.isdigit():
+            cpu_pct = float(val_cpu)
+            # HP/Aruba Memory
+            _, tot_mem, _ = await snmp_get_oid(ip, ".1.3.6.1.4.1.11.2.14.11.5.1.1.2.1.1.1.5.1", community, version, port)
+            _, used_mem, _ = await snmp_get_oid(ip, ".1.3.6.1.4.1.11.2.14.11.5.1.1.2.1.1.1.7.1", community, version, port)
+            if tot_mem and used_mem and tot_mem.isdigit() and used_mem.isdigit() and int(tot_mem) > 0:
+                mem_pct = round((int(used_mem) / int(tot_mem)) * 100, 1)
+
+        # B. Try Cisco OIDs if CPU not found
+        if cpu_pct is None:
+            ok_cisco_cpu, val_cisco_cpu, _ = await snmp_get_oid(ip, ".1.3.6.1.4.1.9.9.109.1.1.1.1.5.1", community, version, port)
+            if ok_cisco_cpu and val_cisco_cpu and val_cisco_cpu.isdigit():
+                cpu_pct = float(val_cisco_cpu)
+                # Cisco Memory
+                _, used_m, _ = await snmp_get_oid(ip, ".1.3.6.1.4.1.9.9.48.1.1.1.5.1", community, version, port)
+                _, free_m, _ = await snmp_get_oid(ip, ".1.3.6.1.4.1.9.9.48.1.1.1.6.1", community, version, port)
+                if used_m and free_m and used_m.isdigit() and free_m.isdigit():
+                    u, f = int(used_m), int(free_m)
+                    if u + f > 0:
+                        mem_pct = round((u / (u + f)) * 100, 1)
+                # Cisco Temp
+                _, temp_val, _ = await snmp_get_oid(ip, ".1.3.6.1.4.1.9.9.13.1.3.1.3.1", community, version, port)
+                if temp_val and temp_val.isdigit():
+                    temp_c = float(temp_val)
+
+        # C. Try Host-Resources (generic server / router)
+        if cpu_pct is None:
+            ok_hr_cpu, val_hr_cpu, _ = await snmp_get_oid(ip, ".1.3.6.1.2.1.25.3.3.1.2.1", community, version, port)
+            if ok_hr_cpu and val_hr_cpu and val_hr_cpu.isdigit():
+                cpu_pct = float(val_hr_cpu)
+
+    return {
+        "is_alive": is_alive,
+        "ping_ms": ping_ms if is_alive else None,
+        "packet_loss": packet_loss,
+        "uptime": formatted_uptime,
+        "uptime_raw": uptime_raw,
+        "cpu_percent": cpu_pct,
+        "memory_percent": mem_pct,
+        "temperature_c": temp_c,
+    }
 
 async def poll_and_calculate_device_traffic(
     pool,
@@ -218,16 +339,50 @@ async def poll_and_calculate_device_traffic(
     """
     interfaces = await collect_device_interfaces(ip, community, port, version)
     now = datetime.now(timezone.utc)
+    telemetry = await collect_device_real_telemetry(ip, community, port, version)
+
+    # Store real telemetry metrics into database
+    async with pool.acquire() as conn:
+        if telemetry.get("cpu_percent") is not None:
+            await conn.execute("""
+                INSERT INTO device_metric_samples (device_id, sampled_at, oid, metric_name, numeric_value)
+                VALUES ($1, $2, 'cpu', 'cpu_usage_percent', $3)
+                ON CONFLICT (device_id, sampled_at, oid, labels) DO NOTHING
+            """, device_id, now, telemetry["cpu_percent"])
+        if telemetry.get("memory_percent") is not None:
+            await conn.execute("""
+                INSERT INTO device_metric_samples (device_id, sampled_at, oid, metric_name, numeric_value)
+                VALUES ($1, $2, 'memory', 'memory_usage_percent', $3)
+                ON CONFLICT (device_id, sampled_at, oid, labels) DO NOTHING
+            """, device_id, now, telemetry["memory_percent"])
+        if telemetry.get("temperature_c") is not None:
+            await conn.execute("""
+                INSERT INTO device_metric_samples (device_id, sampled_at, oid, metric_name, numeric_value)
+                VALUES ($1, $2, 'temperature', 'chassis_temperature_c', $3)
+                ON CONFLICT (device_id, sampled_at, oid, labels) DO NOTHING
+            """, device_id, now, telemetry["temperature_c"])
+        if telemetry.get("is_alive") and telemetry.get("ping_ms") is not None:
+            await conn.execute("""
+                INSERT INTO device_metric_samples (device_id, sampled_at, oid, metric_name, numeric_value)
+                VALUES ($1, $2, 'ping', 'ping_rtt_ms', $3)
+                ON CONFLICT (device_id, sampled_at, oid, labels) DO NOTHING
+            """, device_id, now, telemetry["ping_ms"])
 
     if not interfaces:
         return {
-            "success": False,
+            "success": telemetry.get("is_alive", False),
             "has_snmp": False,
             "interfaces_polled": 0,
             "total_in_mbps": 0.0,
             "total_out_mbps": 0.0,
             "timestamp": now.isoformat(),
             "interfaces": [],
+            "uptime": telemetry.get("uptime"),
+            "mac_address": None,
+            "ping_ms": telemetry.get("ping_ms"),
+            "cpu_percent": telemetry.get("cpu_percent"),
+            "memory_percent": telemetry.get("memory_percent"),
+            "temperature_c": telemetry.get("temperature_c"),
         }
 
     # Upsert interfaces and obtain IDs
@@ -236,6 +391,7 @@ async def poll_and_calculate_device_traffic(
     total_in_mbps = 0.0
     total_out_mbps = 0.0
     interface_results = []
+    primary_mac = next((iface["mac_address"] for iface in interfaces if iface.get("mac_address")), None)
 
     async with pool.acquire() as conn:
         for iface in interfaces:
@@ -294,6 +450,7 @@ async def poll_and_calculate_device_traffic(
                 "if_index": if_idx,
                 "name": iface["name"],
                 "description": iface["description"],
+                "mac_address": iface.get("mac_address"),
                 "speed_bps": iface["speed_bps"],
                 "oper_status": iface["oper_status"],
                 "in_mbps": in_mbps,
@@ -308,6 +465,12 @@ async def poll_and_calculate_device_traffic(
         "total_out_mbps": round(total_out_mbps, 2),
         "timestamp": now.isoformat(),
         "interfaces": interface_results,
+        "uptime": telemetry.get("uptime"),
+        "mac_address": primary_mac,
+        "ping_ms": telemetry.get("ping_ms"),
+        "cpu_percent": telemetry.get("cpu_percent"),
+        "memory_percent": telemetry.get("memory_percent"),
+        "temperature_c": telemetry.get("temperature_c"),
     }
 
 async def get_device_traffic_series(

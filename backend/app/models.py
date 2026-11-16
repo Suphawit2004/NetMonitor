@@ -74,6 +74,7 @@ class InterfaceTrafficOut(BaseModel):
     if_index: int
     name: str
     description: Optional[str] = None
+    mac_address: Optional[str] = None
     speed_bps: Optional[int] = None
     oper_status: Optional[str] = None
     in_mbps: float = 0.0
@@ -97,11 +98,23 @@ class PollTrafficResult(BaseModel):
     total_out_mbps: float
     timestamp: str
     interfaces: list[InterfaceTrafficOut] = []
+    uptime: Optional[str] = None
+    mac_address: Optional[str] = None
+    ping_ms: Optional[float] = None
+    cpu_percent: Optional[float] = None
+    memory_percent: Optional[float] = None
+    temperature_c: Optional[float] = None
 
 class DeviceDetailOut(BaseModel):
     device: DeviceOut
     interfaces: list[InterfaceOut] = []
     latest_metrics: dict = {}
+    uptime: Optional[str] = None
+    mac_address: Optional[str] = None
+    ping_ms: Optional[float] = None
+    cpu_percent: Optional[float] = None
+    memory_percent: Optional[float] = None
+    temperature_c: Optional[float] = None
 
 class BuildingCornersModel(BaseModel):
     nw: list[float]  # [lat, lon]
