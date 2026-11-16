@@ -28,7 +28,6 @@ function TopologyLinksLayer({
   isLinkEditMode,
   onToggleLinkDown,
   onDeleteLink,
-  onFloorChange,
 }: Props) {
   const { t } = useTranslation()
 
@@ -43,19 +42,18 @@ function TopologyLinksLayer({
         const src = deviceById.get(link.source_device_id)
         const dst = deviceById.get(link.target_device_id)
         if (!src || !dst) return null
-        const srcOnFloor = src.floor === currentFloor
-        const dstOnFloor = dst.floor === currentFloor
-        if (!srcOnFloor && !dstOnFloor) return null
+        // Render only same-floor physical lines on the 2D canvas to avoid floating stub artifacts
+        if (src.floor !== currentFloor || dst.floor !== currentFloor) return null
 
-        const state: LinkImpactState = linkStates[link.id] ?? 'active'
-        const isCrossFloor = srcOnFloor !== dstOnFloor
-        const localDev = srcOnFloor ? src : dst
-        const remoteDev = srcOnFloor ? dst : src
+        let state: LinkImpactState = linkStates[link.id] ?? 'active'
+        if (!isSimMode && state === 'active' && (src.status === 'offline' || dst.status === 'offline')) {
+          state = 'isolated'
+        }
 
-        const x1 = localDev.x
-        const y1 = localDev.y
-        const x2 = isCrossFloor ? Math.min(planW - 24, localDev.x + 42) : remoteDev.x
-        const y2 = isCrossFloor ? Math.max(24, localDev.y - 34) : remoteDev.y
+        const x1 = src.x
+        const y1 = src.y
+        const x2 = dst.x
+        const y2 = dst.y
         const mx = (x1 + x2) / 2
         const my = (y1 + y2) / 2
 
@@ -63,9 +61,6 @@ function TopologyLinksLayer({
           link,
           src,
           dst,
-          localDev,
-          remoteDev,
-          isCrossFloor,
           state,
           x1,
           y1,
@@ -76,7 +71,7 @@ function TopologyLinksLayer({
         }
       })
       .filter((x): x is NonNullable<typeof x> => x !== null)
-  }, [links, deviceById, currentFloor, linkStates, planW])
+  }, [links, deviceById, currentFloor, linkStates, isSimMode])
 
   if (renderedLinks.length === 0) return null
 
@@ -89,7 +84,7 @@ function TopologyLinksLayer({
       aria-label="Network topology links"
     >
       {renderedLinks.map(item => {
-        const { link, src, dst, remoteDev, isCrossFloor, state, x1, y1, x2, y2, mx, my } = item
+        const { link, src, dst, state, x1, y1, x2, y2, mx, my } = item
         const stateClass =
           state === 'severed'
             ? styles.lineSevered
@@ -170,24 +165,6 @@ function TopologyLinksLayer({
                 <title>{title}</title>
                 <circle r={8} className={styles.deleteCircle} />
                 <path d="M-3,-3 L3,3 M3,-3 L-3,3" className={styles.severCross} />
-              </g>
-            )}
-
-            {isCrossFloor && (
-              <g
-                transform={`translate(${x2}, ${y2})`}
-                className={styles.crossFloorPill}
-                onMouseDown={e => e.stopPropagation()}
-                onClick={e => {
-                  e.stopPropagation()
-                  onFloorChange?.(remoteDev.floor)
-                }}
-              >
-                <title>{`${remoteDev.name} (Floor ${remoteDev.floor})`}</title>
-                <rect x={-16} y={-9} width={32} height={18} rx={5} className={styles.crossFloorRect} />
-                <text textAnchor="middle" dominantBaseline="central" className={styles.crossFloorText}>
-                  {`F${remoteDev.floor}`}
-                </text>
               </g>
             )}
           </g>

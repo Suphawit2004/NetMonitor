@@ -1,6 +1,7 @@
 /* ── Base ── */
 .device {
   position: absolute;
+  width: 26px;
   cursor: grab;
   display: flex;
   flex-direction: column;

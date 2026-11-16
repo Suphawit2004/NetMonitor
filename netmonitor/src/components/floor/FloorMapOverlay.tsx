@@ -558,19 +558,15 @@ export default function FloorMapOverlay({
       const src = deviceMap.get(link.source_device_id)
       const dst = deviceMap.get(link.target_device_id)
       if (!src || !dst) return
-      const srcOnFloor = src.floor === currentFloor
-      const dstOnFloor = dst.floor === currentFloor
-      if (!srcOnFloor && !dstOnFloor) return
+      if (src.floor !== currentFloor || dst.floor !== currentFloor) return
 
-      const state = faultSim.impactReport.link_states[link.id] ?? 'active'
-      const isCrossFloor = srcOnFloor !== dstOnFloor
-      const localDev = srcOnFloor ? src : dst
-      const remoteDev = srcOnFloor ? dst : src
+      let state = faultSim.impactReport.link_states[link.id] ?? 'active'
+      if (!isSimMode && state === 'active' && (src.status === 'offline' || dst.status === 'offline')) {
+        state = 'isolated'
+      }
 
-      const p1 = getGps(localDev)
-      const p2: [number, number] = isCrossFloor
-        ? canvasToGps(localDev.x + 36, Math.max(20, localDev.y - 28), buildingBounds)
-        : getGps(remoteDev)
+      const p1 = getGps(src)
+      const p2 = getGps(dst)
 
       const color =
         state === 'severed'
@@ -586,7 +582,7 @@ export default function FloorMapOverlay({
                   : '#3b82f6'
 
       const dashArray =
-        state === 'severed' || state === 'failover_active' || link.is_redundant || isCrossFloor
+        state === 'severed' || state === 'isolated' || state === 'failover_active' || link.is_redundant
           ? '6, 5'
           : undefined
 
