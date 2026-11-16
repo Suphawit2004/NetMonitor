@@ -60,7 +60,12 @@ function normalizeDevices(list: RawDevice[]): Device[] {
     const spot = raw.x !== undefined && raw.y !== undefined
       ? { x: raw.x, y: raw.y }
       : pickFreeSpot(placed, raw.floor)
-    placed.push({ ...raw, ...spot, locked: raw.locked ?? true })
+    placed.push({
+      ...raw,
+      ...spot,
+      locked: raw.locked ?? true,
+      services: Array.isArray(raw.services) ? raw.services : [],
+    })
   }
   return placed
 }
@@ -99,7 +104,11 @@ export async function fetchDevices(): Promise<Device[]> {
   try {
     const res = await fetch(`${API_BASE}/devices`)
     if (res.ok) {
-      const data = (await res.json()) as Device[]
+      const rawData = (await res.json()) as Device[]
+      const data = rawData.map(d => ({
+        ...d,
+        services: Array.isArray(d.services) ? d.services : [],
+      }))
       db = data
       saveStoredDevices(db)
       return data

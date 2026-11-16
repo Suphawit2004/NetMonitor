@@ -14,6 +14,7 @@ import { levelColor } from '../components/detail/metricColors'
 import MetricCard from '../components/detail/MetricCard'
 import TrafficChart from '../components/detail/TrafficChart'
 import AlertList from '../components/detail/AlertList'
+import ServiceTagsEditor from '../components/detail/ServiceTagsEditor'
 import { acknowledgeAlert } from '../services/api'
 import { DEVICE_ICON } from '../constants/deviceMeta'
 import { Activity, Zap, Loader2, Copy, Check, AlertCircle, AlertTriangle, ArrowRight, FlaskConical } from 'lucide-react'
@@ -43,7 +44,7 @@ export default function DeviceDetailPage({
   onViewAllAlerts,
 }: Props) {
   const { t } = useTranslation()
-  const { devices, connectDevice, retryDevices } = useNetwork()
+  const { devices, connectDevice, retryDevices, updateDevice } = useNetwork()
   const { live, intervalSec } = useSimulation()
   const faultSim = useFaultSimOptional()
   const { showToast } = useToast()
@@ -318,6 +319,12 @@ export default function DeviceDetailPage({
               <div className={styles.infoValue}>{detail.vlanCount} VLANs</div>
             </div>
           </div>
+
+          <ServiceTagsEditor
+            device={device}
+            editable
+            onSave={services => updateDevice(device.id, { services })}
+          />
 
           {/* Tabs */}
           <div className={styles.tabs}>

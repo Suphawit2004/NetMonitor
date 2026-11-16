@@ -9,6 +9,7 @@ import Modal from '../ui/Modal'
 import MetricCard from './MetricCard'
 import TrafficChart from './TrafficChart'
 import AlertList from './AlertList'
+import ServiceTagsEditor from './ServiceTagsEditor'
 import { levelColor } from './metricColors'
 import { DEVICE_ICON } from '../../constants/deviceMeta'
 import {
@@ -239,6 +240,7 @@ export default function DeviceInfoModal({ device, onClose, onOpenFullDetail, onN
               </div>
             ))}
           </div>
+          <ServiceTagsEditor device={device} />
         </div>
 
         {/* Metrics */}
