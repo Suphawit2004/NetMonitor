@@ -3,6 +3,7 @@ Repository layer providing clean, decoupled data access operations.
 Enforces Single Responsibility Principle and encapsulates raw SQL logic.
 """
 from datetime import datetime, timezone
+import json
 from typing import Optional, List, Dict, Any
 import asyncpg
 import logging
@@ -89,7 +90,7 @@ async def fetch_devices_with_telemetry(pool: asyncpg.Pool) -> List[asyncpg.Recor
             d.id, d.name, d.hostname, host(d.management_ip) AS ip, 
             d.snmp_port, d.snmp_version, d.credential_ref, d.poll_interval_s, 
             d.location, d.enabled, d.dtype, d.floor, d.x, d.y, 
-            d.locked, d.model, d.latitude, d.longitude, d.altitude,
+            d.locked, d.model, d.latitude, d.longitude, d.altitude, d.services,
             p.status AS latest_poll_status,
             a.highest_severity AS alert_severity
         FROM devices d
@@ -152,23 +153,25 @@ async def insert_device(
     model: Optional[str],
     latitude: Optional[float],
     longitude: Optional[float],
-    altitude: Optional[float]
+    altitude: Optional[float],
+    services: Optional[List[str]] = None,
 ) -> asyncpg.Record:
     """Inserts a new device and returns its newly created row."""
+    services_json = json.dumps(services or [])
     insert_query = """
         INSERT INTO devices (
             name, hostname, management_ip, snmp_port, snmp_version, 
             credential_ref, poll_interval_s, location, enabled,
-            dtype, floor, x, y, locked, model, latitude, longitude, altitude
+            dtype, floor, x, y, locked, model, latitude, longitude, altitude, services
         )
-        VALUES ($1, $2, $3::inet, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)
-        RETURNING id, name, dtype, floor, x, y, locked, host(management_ip) AS ip, model, latitude, longitude, altitude;
+        VALUES ($1, $2, $3::inet, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19::jsonb)
+        RETURNING id, name, dtype, floor, x, y, locked, host(management_ip) AS ip, model, latitude, longitude, altitude, services;
     """
     return await pool.fetchrow(
         insert_query,
         name, hostname, ip, snmp_port, snmp_version,
         credential_ref, poll_interval_s, location_str, enabled,
-        dtype, floor, x, y, locked, model, latitude, longitude, altitude
+        dtype, floor, x, y, locked, model, latitude, longitude, altitude, services_json
     )
 
 async def fetch_device_detail_by_id(pool: asyncpg.Pool, device_id: int) -> Optional[asyncpg.Record]:
@@ -179,7 +182,7 @@ async def fetch_device_detail_by_id(pool: asyncpg.Pool, device_id: int) -> Optio
             d.id, d.name, d.hostname, host(d.management_ip) AS ip, 
             d.snmp_port, d.snmp_version, d.credential_ref, d.poll_interval_s, 
             d.location, d.enabled, d.dtype, d.floor, d.x, d.y, 
-            d.locked, d.model, d.latitude, d.longitude, d.altitude,
+            d.locked, d.model, d.latitude, d.longitude, d.altitude, d.services,
             p.status AS latest_poll_status,
             a.highest_severity AS alert_severity
         FROM devices d

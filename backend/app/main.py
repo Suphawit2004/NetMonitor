@@ -1,9 +1,10 @@
 import asyncio
+import json
 import logging
 from datetime import datetime, timezone
 from contextlib import asynccontextmanager
 from pathlib import Path
-from typing import List, Optional
+from typing import Any, List, Optional
 from fastapi import FastAPI, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
 import asyncpg
@@ -129,6 +130,42 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+def _parse_services(raw: Any) -> list[str]:
+    if raw is None:
+        return []
+    if isinstance(raw, str):
+        try:
+            raw = json.loads(raw)
+        except Exception:
+            return []
+    if not isinstance(raw, (list, tuple)):
+        return []
+    return [str(s).strip() for s in raw if str(s).strip()]
+
+
+def _serialize_device(d: Any, status_override: Optional[DeviceStatus] = None) -> DeviceOut:
+    getter = d.get if hasattr(d, "get") else lambda k, default=None: d[k] if k in d else default
+    computed = status_override or getter("status") or compute_device_status(d)
+    x_val = getter("x")
+    y_val = getter("y")
+    return DeviceOut(
+        id=str(d["id"]),
+        name=d["name"],
+        dtype=d["dtype"],
+        status=computed,
+        floor=d["floor"],
+        x=100.0 if x_val is None else x_val,
+        y=100.0 if y_val is None else y_val,
+        locked=d["locked"],
+        ip=d["ip"],
+        model=d["model"],
+        latitude=getter("latitude"),
+        longitude=getter("longitude"),
+        altitude=getter("altitude"),
+        services=_parse_services(getter("services")),
+    )
+
+
 def compute_device_status(row: asyncpg.Record) -> DeviceStatus:
     if not row["enabled"]:
         return "offline"
@@ -187,24 +224,7 @@ async def list_devices():
             location_str = f"Floor {d['floor']} – {room_label}"
             await repository.update_device_placement(pool, d["id"], gx, gy, location_str)
 
-    return [
-        DeviceOut(
-            id=str(d["id"]),
-            name=d["name"],
-            dtype=d["dtype"],
-            status=d["status"],
-            floor=d["floor"],
-            x=d["x"],
-            y=d["y"],
-            locked=d["locked"],
-            ip=d["ip"],
-            model=d["model"],
-            latitude=d.get("latitude"),
-            longitude=d.get("longitude"),
-            altitude=d.get("altitude"),
-        )
-        for d in devices_data
-    ]
+    return [_serialize_device(d) for d in devices_data]
 
 @app.post("/api/v1/devices", response_model=DeviceOut, status_code=status.HTTP_201_CREATED)
 async def create_device(payload: DeviceCreate):
@@ -260,6 +280,7 @@ async def create_device(payload: DeviceCreate):
             latitude=payload.latitude,
             longitude=payload.longitude,
             altitude=payload.altitude,
+            services=payload.services,
         )
     except asyncpg.UniqueViolationError:
         raise HTTPException(
@@ -276,21 +297,7 @@ async def create_device(payload: DeviceCreate):
         "Awaiting connection verification"
     )
 
-    return DeviceOut(
-        id=str(row["id"]),
-        name=row["name"],
-        dtype=row["dtype"],
-        status="offline",
-        floor=row["floor"],
-        x=row["x"],
-        y=row["y"],
-        locked=row["locked"],
-        ip=row["ip"],
-        model=row["model"],
-        latitude=row["latitude"],
-        longitude=row["longitude"],
-        altitude=row["altitude"],
-    )
+    return _serialize_device(row, status_override="offline")
 
 @app.get("/api/v1/devices/{device_id}", response_model=DeviceDetailOut)
 async def get_device_detail(device_id: int):
@@ -299,21 +306,7 @@ async def get_device_detail(device_id: int):
     if not dev_row:
         raise HTTPException(status_code=404, detail="Device not found")
 
-    dev_out = DeviceOut(
-        id=str(dev_row["id"]),
-        name=dev_row["name"],
-        dtype=dev_row["dtype"],
-        status=compute_device_status(dev_row),
-        floor=dev_row["floor"],
-        x=dev_row["x"] or 100.0,
-        y=dev_row["y"] or 100.0,
-        locked=dev_row["locked"],
-        ip=dev_row["ip"],
-        model=dev_row["model"],
-        latitude=dev_row["latitude"],
-        longitude=dev_row["longitude"],
-        altitude=dev_row["altitude"],
-    )
+    dev_out = _serialize_device(dev_row)
 
     if_rows = await repository.fetch_device_interfaces(pool, device_id)
     interfaces = [
@@ -406,6 +399,11 @@ async def update_device(device_id: int, payload: DeviceUpdate):
         params.append(payload.ip)
         idx += 1
 
+    if payload.services is not None:
+        updates.append(f"services = ${idx}::jsonb")
+        params.append(json.dumps(payload.services))
+        idx += 1
+
     for col, val in field_map.items():
         if val is not None:
             updates.append(f"{col} = ${idx}")
@@ -433,7 +431,7 @@ async def update_device(device_id: int, payload: DeviceUpdate):
         SELECT 
             d.id, d.name, d.dtype, d.floor, d.x, d.y, d.locked, 
             host(d.management_ip) AS ip, d.model, d.enabled,
-            d.latitude, d.longitude, d.altitude,
+            d.latitude, d.longitude, d.altitude, d.services,
             p.status AS latest_poll_status,
             a.highest_severity AS alert_severity
         FROM devices d
@@ -454,21 +452,7 @@ async def update_device(device_id: int, payload: DeviceUpdate):
         device_id,
     )
 
-    return DeviceOut(
-        id=str(updated_row["id"]),
-        name=updated_row["name"],
-        dtype=updated_row["dtype"],
-        status=compute_device_status(updated_row),
-        floor=updated_row["floor"],
-        x=updated_row["x"] or 100.0,
-        y=updated_row["y"] or 100.0,
-        locked=updated_row["locked"],
-        ip=updated_row["ip"],
-        model=updated_row["model"],
-        latitude=updated_row["latitude"],
-        longitude=updated_row["longitude"],
-        altitude=updated_row["altitude"],
-    )
+    return _serialize_device(updated_row)
 
 @app.delete("/api/v1/devices/{device_id}", status_code=status.HTTP_200_OK)
 async def delete_device(device_id: int):
@@ -853,23 +837,7 @@ async def import_discovered_devices(payload: ImportRequest):
         except Exception as alert_err:
             logger.warning(f"Failed to record import alert: {alert_err}")
 
-        imported.append(
-            DeviceOut(
-                id=str(row["id"]),
-                name=row["name"],
-                dtype=row["dtype"],
-                status="online",
-                floor=row["floor"],
-                x=row["x"],
-                y=row["y"],
-                locked=row["locked"],
-                ip=row["ip"],
-                model=row["model"],
-                latitude=row["latitude"],
-                longitude=row["longitude"],
-                altitude=row["altitude"],
-            )
-        )
+        imported.append(_serialize_device(row, status_override="online"))
     return imported
 
 @app.post("/api/v1/clear")
@@ -1027,6 +995,7 @@ def _dev_with_status(row: Any) -> dict:
     d = dict(row)
     if "status" not in d:
         d["status"] = compute_device_status(row) if "enabled" in d else "online"
+    d["services"] = _parse_services(d.get("services"))
     return d
 
 

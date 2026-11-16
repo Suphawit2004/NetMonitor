@@ -1,8 +1,28 @@
 from typing import Literal, Optional
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 DeviceStatus = Literal['online', 'warning', 'offline']
 DeviceType = Literal['switch', 'ap', 'router', 'server']
+
+
+def normalize_services_list(values: list[str]) -> list[str]:
+    """Trims, drops empty tags, validates max length, and deduplicates case-insensitively."""
+    cleaned: list[str] = []
+    seen: set[str] = set()
+    for raw in values:
+        tag = raw.strip()
+        if not tag:
+            continue
+        if len(tag) > 40:
+            raise ValueError("Each service tag must be at most 40 characters")
+        key = tag.lower()
+        if key not in seen:
+            seen.add(key)
+            cleaned.append(tag)
+    if len(cleaned) > 12:
+        raise ValueError("At most 12 service tags allowed per device")
+    return cleaned
+
 
 class DeviceBase(BaseModel):
     name: str
@@ -17,6 +37,12 @@ class DeviceBase(BaseModel):
     longitude: Optional[float] = None
     altitude: Optional[float] = None
     target_room: Optional[str] = None
+    services: list[str] = Field(default_factory=list)
+
+    @field_validator('services')
+    @classmethod
+    def _validate_services(cls, v: list[str]) -> list[str]:
+        return normalize_services_list(v)
 
 class DeviceCreate(DeviceBase):
     snmp_port: int = 161
@@ -41,6 +67,14 @@ class DeviceUpdate(BaseModel):
     longitude: Optional[float] = None
     altitude: Optional[float] = None
     target_room: Optional[str] = None
+    services: Optional[list[str]] = None
+
+    @field_validator('services')
+    @classmethod
+    def _validate_services(cls, v: Optional[list[str]]) -> Optional[list[str]]:
+        if v is None:
+            return None
+        return normalize_services_list(v)
 
 class DeviceOut(BaseModel):
     id: str
@@ -57,6 +91,7 @@ class DeviceOut(BaseModel):
     longitude: Optional[float] = None
     altitude: Optional[float] = None
     target_room: Optional[str] = None
+    services: list[str] = Field(default_factory=list)
 
 class InterfaceOut(BaseModel):
     id: str
@@ -279,6 +314,23 @@ class SpofCandidateOut(BaseModel):
     score: int
 
 
+class ZoneImpactOut(BaseModel):
+    zone: str
+    floor: int
+    impact_state: Literal['outage', 'degraded']
+    down_count: int
+    total_count: int
+    affected_devices: list[str] = Field(default_factory=list)
+    impacted_services: list[str] = Field(default_factory=list)
+
+
+class ServiceImpactOut(BaseModel):
+    service: str
+    impact_state: Literal['outage', 'degraded']
+    source_devices: list[str] = Field(default_factory=list)
+    zones: list[str] = Field(default_factory=list)
+
+
 class SimulationImpactResponse(BaseModel):
     down_device_ids: list[str]
     down_link_ids: list[str]
@@ -287,6 +339,8 @@ class SimulationImpactResponse(BaseModel):
     link_states: dict[str, str]
     affected_floors: list[int]
     spof_ranking: list[SpofCandidateOut] = Field(default_factory=list)
+    affected_zones: list[ZoneImpactOut] = Field(default_factory=list)
+    affected_services: list[ServiceImpactOut] = Field(default_factory=list)
 
 
 class ApplyFaultsRequest(BaseModel):

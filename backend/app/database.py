@@ -40,6 +40,7 @@ async def init_db():
                 latitude        DOUBLE PRECISION,
                 longitude       DOUBLE PRECISION,
                 altitude        DOUBLE PRECISION,
+                services        JSONB NOT NULL DEFAULT '[]'::jsonb,
                 created_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
                 updated_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
                 UNIQUE (management_ip, snmp_port)
@@ -100,7 +101,8 @@ async def init_db():
             ADD COLUMN IF NOT EXISTS model TEXT,
             ADD COLUMN IF NOT EXISTS latitude DOUBLE PRECISION,
             ADD COLUMN IF NOT EXISTS longitude DOUBLE PRECISION,
-            ADD COLUMN IF NOT EXISTS altitude DOUBLE PRECISION;
+            ADD COLUMN IF NOT EXISTS altitude DOUBLE PRECISION,
+            ADD COLUMN IF NOT EXISTS services JSONB NOT NULL DEFAULT '[]'::jsonb;
 
             CREATE TABLE IF NOT EXISTS alerts (
                 id SERIAL PRIMARY KEY,

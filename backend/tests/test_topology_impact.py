@@ -161,3 +161,17 @@ async def test_duplicate_undirected_link_rejected_with_400():
             )
             assert res.status_code == 400
             assert "already exists" in res.json()["detail"].lower()
+
+
+def test_device_update_services_normalization_and_validation():
+    from pydantic import ValidationError
+    from app.models import DeviceUpdate
+
+    valid = DeviceUpdate(services=["  Wi-Fi  ", "wi-fi", "", "DHCP", "DNS"])
+    assert valid.services == ["Wi-Fi", "DHCP", "DNS"]
+
+    with pytest.raises(ValidationError):
+        DeviceUpdate(services=["x" * 41])
+
+    with pytest.raises(ValidationError):
+        DeviceUpdate(services=[f"svc-{i}" for i in range(13)])

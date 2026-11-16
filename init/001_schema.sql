@@ -18,6 +18,7 @@ CREATE TABLE devices (
     latitude        DOUBLE PRECISION,
     longitude       DOUBLE PRECISION,
     altitude        DOUBLE PRECISION,
+    services        JSONB NOT NULL DEFAULT '[]'::jsonb,
     created_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
     updated_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
     UNIQUE (management_ip, snmp_port)
