@@ -175,3 +175,34 @@ def test_device_update_services_normalization_and_validation():
 
     with pytest.raises(ValidationError):
         DeviceUpdate(services=[f"svc-{i}" for i in range(13)])
+
+
+def test_zone_and_service_impact_inference_and_full_vs_partial_room():
+    devices = [
+        {"id": "1", "name": "RTR-01", "dtype": "router", "floor": 1, "x": 50.0, "y": 50.0, "location": "Floor 1 – SERVER ROOM"},
+        {"id": "2", "name": "SW-CORE", "dtype": "switch", "floor": 1, "x": 80.0, "y": 50.0, "location": "Floor 1 – SERVER ROOM"},
+        {"id": "3", "name": "AP-MEETING", "dtype": "ap", "floor": 1, "x": 200.0, "y": 200.0, "location": "Floor 1 – MEETING"},
+        {"id": "4", "name": "DB-ERP-01", "dtype": "server", "floor": 1, "x": 90.0, "y": 80.0, "location": "Floor 1 – ZONE-LAB", "services": ["ERP", "PostgreSQL"]},
+    ]
+    links = [
+        {"id": "10", "source_device_id": "1", "target_device_id": "2", "link_type": "wan", "bandwidth_mbps": 10000, "is_redundant": False},
+        {"id": "11", "source_device_id": "2", "target_device_id": "3", "link_type": "access", "bandwidth_mbps": 1000, "is_redundant": False},
+        {"id": "12", "source_device_id": "2", "target_device_id": "4", "link_type": "access", "bandwidth_mbps": 10000, "is_redundant": False},
+    ]
+    report = compute_blast_radius(devices, links, down_device_ids=["2"], down_link_ids=[], include_spof=False)
+    zones = {z["zone"]: z for z in report["affected_zones"]}
+    svcs = {s["service"]: s for s in report["affected_services"]}
+
+    # SERVER ROOM has both RTR-01 (healthy) and SW-CORE (root_down) -> degraded
+    assert zones["SERVER ROOM"]["impact_state"] == "degraded"
+    # MEETING and ZONE-LAB lose 100% of devices -> outage
+    assert zones["MEETING"]["impact_state"] == "outage"
+    assert zones["ZONE-LAB"]["impact_state"] == "outage"
+    assert set(zones["ZONE-LAB"]["impacted_services"]) == {"ERP", "PostgreSQL"}
+
+    # Auto-inferred Core Switching & Wi-Fi plus explicit ERP / PostgreSQL
+    assert svcs["Core Switching"]["impact_state"] == "outage"
+    assert svcs["Wi-Fi"]["impact_state"] == "outage"
+    assert svcs["ERP"]["impact_state"] == "outage"
+    assert svcs["PostgreSQL"]["impact_state"] == "outage"
+    assert "Internet Gateway" not in svcs  # router stayed healthy

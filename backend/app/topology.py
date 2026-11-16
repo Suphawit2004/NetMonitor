@@ -276,6 +276,155 @@ def _trace_dependency_chain(
     return cause_id, cause_name, path_names
 
 
+def resolve_device_services(device: Dict[str, Any]) -> List[str]:
+    """Returns explicit user services if configured, otherwise infers role-based service tags."""
+    raw = device.get("services")
+    if isinstance(raw, list) and raw:
+        cleaned = [str(s).strip() for s in raw if str(s).strip()]
+        if cleaned:
+            return cleaned
+
+    dtype = (device.get("dtype") or "switch").lower()
+    name_low = (device.get("name") or "").lower()
+
+    if dtype == "router":
+        return ["Internet Gateway"]
+    if dtype == "switch":
+        return ["Core Switching"] if _is_core_switch(device) else ["LAN / PoE"]
+    if dtype == "ap":
+        return ["Wi-Fi"]
+
+    inferred: List[str] = []
+    keyword_rules = [
+        (("dhcp",), "DHCP"),
+        (("dns",), "DNS"),
+        (("db", "sql", "postgres", "mysql", "mariadb"), "Database"),
+        (("erp", "hr", "acc"), "Internal ERP"),
+        (("web", "http", "app", "api"), "Web Service"),
+        (("cctv", "nvr", "cam"), "CCTV / NVR"),
+        (("air", "sensor", "iot", "zhimi"), "IoT / Facility"),
+    ]
+    for keys, label in keyword_rules:
+        if any(k in name_low for k in keys):
+            inferred.append(label)
+    return inferred or ["Internal Server"]
+
+
+def _resolve_device_zone(device: Dict[str, Any]) -> str:
+    """Extracts readable zone/room name from target_room or location string."""
+    target_room = (device.get("target_room") or "").strip()
+    if target_room:
+        return target_room
+    loc = (device.get("location") or "").strip()
+    if loc:
+        for sep in ("–", "—", " - "):
+            if sep in loc:
+                part = loc.split(sep, 1)[1].strip()
+                if part:
+                    return part
+        return loc
+    floor = int(device.get("floor") or 1)
+    return f"Floor {floor}"
+
+
+def _compute_business_impacts(
+    devices: List[Dict[str, Any]],
+    device_impacts: List[Dict[str, Any]],
+) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]]]:
+    """Aggregates affected zones/rooms and impacted services from device impact details."""
+    by_id: Dict[str, Dict[str, Any]] = {str(d["id"]): d for d in devices}
+    impact_by_id: Dict[str, Dict[str, Any]] = {x["device_id"]: x for x in device_impacts}
+
+    zone_buckets: Dict[Tuple[int, str], Dict[str, Any]] = {}
+    for d in devices:
+        did = str(d["id"])
+        floor = int(d.get("floor") or 1)
+        zone = _resolve_device_zone(d)
+        key = (floor, zone)
+        bucket = zone_buckets.setdefault(
+            key,
+            {
+                "zone": zone,
+                "floor": floor,
+                "total_count": 0,
+                "failed_count": 0,
+                "degraded_count": 0,
+                "affected_devices": [],
+                "services_set": set(),
+            },
+        )
+        bucket["total_count"] += 1
+        imp = impact_by_id.get(did)
+        state = imp["impact_state"] if imp else "healthy"
+        if state in ("root_down", "unreachable"):
+            bucket["failed_count"] += 1
+            bucket["affected_devices"].append(d.get("name") or did)
+            bucket["services_set"].update(resolve_device_services(d))
+        elif state == "degraded":
+            bucket["degraded_count"] += 1
+            bucket["affected_devices"].append(d.get("name") or did)
+            bucket["services_set"].update(resolve_device_services(d))
+
+    affected_zones: List[Dict[str, Any]] = []
+    for bucket in zone_buckets.values():
+        impacted_cnt = bucket["failed_count"] + bucket["degraded_count"]
+        if impacted_cnt == 0:
+            continue
+        zone_state = (
+            "outage"
+            if bucket["failed_count"] >= bucket["total_count"]
+            else "degraded"
+        )
+        affected_zones.append(
+            {
+                "zone": bucket["zone"],
+                "floor": bucket["floor"],
+                "impact_state": zone_state,
+                "down_count": impacted_cnt,
+                "total_count": bucket["total_count"],
+                "affected_devices": sorted(bucket["affected_devices"]),
+                "impacted_services": sorted(bucket["services_set"]),
+            }
+        )
+    affected_zones.sort(
+        key=lambda z: (0 if z["impact_state"] == "outage" else 1, -z["down_count"], z["floor"], z["zone"])
+    )
+
+    service_buckets: Dict[str, Dict[str, Any]] = {}
+    for imp in device_impacts:
+        state = imp["impact_state"]
+        if state == "healthy":
+            continue
+        dev = by_id.get(imp["device_id"])
+        if not dev:
+            continue
+        zone = _resolve_device_zone(dev)
+        dev_name = dev.get("name") or imp["device_id"]
+        for svc in resolve_device_services(dev):
+            sb = service_buckets.setdefault(
+                svc,
+                {"service": svc, "has_outage": False, "source_devices": [], "zones": set()},
+            )
+            if state in ("root_down", "unreachable"):
+                sb["has_outage"] = True
+            sb["source_devices"].append(dev_name)
+            sb["zones"].add(zone)
+
+    affected_services: List[Dict[str, Any]] = [
+        {
+            "service": sb["service"],
+            "impact_state": "outage" if sb["has_outage"] else "degraded",
+            "source_devices": sorted(set(sb["source_devices"])),
+            "zones": sorted(sb["zones"]),
+        }
+        for sb in service_buckets.values()
+    ]
+    affected_services.sort(
+        key=lambda s: (0 if s["impact_state"] == "outage" else 1, -len(s["source_devices"]), s["service"])
+    )
+    return affected_zones, affected_services
+
+
 def compute_blast_radius(
     devices: List[Dict[str, Any]],
     links: List[Dict[str, Any]],
@@ -442,6 +591,11 @@ def compute_blast_radius(
     unreachable_cnt = sum(1 for x in device_impacts if x["impact_state"] == "unreachable")
     degraded_cnt = sum(1 for x in device_impacts if x["impact_state"] == "degraded")
 
+    affected_zones: List[Dict[str, Any]] = []
+    affected_services: List[Dict[str, Any]] = []
+    if include_spof or root_down_cnt + unreachable_cnt + degraded_cnt > 0:
+        affected_zones, affected_services = _compute_business_impacts(devices, device_impacts)
+
     return {
         "down_device_ids": sorted(down_devs),
         "down_link_ids": sorted(down_links),
@@ -456,4 +610,6 @@ def compute_blast_radius(
         "link_states": link_states,
         "affected_floors": sorted(affected_floors),
         "spof_ranking": spof_ranking[:10],
+        "affected_zones": affected_zones,
+        "affected_services": affected_services,
     }

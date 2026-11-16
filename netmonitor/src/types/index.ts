@@ -26,6 +26,7 @@ export interface Device {
   longitude?: number | null
   altitude?: number | null
   gps_source?: string | null
+  services?: string[]
 }
 
 // รูปแบบอุปกรณ์จาก backend — พิกัดอาจยังไม่ถูกระบุตอนเชื่อมเครื่อง
@@ -37,6 +38,7 @@ export interface RawDevice extends Omit<Device, 'x' | 'y'> {
   longitude?: number | null
   altitude?: number | null
   gps_source?: string | null
+  services?: string[]
 }
 
 export interface DiscoveredDevice {
@@ -232,6 +234,23 @@ export interface BlastRadiusSummary {
   healthy_count: number
 }
 
+export interface ZoneImpactDetail {
+  zone: string
+  floor: number
+  impact_state: 'outage' | 'degraded'
+  down_count: number
+  total_count: number
+  affected_devices: string[]
+  impacted_services: string[]
+}
+
+export interface ServiceImpactDetail {
+  service: string
+  impact_state: 'outage' | 'degraded'
+  source_devices: string[]
+  zones: string[]
+}
+
 export interface BlastRadiusReport {
   down_device_ids: string[]
   down_link_ids: string[]
@@ -240,4 +259,6 @@ export interface BlastRadiusReport {
   link_states: Record<string, LinkImpactState>
   affected_floors: number[]
   spof_ranking: SpofCandidate[]
+  affected_zones: ZoneImpactDetail[]
+  affected_services: ServiceImpactDetail[]
 }

@@ -4,9 +4,13 @@ import type {
   DeviceImpactDetail,
   ImpactState,
   LinkImpactState,
+  Room,
+  ServiceImpactDetail,
   SpofCandidate,
   TopologyLink,
+  ZoneImpactDetail,
 } from '../types'
+import { getStoredRooms } from './roomStore'
 
 function dist(a: Device, b: Device): number {
   const floorPenalty = a.floor === b.floor ? 0 : 10000
@@ -15,6 +19,171 @@ function dist(a: Device, b: Device): number {
 
 function isCoreSwitch(dev: Device): boolean {
   return dev.dtype === 'switch' && (dev.name.toLowerCase().includes('core') || dev.id === '1')
+}
+
+const SERVER_KEYWORD_RULES: { keys: string[]; label: string }[] = [
+  { keys: ['dhcp'], label: 'DHCP' },
+  { keys: ['dns'], label: 'DNS' },
+  { keys: ['db', 'sql', 'postgres', 'mysql', 'mariadb'], label: 'Database' },
+  { keys: ['erp', 'hr', 'acc'], label: 'Internal ERP' },
+  { keys: ['web', 'http', 'app', 'api'], label: 'Web Service' },
+  { keys: ['cctv', 'nvr', 'cam'], label: 'CCTV / NVR' },
+  { keys: ['air', 'sensor', 'iot', 'zhimi'], label: 'IoT / Facility' },
+]
+
+/**
+ * Resolves effective service tags for a device (explicit tags override role-based defaults).
+ */
+export function resolveDeviceServices(device: Device): { services: string[]; isAuto: boolean } {
+  if (Array.isArray(device.services) && device.services.length > 0) {
+    const cleaned = device.services.map(s => s.trim()).filter(Boolean)
+    if (cleaned.length > 0) return { services: cleaned, isAuto: false }
+  }
+  if (device.dtype === 'router') return { services: ['Internet Gateway'], isAuto: true }
+  if (device.dtype === 'switch') {
+    return { services: [isCoreSwitch(device) ? 'Core Switching' : 'LAN / PoE'], isAuto: true }
+  }
+  if (device.dtype === 'ap') return { services: ['Wi-Fi'], isAuto: true }
+
+  const nameLow = (device.name ?? '').toLowerCase()
+  const inferred = SERVER_KEYWORD_RULES
+    .filter(rule => rule.keys.some(k => nameLow.includes(k)))
+    .map(rule => rule.label)
+  return { services: inferred.length > 0 ? inferred : ['Internal Server'], isAuto: true }
+}
+
+/**
+ * Resolves the building room/zone containing a device using live canvas room boxes first.
+ */
+export function resolveDeviceZone(device: Device, roomsByFloor?: Map<1 | 2, Room[]>): string {
+  const floorRooms = roomsByFloor?.get(device.floor) ?? (typeof window !== 'undefined' ? getStoredRooms(device.floor) : [])
+  const room = floorRooms.find(
+    r =>
+      device.x >= r.left &&
+      device.x <= r.left + r.width &&
+      device.y >= r.top &&
+      device.y <= r.top + r.height,
+  )
+  if (room?.label?.trim()) return room.label.trim()
+  if (device.target_room?.trim()) return device.target_room.trim()
+  return `Floor ${device.floor}`
+}
+
+function computeBusinessImpacts(
+  devices: Device[],
+  deviceImpacts: DeviceImpactDetail[],
+): { affectedZones: ZoneImpactDetail[]; affectedServices: ServiceImpactDetail[] } {
+  const byId = new Map(devices.map(d => [d.id, d]))
+  const impactById = new Map(deviceImpacts.map(x => [x.device_id, x]))
+  const roomsByFloor = new Map<1 | 2, Room[]>()
+  if (typeof window !== 'undefined') {
+    roomsByFloor.set(1, getStoredRooms(1))
+    roomsByFloor.set(2, getStoredRooms(2))
+  }
+
+  interface ZoneBucket {
+    zone: string
+    floor: 1 | 2
+    totalCount: number
+    failedCount: number
+    degradedCount: number
+    affectedDevices: string[]
+    servicesSet: Set<string>
+  }
+
+  const zoneBuckets = new Map<string, ZoneBucket>()
+  for (const d of devices) {
+    const zone = resolveDeviceZone(d, roomsByFloor)
+    const key = `${d.floor}::${zone}`
+    let bucket = zoneBuckets.get(key)
+    if (!bucket) {
+      bucket = {
+        zone,
+        floor: d.floor,
+        totalCount: 0,
+        failedCount: 0,
+        degradedCount: 0,
+        affectedDevices: [],
+        servicesSet: new Set(),
+      }
+      zoneBuckets.set(key, bucket)
+    }
+    bucket.totalCount += 1
+    const state = impactById.get(d.id)?.impact_state ?? 'healthy'
+    if (state === 'root_down' || state === 'unreachable') {
+      bucket.failedCount += 1
+      bucket.affectedDevices.push(d.name)
+      resolveDeviceServices(d).services.forEach(s => bucket!.servicesSet.add(s))
+    } else if (state === 'degraded') {
+      bucket.degradedCount += 1
+      bucket.affectedDevices.push(d.name)
+      resolveDeviceServices(d).services.forEach(s => bucket!.servicesSet.add(s))
+    }
+  }
+
+  const affectedZones: ZoneImpactDetail[] = []
+  for (const bucket of zoneBuckets.values()) {
+    const impactedCnt = bucket.failedCount + bucket.degradedCount
+    if (impactedCnt === 0) continue
+    affectedZones.push({
+      zone: bucket.zone,
+      floor: bucket.floor,
+      impact_state: bucket.failedCount >= bucket.totalCount ? 'outage' : 'degraded',
+      down_count: impactedCnt,
+      total_count: bucket.totalCount,
+      affected_devices: [...bucket.affectedDevices].sort(),
+      impacted_services: [...bucket.servicesSet].sort(),
+    })
+  }
+  affectedZones.sort(
+    (a, b) =>
+      (a.impact_state === 'outage' ? 0 : 1) - (b.impact_state === 'outage' ? 0 : 1) ||
+      b.down_count - a.down_count ||
+      a.floor - b.floor ||
+      a.zone.localeCompare(b.zone),
+  )
+
+  interface ServiceBucket {
+    service: string
+    hasOutage: boolean
+    sourceDevices: Set<string>
+    zones: Set<string>
+  }
+  const serviceBuckets = new Map<string, ServiceBucket>()
+  for (const imp of deviceImpacts) {
+    if (imp.impact_state === 'healthy') continue
+    const dev = byId.get(imp.device_id)
+    if (!dev) continue
+    const zone = resolveDeviceZone(dev, roomsByFloor)
+    for (const svc of resolveDeviceServices(dev).services) {
+      let sb = serviceBuckets.get(svc)
+      if (!sb) {
+        sb = { service: svc, hasOutage: false, sourceDevices: new Set(), zones: new Set() }
+        serviceBuckets.set(svc, sb)
+      }
+      if (imp.impact_state === 'root_down' || imp.impact_state === 'unreachable') {
+        sb.hasOutage = true
+      }
+      sb.sourceDevices.add(dev.name)
+      sb.zones.add(zone)
+    }
+  }
+
+  const affectedServices: ServiceImpactDetail[] = [...serviceBuckets.values()]
+    .map(sb => ({
+      service: sb.service,
+      impact_state: (sb.hasOutage ? 'outage' : 'degraded') as 'outage' | 'degraded',
+      source_devices: [...sb.sourceDevices].sort(),
+      zones: [...sb.zones].sort(),
+    }))
+    .sort(
+      (a, b) =>
+        (a.impact_state === 'outage' ? 0 : 1) - (b.impact_state === 'outage' ? 0 : 1) ||
+        b.source_devices.length - a.source_devices.length ||
+        a.service.localeCompare(b.service),
+    )
+
+  return { affectedZones, affectedServices }
 }
 
 /**
@@ -386,6 +555,10 @@ export function computeBlastRadius(
   const rootDownCount = deviceImpacts.filter(x => x.impact_state === 'root_down').length
   const unreachableCount = deviceImpacts.filter(x => x.impact_state === 'unreachable').length
   const degradedCount = deviceImpacts.filter(x => x.impact_state === 'degraded').length
+  const { affectedZones, affectedServices } =
+    includeSpof || rootDownCount + unreachableCount + degradedCount > 0
+      ? computeBusinessImpacts(devices, deviceImpacts)
+      : { affectedZones: [], affectedServices: [] }
 
   return {
     down_device_ids: [...downDeviceIds].sort(),
@@ -401,6 +574,8 @@ export function computeBlastRadius(
     link_states: linkStates,
     affected_floors: [...affectedFloorsSet].sort((a, b) => a - b),
     spof_ranking: spofRanking.slice(0, 10),
+    affected_zones: affectedZones,
+    affected_services: affectedServices,
   }
 }
 
