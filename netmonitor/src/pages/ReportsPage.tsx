@@ -10,6 +10,7 @@ import { computeBlastRadius } from '../services/topologyEngine'
 import { fetchAlerts, acknowledgeAlert } from '../services/api'
 import { formatTimeAgo } from '../i18n/format'
 import { DEVICE_ICON } from '../constants/deviceMeta'
+import BusinessImpactSummary from '../components/simulation/BusinessImpactSummary'
 import {
   BarChart3,
   Download,
@@ -332,6 +333,13 @@ export default function ReportsPage({ onDeviceInfo, onOpenFullDetail }: Props) {
               <span className={styles.miniKpiLbl}>{t('sim.kpiDegraded')}</span>
             </div>
           </div>
+
+          <BusinessImpactSummary
+            zones={effectiveReport.affected_zones}
+            services={effectiveReport.affected_services}
+            variant="report"
+            testId="reports-business-impact"
+          />
 
           {impactedDevices.length === 0 ? (
             <div className={styles.emptyText}>{t('reports.noOutageImpact')}</div>

@@ -22,6 +22,7 @@ import styles from './FloorCanvas.module.css'
 
 interface RoomsLayerProps {
   roomList: Room[]
+  zoneImpactMap: Map<string, 'outage' | 'degraded'>
   isEditingRooms: boolean
   activeRoomIndex: number | null
   editingRoomIdx: number | null
@@ -39,6 +40,7 @@ interface RoomsLayerProps {
 
 const RoomsLayer = memo(function RoomsLayer({
   roomList,
+  zoneImpactMap,
   isEditingRooms,
   activeRoomIndex,
   editingRoomIdx,
@@ -61,11 +63,19 @@ const RoomsLayer = memo(function RoomsLayer({
         const isRestroom = room.type === 'restroom' || /ห้องน้ำ|restroom|toilet|wc/i.test(room.label)
         const isServer = room.type === 'server' || /server|datacenter|เซิร์ฟเวอร์/i.test(room.label)
         const roomTypeClass = isServer ? styles.roomServer : isStairs ? styles.roomStairs : isRestroom ? styles.roomRestroom : ''
+        const zoneState = !isEditingRooms ? zoneImpactMap.get(room.label) : undefined
+        const zoneClass =
+          zoneState === 'outage'
+            ? styles.roomOutage
+            : zoneState === 'degraded'
+              ? styles.roomDegraded
+              : ''
 
         return (
           <div
             key={i}
-            className={`${styles.room} ${roomTypeClass} ${isEditingRooms ? styles.roomEditing : ''} ${isEditingThisRoom ? styles.roomDragging : ''}`}
+            className={`${styles.room} ${roomTypeClass} ${zoneClass} ${isEditingRooms ? styles.roomEditing : ''} ${isEditingThisRoom ? styles.roomDragging : ''}`}
+            data-zone-state={zoneState}
             style={{ left: room.left, top: room.top, width: room.width, height: room.height }}
             onMouseDown={e => onRoomMouseDown(e, i)}
           >
@@ -199,6 +209,16 @@ export default function FloorCanvas({
   const isSimMode = faultSim?.isSimMode ?? false
   const isLinkEditMode = faultSim?.isLinkEditMode ?? false
   const showLinks = faultSim?.showLinks ?? true
+
+  const zoneImpactMap = useMemo(() => {
+    const map = new Map<string, 'outage' | 'degraded'>()
+    if (!faultSim || !isSimMode) return map
+    if (faultSim.downDeviceIds.size === 0 && faultSim.downLinkIds.size === 0) return map
+    for (const z of faultSim.impactReport.affected_zones) {
+      if (z.floor === currentFloor) map.set(z.zone, z.impact_state)
+    }
+    return map
+  }, [faultSim, isSimMode, currentFloor])
 
   // ── 0. คำนวณขนาดและสัดส่วนอาคารจริงจากแผนที่ดาวเทียม ───────────────
   const buildingDim = useMemo(() => getBuildingRealDimensions(), [currentFloor])
@@ -772,6 +792,7 @@ export default function FloorCanvas({
           {!bgImage && (
             <RoomsLayer
               roomList={roomList}
+              zoneImpactMap={zoneImpactMap}
               isEditingRooms={isEditingRooms}
               activeRoomIndex={activeRoomIndex}
               editingRoomIdx={editingRoomIdx}

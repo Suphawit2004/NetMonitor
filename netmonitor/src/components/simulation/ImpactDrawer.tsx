@@ -5,6 +5,7 @@ import { useNetwork } from '../../context/networkContext'
 import { useFaultSim } from '../../context/faultSimContext'
 import { useToast } from '../ui/toast-context'
 import ConfirmDialog from '../ui/ConfirmDialog'
+import BusinessImpactSummary from './BusinessImpactSummary'
 import { DEVICE_ICON } from '../../constants/deviceMeta'
 import {
   FlaskConical,
@@ -194,23 +195,31 @@ export default function ImpactDrawer({ onFocusDevice }: Props) {
 
       {/* Step 2: Compact Summary Strip */}
       {hasFaults && (
-        <div className={styles.summaryStrip}>
-          <span className={styles.sumCrit}>
-            {`${t('sim.kpiRootDown')} ${summary.root_down_count}`}
-          </span>
-          <span className={styles.sumDot}>·</span>
-          <span className={styles.sumCrit}>
-            {`${t('sim.kpiUnreachable')} ${summary.unreachable_count}`}
-          </span>
-          {summary.degraded_count > 0 && (
-            <>
-              <span className={styles.sumDot}>·</span>
-              <span className={styles.sumWarn}>
-                {`${t('sim.kpiDegraded')} ${summary.degraded_count}`}
-              </span>
-            </>
-          )}
-        </div>
+        <>
+          <div className={styles.summaryStrip}>
+            <span className={styles.sumCrit}>
+              {`${t('sim.kpiRootDown')} ${summary.root_down_count}`}
+            </span>
+            <span className={styles.sumDot}>·</span>
+            <span className={styles.sumCrit}>
+              {`${t('sim.kpiUnreachable')} ${summary.unreachable_count}`}
+            </span>
+            {summary.degraded_count > 0 && (
+              <>
+                <span className={styles.sumDot}>·</span>
+                <span className={styles.sumWarn}>
+                  {`${t('sim.kpiDegraded')} ${summary.degraded_count}`}
+                </span>
+              </>
+            )}
+          </div>
+          <BusinessImpactSummary
+            zones={impactReport.affected_zones}
+            services={impactReport.affected_services}
+            variant="drawer"
+            testId="sim-business-impact"
+          />
+        </>
       )}
 
       {/* Affected Devices List */}

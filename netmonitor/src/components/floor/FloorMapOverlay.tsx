@@ -458,13 +458,25 @@ export default function FloorMapOverlay({
     group.clearLayers()
     roomLayersRef.current = []
 
+    const zoneStateMap = new Map<string, 'outage' | 'degraded'>()
+    if (
+      isSimMode &&
+      faultSim &&
+      (faultSim.downDeviceIds.size > 0 || faultSim.downLinkIds.size > 0)
+    ) {
+      for (const z of faultSim.impactReport.affected_zones) {
+        if (z.floor === currentFloor) zoneStateMap.set(z.zone, z.impact_state)
+      }
+    }
+
     rooms.forEach(room => {
       const pts = roomToGpsPolygon(room, buildingBounds)
       const isStairs = room.type === 'stairs' || /บันได|stairs/i.test(room.label)
       const isRestroom = room.type === 'restroom' || /ห้องน้ำ|restroom|toilet|wc/i.test(room.label)
       const isServer = room.type === 'server' || /server|datacenter|เซิร์ฟเวอร์/i.test(room.label)
+      const zoneState = zoneStateMap.get(room.label)
 
-      const color = isServer
+      const baseColor = isServer
         ? (isLight ? '#6366f1' : '#a5b4fc')
         : isStairs
         ? (isLight ? '#d97706' : '#fbbf24')
@@ -472,7 +484,7 @@ export default function FloorMapOverlay({
         ? (isLight ? '#0891b2' : '#22d3ee')
         : (isLight ? '#0284c7' : '#38bdf8')
 
-      const fillColor = isServer
+      const baseFill = isServer
         ? (isLight ? '#4338ca' : '#3730a3')
         : isStairs
         ? (isLight ? '#b45309' : '#92400e')
@@ -480,11 +492,20 @@ export default function FloorMapOverlay({
         ? (isLight ? '#0e7490' : '#155e75')
         : (isLight ? '#0284c7' : '#0369a1')
 
+      const color =
+        zoneState === 'outage' ? '#ef4444' : zoneState === 'degraded' ? '#f59e0b' : baseColor
+      const fillColor =
+        zoneState === 'outage' ? '#dc2626' : zoneState === 'degraded' ? '#d97706' : baseFill
+
       const poly = L.polygon(pts, {
         color,
-        weight: isServer ? 2.5 : 2,
+        weight: zoneState ? 2.8 : isServer ? 2.5 : 2,
         fillColor,
-        fillOpacity: isServer ? Math.min(0.85, overlayOpacity + 0.18) : Math.max(0.22, overlayOpacity),
+        fillOpacity: zoneState
+          ? Math.max(0.28, overlayOpacity + 0.08)
+          : isServer
+            ? Math.min(0.85, overlayOpacity + 0.18)
+            : Math.max(0.22, overlayOpacity),
         dashArray: isStairs ? '3, 4' : '4, 4',
         interactive: isStairs && !!onFloorChange,
       })
@@ -534,7 +555,7 @@ export default function FloorMapOverlay({
       group.addLayer(poly)
       roomLayersRef.current.push({ poly, labelMarker, room })
     })
-  }, [mapReady, rooms, overlayOpacity, zoomLevel, buildingBounds, currentFloor, onFloorChange, t, isLight])
+  }, [mapReady, rooms, overlayOpacity, zoomLevel, buildingBounds, currentFloor, onFloorChange, t, isLight, isSimMode, faultSim])
 
   // ── 5.5. เรนเดอร์เส้นเชื่อม Topology Links บนแผนที่ ─────────────
   useEffect(() => {

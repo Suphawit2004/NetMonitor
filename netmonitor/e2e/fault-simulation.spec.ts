@@ -207,4 +207,54 @@ test.describe('Device-to-Device Failure Impact Simulation', () => {
 
     await drawer.getByRole('button', { name: /เสร็จสิ้น|Done/i }).click();
   });
+
+  test('TC-SIM-06: Custom service tag persists in DB and appears across Floor room highlights, ImpactDrawer, and Reports', async ({ page }) => {
+    try {
+      await page.getByRole('tab', { name: /รายการอุปกรณ์|Device List/i }).click();
+      const coreRow = page.locator('tbody tr', { hasText: 'Switch-Core' }).first();
+      await expect(coreRow).toBeVisible({ timeout: 5000 });
+      await coreRow.click();
+
+      const editor = page.getByTestId('service-tags-editor');
+      await expect(editor).toBeVisible({ timeout: 5000 });
+
+      const input = editor.locator('input[type="text"]');
+      await input.fill('ERP-CORE');
+      await editor.locator('button[type="submit"]').click();
+      await expect(editor.locator('[data-testid="active-service-tag"]', { hasText: 'ERP-CORE' })).toBeVisible({ timeout: 5000 });
+
+      // Reload page to prove PostgreSQL persistence
+      await page.reload({ waitUntil: 'domcontentloaded' });
+      await expect(page.getByTestId('service-tags-editor').locator('[data-testid="active-service-tag"]', { hasText: 'ERP-CORE' })).toBeVisible({ timeout: 10000 });
+
+      // Navigate to Floor Plan 2D -> simulate Switch-Core (id 1) down -> check room highlights & drawer summary
+      await page.getByRole('tab', { name: /แผนผัง|Floor Plan/i }).click();
+      await page.getByRole('button', { name: /^2D$/i }).click();
+      await page.getByTestId('toggle-sim-btn').click();
+      const drawer = page.getByTestId('impact-drawer');
+      await drawer.locator('select').selectOption('1');
+
+      const bizDrawer = page.getByTestId('sim-business-impact');
+      await expect(bizDrawer).toBeVisible();
+      await expect(bizDrawer).toContainText('ERP-CORE');
+      expect(await page.locator('[data-zone-state]').count()).toBeGreaterThan(0);
+
+      // Navigate to Reports -> verify business impact panel renders zones and custom service
+      await page.getByRole('tab', { name: /รายงาน|Reports/i }).click();
+      const bizReport = page.getByTestId('reports-business-impact');
+      await expect(bizReport).toBeVisible();
+      await expect(bizReport).toContainText('ERP-CORE');
+
+      // Exit simulation cleanly
+      await page.getByTestId('sim-sandbox-banner').getByRole('button', { name: /เสร็จสิ้น|Done/i }).click();
+    } finally {
+      await page.evaluate(() =>
+        fetch('/api/v1/devices/1', {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ services: [] }),
+        }),
+      );
+    }
+  });
 });
