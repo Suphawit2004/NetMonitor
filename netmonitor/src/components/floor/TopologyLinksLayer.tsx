@@ -156,7 +156,7 @@ function TopologyLinksLayer({
         const len = Math.hypot(x2 - x1, y2 - y1)
         const angleDeg = (Math.atan2(y2 - y1, x2 - x1) * 180) / Math.PI
         const { mx, my } = pickClearBadgePoint(x1, y1, x2, y2, floorPins, src.id, dst.id)
-        const hasBadge = state === 'severed' || (isLinkEditMode && state !== 'severed')
+        const hasBadge = state === 'severed' || isLinkEditMode
         const chevron =
           isFailureFlow && len >= 44
             ? pickClearChevronPoint(x1, y1, x2, y2, floorPins, src.id, dst.id, hasBadge ? { mx, my } : null)
