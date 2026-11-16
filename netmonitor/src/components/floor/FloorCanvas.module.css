@@ -665,6 +665,30 @@
   border-color: rgba(6, 182, 212, 0.5);
 }
 
+:global([data-theme="light"]) .room.roomOutage {
+  border-color: #ef4444 !important;
+  background: rgba(239, 68, 68, 0.14) !important;
+  box-shadow: 0 0 18px rgba(239, 68, 68, 0.25), 0 4px 14px rgba(15, 23, 42, 0.08);
+}
+
+:global([data-theme="light"]) .room.roomOutage .roomLabel {
+  color: #991b1b;
+  background: rgba(254, 226, 226, 0.95);
+  border-color: rgba(239, 68, 68, 0.5);
+}
+
+:global([data-theme="light"]) .room.roomDegraded {
+  border-color: #d97706 !important;
+  background: rgba(245, 158, 11, 0.14) !important;
+  box-shadow: 0 0 14px rgba(245, 158, 11, 0.22), 0 4px 14px rgba(15, 23, 42, 0.08);
+}
+
+:global([data-theme="light"]) .room.roomDegraded .roomLabel {
+  color: #92400e;
+  background: rgba(254, 243, 199, 0.95);
+  border-color: rgba(245, 158, 11, 0.5);
+}
+
 :global([data-theme="light"]) .stairLink {
   background: rgba(254, 243, 199, 0.95);
   border: 1px solid rgba(217, 119, 6, 0.6);

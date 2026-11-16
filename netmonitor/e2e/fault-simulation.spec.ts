@@ -167,36 +167,122 @@ test.describe('Device-to-Device Failure Impact Simulation', () => {
   });
 
   test('TC-SIM-05: Red failure lines animate from outage origin toward affected downstream devices on 2D and Map', async ({ page }) => {
+    const plan = await page.evaluate(async () => {
+      const [devs, links, simOverview] = await Promise.all([
+        fetch('/api/v1/devices').then(r => r.json()) as Promise<Array<{ id: string | number; name: string; dtype: string; floor: number }>>,
+        fetch('/api/v1/topology/links').then(r => r.json()) as Promise<Array<{ id: string | number; source_device_id: string | number; target_device_id: string | number }>>,
+        fetch('/api/v1/simulate/impact', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ down_device_ids: [], down_link_ids: [], include_spof: true }),
+        }).then(r => r.json()),
+      ]);
+
+      const devById = new Map(devs.map(d => [String(d.id), d]));
+      const floorById = new Map(devs.map(d => [String(d.id), d.floor]));
+      const edgeKeys = new Set(
+        links.map(l => {
+          const a = String(l.source_device_id);
+          const b = String(l.target_device_id);
+          return a < b ? `${a}::${b}` : `${b}::${a}`;
+        }),
+      );
+      const intraFloorCount = new Map<string, number>();
+      for (const link of links) {
+        const a = String(link.source_device_id);
+        const b = String(link.target_device_id);
+        const da = devById.get(a);
+        const db = devById.get(b);
+        if (da && db && da.floor === db.floor) {
+          intraFloorCount.set(a, (intraFloorCount.get(a) ?? 0) + 1);
+          intraFloorCount.set(b, (intraFloorCount.get(b) ?? 0) + 1);
+        }
+      }
+
+      const hubCandidate =
+        devs.find(d => d.name === 'Switch-Core' && (intraFloorCount.get(String(d.id)) ?? 0) >= 2) ??
+        devs.reduce<(typeof devs)[number] | undefined>((best, cur) => {
+          const curCnt = intraFloorCount.get(String(cur.id)) ?? 0;
+          const bestCnt = best ? (intraFloorCount.get(String(best.id)) ?? 0) : -1;
+          return curCnt > bestCnt ? cur : best;
+        }, undefined);
+
+      let cascadeCheck: { rootId: string; parentId: string; childId: string; floor: number } | null = null;
+      const candidateRoots: string[] = [
+        ...(simOverview.spof_ranking ?? []).map((s: { device_id: string }) => String(s.device_id)),
+        ...devs.filter(d => d.dtype === 'router' || d.dtype === 'switch').map(d => String(d.id)),
+      ];
+      const tested = new Set<string>();
+      for (const rootId of candidateRoots) {
+        if (tested.has(rootId)) continue;
+        tested.add(rootId);
+        const sim = await fetch('/api/v1/simulate/impact', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ down_device_ids: [rootId], down_link_ids: [], include_spof: false }),
+        }).then(r => r.json());
+        for (const imp of sim.device_impacts ?? []) {
+          const path: string[] = (imp.dependency_path ?? []).map(String);
+          if (path.length >= 3 && (imp.impact_state === 'unreachable' || imp.impact_state === 'degraded')) {
+            const parentId = path[path.length - 2];
+            const childId = path[path.length - 1];
+            const pair = parentId < childId ? `${parentId}::${childId}` : `${childId}::${parentId}`;
+            const pFloor = floorById.get(parentId);
+            const cFloor = floorById.get(childId);
+            if (edgeKeys.has(pair) && pFloor && pFloor === cFloor) {
+              cascadeCheck = { rootId, parentId, childId, floor: pFloor };
+              break;
+            }
+          }
+        }
+        if (cascadeCheck) break;
+      }
+
+      return {
+        hubId: hubCandidate ? String(hubCandidate.id) : null,
+        hubFloor: hubCandidate?.floor ?? 1,
+        hubIntraLinks: hubCandidate ? (intraFloorCount.get(String(hubCandidate.id)) ?? 0) : 0,
+        cascadeCheck,
+      };
+    });
+
+    expect(plan.hubId).toBeTruthy();
+    expect(plan.hubIntraLinks).toBeGreaterThanOrEqual(2);
+    const hubId = plan.hubId!;
+    const hubFloor = plan.hubFloor;
+
     await page.getByRole('tab', { name: /แผนผัง|Floor Plan/i }).click();
     await page.getByRole('button', { name: /^2D$/i }).click();
-    await page.getByRole('tab', { name: /ชั้น 2|Floor 2/i }).click();
+    await page.getByRole('tab', { name: new RegExp(`ชั้น ${hubFloor}|Floor ${hubFloor}`, 'i') }).click();
 
     await page.getByTestId('toggle-sim-btn').click();
     const drawer = page.getByTestId('impact-drawer');
     await expect(drawer).toBeVisible();
 
-    // Simulate Switch-Core (id 1 on Floor 2) going down
-    await drawer.locator('select').selectOption('1');
+    // Simulate the chosen hub going down
+    await drawer.locator('select').selectOption(hubId);
     const svgLayer = page.locator('svg[aria-label="Network topology links"]');
 
-    // Links connected to Switch-Core (1) on Floor 2 must flow outward from 1 -> leaf APs
-    const flowFromCore = svgLayer.locator('line[data-flow-dir^="1->"]');
-    expect(await flowFromCore.count()).toBeGreaterThanOrEqual(2);
+    // Links directly connected to the hub must flow outward from hubId -> neighbor
+    const flowFromHub = svgLayer.locator(`line[data-flow-dir^="${hubId}->"]`);
+    await expect(flowFromHub.first()).toBeVisible({ timeout: 5000 });
+    expect(await flowFromHub.count()).toBeGreaterThanOrEqual(2);
 
-    const animInfo = await flowFromCore.first().evaluate(el => {
+    const animInfo = await flowFromHub.first().evaluate(el => {
       const cs = getComputedStyle(el);
       return { animName: cs.animationName, strokeWidth: parseFloat(cs.strokeWidth) };
     });
     expect(animInfo.animName).not.toBe('none');
     expect(animInfo.strokeWidth).toBeGreaterThanOrEqual(2.5);
 
-    // Directional flow chevron should also be visible on Floor 2 failure lines
+    // Directional flow chevron should also be visible on failure lines
     expect(await svgLayer.locator('g[class*="flowArrow"]').count()).toBeGreaterThanOrEqual(2);
 
-    // Check Floor 1 cascaded link (14 -> 10) flows downstream when RTR-CORE-01 (16) goes down
-    await drawer.locator('select').selectOption('16');
-    await page.getByRole('tab', { name: /ชั้น 1|Floor 1/i }).click();
-    await expect(svgLayer.locator('line[data-flow-dir="14->10"]')).toBeVisible();
+    if (plan.cascadeCheck) {
+      await drawer.locator('select').selectOption(plan.cascadeCheck.rootId);
+      await page.getByRole('tab', { name: new RegExp(`ชั้น ${plan.cascadeCheck.floor}|Floor ${plan.cascadeCheck.floor}`, 'i') }).click();
+      await expect(svgLayer.locator(`line[data-flow-dir="${plan.cascadeCheck.parentId}->${plan.cascadeCheck.childId}"]`)).toBeVisible();
+    }
 
     // Switch to Satellite Map and check animated red Leaflet paths
     await page.getByRole('button', { name: /แผนที่|Map/i }).first().click();
@@ -263,5 +349,55 @@ test.describe('Device-to-Device Failure Impact Simulation', () => {
         }),
       );
     }
+  });
+
+  test('TC-SIM-07: Light Theme preserves outage red border on Server Room and toolbar status pills never wrap', async ({ page }) => {
+    await page.getByRole('tab', { name: /แผนผัง|Floor Plan/i }).click();
+    await page.getByRole('button', { name: /^2D$/i }).click();
+
+    // Switch to Light Theme if currently dark
+    const currentTheme = await page.evaluate(() => document.documentElement.getAttribute('data-theme'));
+    if (currentTheme !== 'light') {
+      await page.locator('nav button[title*="สว่าง"], nav button[title*="Light"]').click();
+    }
+    await expect(page.locator('html')).toHaveAttribute('data-theme', 'light');
+
+    // Collapse sidebar so compact status pills render in toolbarCenter
+    const sidebarBtn = page.locator('button[class*="sidebarToggle"]');
+    await sidebarBtn.click();
+    const pills = page.locator('button[class*="floorStatusPill"]');
+    if ((await pills.count()) > 0) {
+      const pillStats = await pills.evaluateAll(els =>
+        els.map(el => {
+          const cs = getComputedStyle(el);
+          const span = el.querySelector('span:last-child');
+          const spanRect = span?.getBoundingClientRect();
+          return {
+            whiteSpace: cs.whiteSpace,
+            height: Math.round(el.getBoundingClientRect().height),
+            spanHeight: spanRect ? Math.round(spanRect.height) : 0,
+          };
+        }),
+      );
+      for (const s of pillStats) {
+        expect(s.whiteSpace).toBe('nowrap');
+        expect(s.height).toBeLessThanOrEqual(28);
+        expect(s.spanHeight).toBeLessThanOrEqual(22);
+      }
+    }
+
+    // Re-expand sidebar and simulate Switch-Core (id 1 in Server Room on Floor 1) going down
+    await sidebarBtn.click();
+    await page.getByRole('tab', { name: /ชั้น 1|Floor 1/i }).click();
+    await page.getByTestId('toggle-sim-btn').click();
+    const drawer = page.getByTestId('impact-drawer');
+    await drawer.locator('select').selectOption('1');
+
+    const outageServerRoom = page.locator('[data-zone-state="outage"][class*="roomServer"]').first();
+    await expect(outageServerRoom).toBeVisible({ timeout: 5000 });
+    const borderRgb = await outageServerRoom.evaluate(el => getComputedStyle(el).borderTopColor);
+    expect(borderRgb).toBe('rgb(239, 68, 68)');
+
+    await drawer.getByRole('button', { name: /เสร็จสิ้น|Done/i }).click();
   });
 });

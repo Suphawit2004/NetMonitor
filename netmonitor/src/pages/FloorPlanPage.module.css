@@ -367,6 +367,10 @@
   align-items: center;
   gap: 6px;
   margin-left: 4px;
+  min-width: 0;
+  max-width: 100%;
+  overflow-x: auto;
+  scrollbar-width: none;
 }
 
 .floorStatusPill {
@@ -383,6 +387,8 @@
   color: var(--text-muted);
   transition: all 0.12s ease;
   font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 
 .floorStatusPill:hover {
