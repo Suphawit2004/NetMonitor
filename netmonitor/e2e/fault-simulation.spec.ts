@@ -395,8 +395,7 @@ test.describe('Device-to-Device Failure Impact Simulation', () => {
 
     const outageServerRoom = page.locator('[data-zone-state="outage"][class*="roomServer"]').first();
     await expect(outageServerRoom).toBeVisible({ timeout: 5000 });
-    const borderRgb = await outageServerRoom.evaluate(el => getComputedStyle(el).borderTopColor);
-    expect(borderRgb).toBe('rgb(239, 68, 68)');
+    await expect(outageServerRoom).toHaveCSS('border-top-color', 'rgb(239, 68, 68)');
 
     await drawer.getByRole('button', { name: /เสร็จสิ้น|Done/i }).click();
   });
