@@ -28,12 +28,15 @@ export default function ServiceTagsEditor({ device, editable = false, onSave }: 
   const { showToast } = useToast()
   const [draft, setDraft] = useState('')
   const [saving, setSaving] = useState(false)
+  const [pendingTags, setPendingTags] = useState<string[] | null>(null)
 
-  const { services: activeServices, isAuto } = resolveDeviceServices(device)
-  const explicitTags = device.services ?? []
+  const displayDevice = pendingTags !== null ? { ...device, services: pendingTags } : device
+  const { services: activeServices, isAuto } = resolveDeviceServices(displayDevice)
+  const explicitTags = displayDevice.services ?? []
 
   async function commitTags(nextTags: string[]) {
     if (!onSave || saving) return
+    setPendingTags(nextTags)
     setSaving(true)
     try {
       const updated = await onSave(nextTags)
@@ -45,6 +48,7 @@ export default function ServiceTagsEditor({ device, editable = false, onSave }: 
     } catch {
       showToast(t('services.saveErrorToast'), 'error')
     } finally {
+      setPendingTags(null)
       setSaving(false)
     }
   }

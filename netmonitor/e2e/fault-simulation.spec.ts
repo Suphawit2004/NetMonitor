@@ -220,7 +220,14 @@ test.describe('Device-to-Device Failure Impact Simulation', () => {
 
       const input = editor.locator('input[type="text"]');
       await input.fill('ERP-CORE');
-      await editor.locator('button[type="submit"]').click();
+      const [patchRes] = await Promise.all([
+        page.waitForResponse(
+          res => res.url().includes('/api/v1/devices/1') && res.request().method() === 'PATCH',
+          { timeout: 15000 },
+        ),
+        editor.locator('button[type="submit"]').click(),
+      ]);
+      expect(patchRes.ok()).toBe(true);
       await expect(editor.locator('[data-testid="active-service-tag"]', { hasText: 'ERP-CORE' })).toBeVisible({ timeout: 5000 });
 
       // Reload page to prove PostgreSQL persistence
