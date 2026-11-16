@@ -128,38 +128,6 @@ export default function ReportsPage({ onDeviceInfo }: Props) {
     const out: { device: Device; alert: Alert }[] = []
     const seenDevices = new Set<string>()
 
-    // 0. หากมีผลกระทบจากการล่ม (ทั้งจำลองหรือล่มจริงแบบลูกโซ่) ให้แสดงในรายการแจ้งเตือนด้วย
-    for (const imp of impactedDevices) {
-      const dev = devices.find(d => d.id === imp.device_id)
-      if (!dev) continue
-      if (imp.impact_state === 'root_down' && hasSimFaults) {
-        out.push({
-          device: dev,
-          alert: {
-            id: `sim-down-${dev.id}`,
-            icon: '',
-            title: `${t('sim.state_root_down')}: ${dev.name}`,
-            severity: 'crit',
-            timeMinutesAgo: 1,
-          },
-        })
-        seenDevices.add(String(dev.id))
-      } else if (imp.impact_state === 'unreachable' || imp.impact_state === 'degraded') {
-        const chain = imp.dependency_path.join(' ➔ ')
-        out.push({
-          device: dev,
-          alert: {
-            id: `sim-cascade-${dev.id}`,
-            icon: '',
-            title: `${t(`sim.state_${imp.impact_state}`)} (${chain})`,
-            severity: imp.impact_state === 'unreachable' ? 'crit' : 'warn',
-            timeMinutesAgo: 1,
-          },
-        })
-        seenDevices.add(String(dev.id))
-      }
-    }
-
     // 1. ดึง Alert จริงที่มีระดับ warn หรือ crit จากฐานข้อมูล
     for (const a of dbAlerts) {
       if (a.severity === 'info') continue
@@ -178,8 +146,8 @@ export default function ReportsPage({ onDeviceInfo }: Props) {
         if (a.severity !== 'info') out.push({ device: d, alert: a })
       }
     }
-    return out.slice(0, 12)
-  }, [devices, dbAlerts, tick, impactedDevices, hasSimFaults, t])
+    return out.slice(0, 10)
+  }, [devices, dbAlerts, tick])
 
   // ── Donut ──
   const R = 42

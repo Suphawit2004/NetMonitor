@@ -85,7 +85,7 @@ export default function ImpactDrawer({ onFocusDevice }: Props) {
 
   return (
     <aside className={styles.drawer} aria-label={t('sim.drawerTitle')} data-testid="impact-drawer">
-      <div className={styles.header}>
+      <div className={styles.header} data-testid="sim-sandbox-banner">
         <div className={styles.headerTitle}>
           <FlaskConical size={16} className={styles.headerIcon} />
           <span>{t('sim.drawerTitle')}</span>

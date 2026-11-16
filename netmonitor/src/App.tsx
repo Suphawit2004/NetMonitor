@@ -144,7 +144,7 @@ export default function App() {
         onNavigate={handleNavigate}
         onSelectDevice={handleSelectDeviceFromSearch}
       />
-      {isSimMode && (
+      {isSimMode && page !== 'floor' && (
         <div className={styles.simBanner} role="status" data-testid="sim-sandbox-banner">
           <div className={styles.simBannerLeft}>
             <FlaskConical size={15} />

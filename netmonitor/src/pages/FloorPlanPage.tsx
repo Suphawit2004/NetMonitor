@@ -17,7 +17,6 @@ import {
   Lock,
   Unlock,
   Scan,
-  Sparkles,
   CheckCircle2,
   AlertTriangle,
   XCircle,
@@ -49,7 +48,7 @@ export default function FloorPlanPage({
   const { t } = useTranslation()
   const {
     devices, loading,
-    moveDevice, commitDevicePosition, toggleLock, setFloorLockAll, simulateSampleStatuses,
+    moveDevice, commitDevicePosition, toggleLock, setFloorLockAll,
   } = useNetwork()
   const {
     isSimMode,
@@ -62,7 +61,6 @@ export default function FloorPlanPage({
     reInferLinks,
   } = useFaultSim()
   const { showToast } = useToast()
-  const [simulating, setSimulating] = useState(false)
   const [linkSourceId, setLinkSourceId] = useState<string | null>(null)
   const [linkType, setLinkType] = useState<LinkType>('trunk')
   const [linkBandwidth, setLinkBandwidth] = useState<number>(1000)
@@ -97,18 +95,6 @@ export default function FloorPlanPage({
     setLinkSourceId(null)
     toggleLinkEditMode()
   }, [toggleLinkEditMode])
-
-  const handleLoadSampleStatuses = async () => {
-    try {
-      setSimulating(true)
-      await simulateSampleStatuses()
-      showToast('นำเข้าตัวอย่างสถานะสำเร็จ (Online, Warning, Offline)', 'success')
-    } catch {
-      showToast('ไม่สามารถนำเข้าตัวอย่างสถานะได้', 'error')
-    } finally {
-      setSimulating(false)
-    }
-  }
 
   const [localFloor, setLocalFloor] = useState<1 | 2>(() => {
     const saved = localStorage.getItem('netmonitor_floor')
@@ -275,9 +261,9 @@ export default function FloorPlanPage({
             </div>
           </div>
 
-          {/* Group 2: Quick Status Filters */}
+          {/* Group 2: Quick Status Filters (แสดงเฉพาะเมื่อพับ Sidebar ซ้าย เพื่อไม่ให้ข้อมูลซ้ำซ้อน) */}
           <div className={styles.toolbarCenter}>
-            {floorDevices.length > 0 && (
+            {!sidebarOpen && floorDevices.length > 0 && (
               <div className={styles.floorStatusPillGroup}>
                 <button
                   type="button"
@@ -321,31 +307,34 @@ export default function FloorPlanPage({
 
           {/* Group 3: Right Action Buttons */}
           <div className={styles.toolbarRight}>
-            <button
-              className={`${styles.linkToggleBtn} ${showLinks ? styles.linkToggleActive : ''}`}
-              onClick={toggleShowLinks}
-              title={t('topology.toggleLinksTitle')}
-              type="button"
-            >
-              <GitFork size={13} />
-              <span>{t('topology.linksBtn')}</span>
-            </button>
+            <div className={styles.linkControlGroup} role="group" aria-label="Topology Links">
+              <button
+                className={`${styles.linkToggleBtn} ${showLinks ? styles.linkToggleActive : ''}`}
+                onClick={toggleShowLinks}
+                title={t('topology.toggleLinksTitle')}
+                type="button"
+              >
+                <GitFork size={13} />
+                <span>{t('topology.linksBtn')}</span>
+              </button>
 
-            <button
-              className={`${styles.linkEditBtn} ${isLinkEditMode ? styles.linkEditActive : ''}`}
-              onClick={handleToggleLinkEdit}
-              title={t('topology.editLinksTitle')}
-              type="button"
-              data-testid="toggle-link-edit-btn"
-            >
-              <Cable size={13} />
-              <span>{isLinkEditMode ? t('topology.doneLinks') : t('topology.editLinks')}</span>
-            </button>
+              <button
+                className={`${styles.linkEditBtn} ${isLinkEditMode ? styles.linkEditActive : ''}`}
+                onClick={handleToggleLinkEdit}
+                title={t('topology.editLinksTitle')}
+                type="button"
+                data-testid="toggle-link-edit-btn"
+              >
+                <Cable size={13} />
+                <span>{isLinkEditMode ? t('topology.doneLinks') : t('topology.editLinks')}</span>
+              </button>
+            </div>
 
             <button
               className={`${styles.simBtn} ${isSimMode ? styles.simBtnActive : ''}`}
               onClick={() => {
                 setLinkSourceId(null)
+                if (!isSimMode) setSidebarOpen(false)
                 toggleSimMode()
               }}
               title={t('sim.toggleSimTitle')}
@@ -364,17 +353,6 @@ export default function FloorPlanPage({
             >
               {isMoveMode ? <Lock size={13} /> : <Unlock size={13} />}
               <span>{isMoveMode ? t('floor.lockPositions') : t('floor.moveMode')}</span>
-            </button>
-
-            <button
-              className={styles.sampleStatusBtn}
-              onClick={handleLoadSampleStatuses}
-              disabled={simulating}
-              title="นำเข้าตัวอย่างสถานะ (Online, Warning, Offline)"
-              type="button"
-            >
-              <Sparkles size={13} />
-              <span>{simulating ? 'กำลังนำเข้า...' : 'ตัวอย่างสถานะ'}</span>
             </button>
 
             <button

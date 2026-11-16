@@ -236,20 +236,19 @@ export default function FloorCanvas({
   const planRef           = useRef<HTMLDivElement>(null)
   const hasAutoFitted     = useRef(false)
 
-  // คำนวณ Auto-Fit ย่อ/ขยายผังอาคารให้พอดีกับหน้าจอและกึ่งกลางเสมอ โดยไม่เว้นขอบรอบตัวอาคาร
+  // คำนวณ Auto-Fit ย่อ/ขยายผังอาคารให้พอดีกับหน้าจอและเว้นระยะขอบไม่ให้ชนปุ่มควบคุม
   const fitToViewport = useCallback(() => {
     const el = wrapRef.current
     if (!el) return
     const cw = el.clientWidth
     const ch = el.clientHeight
     if (cw > 100 && ch > 100) {
-      // พอดีกับหน้าจอ ไม่เว้นขอบรอบตัวอาคาร
-      const scaleX = cw / PLAN_W
-      const scaleY = ch / PLAN_H
+      const scaleX = Math.max(100, cw - 64) / PLAN_W
+      const scaleY = Math.max(100, ch - 84) / PLAN_H
       const bestScale = Math.min(scaleX, scaleY, 1.0)
       const clampedScale = Number(Math.max(0.4, bestScale).toFixed(2))
       setScale(clampedScale)
-      setPan({ x: 0, y: 0 })
+      setPan({ x: 0, y: 12 })
     }
   }, [PLAN_W, PLAN_H])
 
@@ -699,12 +698,8 @@ export default function FloorCanvas({
     >
       {!bgImage && <div className={styles.canvasBg} />}
 
-      {/* Top Bar: แสดงขนาดอาคารจริงจากแผนที่ + ปุ่มเปิดโหมดปรับแต่งผังห้อง */}
+      {/* Top Bar: ปุ่มเปิดโหมดปรับแต่งผังห้อง */}
       <div className={styles.topBar}>
-        <div className={styles.dimBadge} title={t('floor.realBuildingSizeTitle')}>
-          {t('floor.realBuildingSize', { w: buildingDim.widthMeters, h: buildingDim.heightMeters, ratio: buildingDim.aspectRatio })}
-        </div>
-
         <button
           className={`${styles.editRoomsBtn} ${isEditingRooms ? styles.editRoomsBtnActive : ''}`}
           onClick={() => {
@@ -847,9 +842,11 @@ export default function FloorCanvas({
         </button>
       </div>
 
-      <div className={styles.hint}>
-        {isEditingRooms ? t('floor.editRoomsHint') : t('floor.hint')}
-      </div>
+      {isEditingRooms && (
+        <div className={styles.hint}>
+          {t('floor.editRoomsHint')}
+        </div>
+      )}
     </div>
   )
 }

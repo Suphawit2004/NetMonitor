@@ -982,16 +982,16 @@
 
 :global(.mapSimBadge) {
   position: absolute;
-  bottom: -6px;
-  left: 50%;
-  transform: translateX(-50%);
+  top: -7px;
+  right: -9px;
   font-size: 8px;
   font-weight: 800;
   line-height: 1;
-  padding: 1px 3px;
+  padding: 2px 4px;
   border-radius: 3px;
   color: #fff;
   pointer-events: none;
+  z-index: 4;
 }
 
 :global(.mapSimBadgeDown) { background: #dc2626; }

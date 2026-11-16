@@ -158,11 +158,6 @@ export default function FloorMapOverlay({
     ]
   }, [buildingBounds])
 
-  // สถิติอุปกรณ์
-  const onlineCount  = devices.filter(d => d.status === 'online').length
-  const warningCount = devices.filter(d => d.status === 'warning').length
-  const offlineCount = devices.filter(d => d.status === 'offline').length
-
   // ฟังก์ชันอัปเดตเลเยอร์ทั้งหมดบนแผนที่ตาม Bounds แบบเรียลไทม์ (ไม่มี React Re-render ขัดจังหวะ Drag)
   const syncLayersToBounds = useCallback((b: BuildingBounds) => {
     const corners = getBuildingCorners(b)
@@ -675,7 +670,7 @@ export default function FloorMapOverlay({
             <div class="pinIconBox ${statusClass} ${simClass} ${linkSrcClass}">
               <span class="pinEmoji">${emoji}</span>
               <span class="pinDotPulse"></span>
-              ${device.locked ? `<span class="mapPinLockBadge">${LOCK_BADGE_SVG}</span>` : ''}
+              ${device.locked && !simBadgeHtml ? `<span class="mapPinLockBadge">${LOCK_BADGE_SVG}</span>` : ''}
               ${simBadgeHtml}
             </div>
             ${showNameTag ? `<div class="pinNameTag" title="${cleanName}">${cleanName}</div>` : ''}
@@ -1016,22 +1011,6 @@ export default function FloorMapOverlay({
           </div>
         </div>
       )}
-
-      {/* Stats Summary Badge (Bottom Left) */}
-      <div className={styles.statsOverlay}>
-        <div className={styles.statItem}>
-          <span className={`${styles.statNum} ${styles.statOnline}`}>{onlineCount}</span> {t('floor.statsOnline')}
-        </div>
-        <div className={styles.statItem}>
-          <span className={`${styles.statNum} ${styles.statWarning}`}>{warningCount}</span> {t('floor.statsWarning')}
-        </div>
-        <div className={styles.statItem}>
-          <span className={`${styles.statNum} ${styles.statOffline}`}>{offlineCount}</span> {t('floor.statsOffline')}
-        </div>
-        <div className={styles.statItem}>
-          <span className={`${styles.statNum} ${styles.statTotal}`}>{devices.length}</span> {t('floor.statsTotal')}
-        </div>
-      </div>
 
       {/* Leaflet Map DOM Element */}
       <div ref={mapContainerRef} className={styles.leafletWrap} />

@@ -59,10 +59,10 @@ function DevicePin({
       {/* ── Pin rounded-box (matching Image 3) ── */}
       <div className={`${styles.pin} ${styles[device.status]}`}>
         <span className={styles.pinIcon} aria-hidden="true">{DEVICE_ICON[device.dtype]}</span>
-        {!isLocked && (
+        {!isLocked && !isSimMode && (
           <span className={`${styles.dot} ${styles[`dot_${device.status}`]}`} aria-hidden="true" />
         )}
-        {isLocked && (
+        {isLocked && !(isSimMode && impactState && impactState !== 'healthy') && (
           <span className={styles.lockBadge} aria-hidden="true">
             <Lock size={10} className={styles.lockIcon} />
           </span>

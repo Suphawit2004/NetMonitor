@@ -511,17 +511,18 @@
 
 .simTag {
   position: absolute;
-  bottom: -7px;
-  left: 50%;
-  transform: translateX(-50%);
+  top: -8px;
+  right: -10px;
   font-size: 9px;
   font-weight: 800;
   line-height: 1;
-  padding: 1px 4px;
-  border-radius: 3px;
+  padding: 2px 4px;
+  border-radius: 4px;
   letter-spacing: 0.3px;
   pointer-events: none;
   white-space: nowrap;
+  z-index: 4;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.5);
 }
 
 .simTagDown {
