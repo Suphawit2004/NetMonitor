@@ -1,0 +1,128 @@
+.svgLayer {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 1;
+  overflow: visible;
+}
+
+.passiveGroup {
+  pointer-events: none;
+}
+
+.interactiveGroup {
+  pointer-events: auto;
+  cursor: pointer;
+}
+
+.lineBase {
+  fill: none;
+  stroke-linecap: round;
+  transition: stroke 0.15s ease, opacity 0.15s ease, stroke-width 0.15s ease;
+}
+
+.lineWan {
+  stroke: #f59e0b;
+  stroke-width: 2.6;
+  opacity: 0.78;
+}
+
+.lineTrunk {
+  stroke: var(--accent-primary, #3b82f6);
+  stroke-width: 2.2;
+  opacity: 0.65;
+}
+
+.lineAccess {
+  stroke: var(--text-muted, #94a3b8);
+  stroke-width: 1.5;
+  opacity: 0.45;
+}
+
+.lineRedundant {
+  stroke: #06b6d4;
+  stroke-width: 1.9;
+  stroke-dasharray: 5 4;
+  opacity: 0.72;
+}
+
+.lineFailover {
+  stroke: #f59e0b;
+  stroke-width: 3;
+  stroke-dasharray: 8 4;
+  opacity: 0.95;
+  animation: dashFlow 1.2s linear infinite;
+}
+
+.lineSevered {
+  stroke: var(--status-critical, #ef4444);
+  stroke-width: 2.6;
+  stroke-dasharray: 6 4;
+  opacity: 0.95;
+}
+
+.lineIsolated {
+  stroke: var(--status-critical, #ef4444);
+  stroke-width: 1.5;
+  stroke-dasharray: 3 5;
+  opacity: 0.35;
+}
+
+@keyframes dashFlow {
+  to {
+    stroke-dashoffset: -24;
+  }
+}
+
+.hitArea {
+  stroke: transparent;
+  stroke-width: 14;
+  cursor: pointer;
+  pointer-events: stroke;
+}
+
+.interactiveGroup:hover .lineBase {
+  opacity: 1;
+  stroke-width: 3.2;
+}
+
+.severBadge,
+.deleteBadge {
+  pointer-events: auto;
+  cursor: pointer;
+}
+
+.severCircle {
+  fill: var(--status-critical, #ef4444);
+  stroke: var(--bg-surface, #111827);
+  stroke-width: 1.5;
+}
+
+.deleteCircle {
+  fill: var(--bg-elevated, #1e293b);
+  stroke: var(--status-critical, #ef4444);
+  stroke-width: 1.5;
+}
+
+.severCross {
+  stroke: #fff;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+}
+
+.crossFloorPill {
+  pointer-events: auto;
+  cursor: pointer;
+}
+
+.crossFloorRect {
+  fill: var(--bg-elevated, #1e293b);
+  stroke: var(--accent-primary, #3b82f6);
+  stroke-width: 1.2;
+}
+
+.crossFloorText {
+  fill: var(--text-primary, #f8fafc);
+  font-size: 9px;
+  font-weight: 700;
+}

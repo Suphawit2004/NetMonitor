@@ -222,3 +222,77 @@ class AlertCreate(BaseModel):
     description: Optional[str] = None
 
 
+LinkType = Literal['wan', 'uplink', 'trunk', 'access', 'redundancy']
+ImpactState = Literal['healthy', 'root_down', 'unreachable', 'degraded']
+
+
+class TopologyLinkCreate(BaseModel):
+    source_device_id: str
+    target_device_id: str
+    source_port: Optional[str] = None
+    target_port: Optional[str] = None
+    link_type: LinkType = 'uplink'
+    bandwidth_mbps: int = Field(default=1000, gt=0)
+    is_redundant: bool = False
+
+
+class TopologyLinkOut(BaseModel):
+    id: str
+    source_device_id: str
+    target_device_id: str
+    source_port: Optional[str] = None
+    target_port: Optional[str] = None
+    link_type: LinkType = 'uplink'
+    bandwidth_mbps: int = 1000
+    is_redundant: bool = False
+    auto_inferred: bool = False
+
+
+class SimulationImpactRequest(BaseModel):
+    down_device_ids: list[str] = Field(default_factory=list)
+    down_link_ids: list[str] = Field(default_factory=list)
+    include_spof: bool = True
+
+
+class AffectedDeviceOut(BaseModel):
+    device_id: str
+    name: str
+    dtype: DeviceType
+    floor: int
+    impact_state: ImpactState
+    reason: str
+    caused_by_device_id: Optional[str] = None
+    caused_by_name: Optional[str] = None
+    dependency_path: list[str] = Field(default_factory=list)
+    lost_upstream_ids: list[str] = Field(default_factory=list)
+    remaining_path_count: int = 0
+
+
+class SpofCandidateOut(BaseModel):
+    device_id: str
+    name: str
+    dtype: DeviceType
+    floor: int
+    unreachable_count: int
+    degraded_count: int
+    affected_device_names: list[str] = Field(default_factory=list)
+    score: int
+
+
+class SimulationImpactResponse(BaseModel):
+    down_device_ids: list[str]
+    down_link_ids: list[str]
+    summary: dict
+    device_impacts: list[AffectedDeviceOut]
+    link_states: dict[str, str]
+    affected_floors: list[int]
+    spof_ranking: list[SpofCandidateOut] = Field(default_factory=list)
+
+
+class ApplyFaultsRequest(BaseModel):
+    down_device_ids: list[str] = Field(default_factory=list)
+    down_link_ids: list[str] = Field(default_factory=list)
+    clear_existing_simulated: bool = True
+
+
+

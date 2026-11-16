@@ -1,5 +1,5 @@
 import type {
-  Alert, Device, DeviceDetail, DeviceType, MetricValue, Port, PortStatus,
+  Alert, Device, DeviceDetail, DeviceType, MetricValue, Port, PortStatus, TopologyLink,
 } from '../types'
 import { getStoredRooms } from './roomStore'
 import { createRng, hashString, pick, randInt, vary } from './random'
@@ -71,16 +71,33 @@ function metric(value: number, delta: number, suffix: string, higherIsWorse: boo
 
 // ── ports ────────────────────────────────────
 
-function buildPorts(device: Device, all: Device[], rng: () => number): Port[] {
+function buildPorts(device: Device, all: Device[], rng: () => number, links?: TopologyLink[]): Port[] {
   const offline = device.status === 'offline'
   const ports: Port[] = []
   const up = (): PortStatus => (offline ? 'down' : 'up')
 
+  const linkedPeers: Device[] = []
+  if (links && links.length > 0) {
+    const byId = new Map(all.map(d => [d.id, d]))
+    const seenIds = new Set<string>()
+    for (const l of links) {
+      const peerId = l.source_device_id === device.id ? l.target_device_id : l.target_device_id === device.id ? l.source_device_id : null
+      if (peerId && !seenIds.has(peerId)) {
+        const peer = byId.get(peerId)
+        if (peer) {
+          seenIds.add(peerId)
+          linkedPeers.push(peer)
+        }
+      }
+    }
+  }
+
   if (device.dtype === 'switch') {
     const total = rng() < 0.5 ? 24 : 48
     let n = 0
+    const peers = linkedPeers.length > 0 ? linkedPeers : nearestPeers(device, all, UPLINK_COUNT.switch)
 
-    for (const peer of nearestPeers(device, all, UPLINK_COUNT.switch)) {
+    for (const peer of peers) {
       n += 1
       ports.push({
         num: `Gi${n}`,
@@ -124,7 +141,7 @@ function buildPorts(device: Device, all: Device[], rng: () => number): Port[] {
   }
 
   if (device.dtype === 'router') {
-    const peers = nearestPeers(device, all, 2)
+    const peers = linkedPeers.length > 0 ? linkedPeers : nearestPeers(device, all, 2)
     peers.forEach((peer, i) => {
       ports.push({
         num: `Gi0/${i}`,
@@ -149,7 +166,7 @@ function buildPorts(device: Device, all: Device[], rng: () => number): Port[] {
   }
 
   if (device.dtype === 'ap') {
-    const [uplink] = nearestPeers(device, all, 1)
+    const [uplink] = linkedPeers.length > 0 ? linkedPeers : nearestPeers(device, all, 1)
     ports.push({
       num: 'eth0',
       status: offline ? 'down' : 'up',
@@ -171,7 +188,7 @@ function buildPorts(device: Device, all: Device[], rng: () => number): Port[] {
   }
 
   // server
-  const peers = nearestPeers(device, all, 2)
+  const peers = linkedPeers.length > 0 ? linkedPeers : nearestPeers(device, all, 2)
   ports.push({
     num: 'eno1',
     status: up(),
@@ -309,11 +326,11 @@ function buildAlerts(
 
 // ── main ─────────────────────────────────────
 
-export function buildDeviceDetail(device: Device, allDevices: Device[], tick = 0): DeviceDetail {
+export function buildDeviceDetail(device: Device, allDevices: Device[], tick = 0, links?: TopologyLink[]): DeviceDetail {
   const rng = createRng(hashString(device.id))
   const phase = (hashString(device.id) % 100) * 0.09
 
-  const ports = buildPorts(device, allDevices, rng).map((p, i) =>
+  const ports = buildPorts(device, allDevices, rng, links).map((p, i) =>
     tick > 0 && p.status === 'up' && (p.utilization ?? 0) > 0
       ? { ...p, utilization: vary(p.utilization ?? 0, tick, i * 1.7, 15) }
       : p,

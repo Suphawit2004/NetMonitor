@@ -3,12 +3,25 @@ import { useTranslation } from 'react-i18next'
 import type { Alert, Device, DeviceStatus, DeviceType } from '../types'
 import { useNetwork } from '../context/networkContext'
 import { useSimulation } from '../context/simulationContext'
+import { useFaultSim } from '../context/faultSimContext'
 import { useToast } from '../components/ui/toast-context'
 import { buildDeviceDetail } from '../services/detailFactory'
+import { computeBlastRadius } from '../services/topologyEngine'
 import { fetchAlerts, acknowledgeAlert } from '../services/api'
 import { formatTimeAgo } from '../i18n/format'
 import { DEVICE_ICON } from '../constants/deviceMeta'
-import { BarChart3, Download, AlertOctagon, AlertTriangle, Info, Check } from 'lucide-react'
+import {
+  BarChart3,
+  Download,
+  AlertOctagon,
+  AlertTriangle,
+  Info,
+  Check,
+  ServerCrash,
+  GitFork,
+  RotateCcw,
+  FlaskConical,
+} from 'lucide-react'
 import styles from './ReportsPage.module.css'
 
 const TYPE_LABEL_KEYS: Record<DeviceType, string> = {
@@ -33,8 +46,40 @@ export default function ReportsPage({ onDeviceInfo }: Props) {
   const { t } = useTranslation()
   const { devices, retryDevices } = useNetwork()
   const { tick } = useSimulation()
+  const {
+    links,
+    isSimMode,
+    downDeviceIds,
+    downLinkIds,
+    impactReport: simImpactReport,
+    simulateSingleDeviceDown,
+    toggleDeviceDown,
+    resetSimulation,
+    setSimMode,
+  } = useFaultSim()
   const { showToast } = useToast()
   const [dbAlerts, setDbAlerts] = useState<Alert[]>([])
+
+  // Compute live outage report: if Sandbox has selected faults, use simImpactReport;
+  // otherwise evaluate blast radius from any currently offline devices in the system.
+  const hasSimFaults = isSimMode && (downDeviceIds.size > 0 || downLinkIds.size > 0)
+  const effectiveReport = useMemo(() => {
+    if (hasSimFaults) return simImpactReport
+    const offlineIds = new Set(devices.filter(d => d.status === 'offline').map(d => d.id))
+    return computeBlastRadius(devices, links, offlineIds, new Set(), true)
+  }, [hasSimFaults, simImpactReport, devices, links])
+
+  const impactedDevices = useMemo(() => {
+    const order = { root_down: 0, unreachable: 1, degraded: 2, healthy: 3 }
+    return effectiveReport.device_impacts
+      .filter(d => d.impact_state !== 'healthy')
+      .sort(
+        (a, b) =>
+          order[a.impact_state] - order[b.impact_state] ||
+          a.dependency_path.length - b.dependency_path.length ||
+          a.name.localeCompare(b.name),
+      )
+  }, [effectiveReport.device_impacts])
 
   async function handleAcknowledge(e: React.MouseEvent, alertId: string | number) {
     e.stopPropagation()
@@ -55,11 +100,20 @@ export default function ReportsPage({ onDeviceInfo }: Props) {
   }, [tick])
 
   const total = devices.length
-  const counts = useMemo<Record<DeviceStatus, number>>(() => ({
-    online:  devices.filter(d => d.status === 'online').length,
-    warning: devices.filter(d => d.status === 'warning').length,
-    offline: devices.filter(d => d.status === 'offline').length,
-  }), [devices])
+  const counts = useMemo<Record<DeviceStatus, number>>(() => {
+    if (hasSimFaults) {
+      return {
+        online: effectiveReport.summary.healthy_count,
+        warning: effectiveReport.summary.degraded_count,
+        offline: effectiveReport.summary.root_down_count + effectiveReport.summary.unreachable_count,
+      }
+    }
+    return {
+      online:  devices.filter(d => d.status === 'online').length,
+      warning: devices.filter(d => d.status === 'warning').length,
+      offline: devices.filter(d => d.status === 'offline').length,
+    }
+  }, [devices, hasSimFaults, effectiveReport.summary])
 
   const typeCounts = useMemo(() => {
     const list: { type: DeviceType; count: number }[] = (Object.keys(TYPE_LABEL_KEYS) as DeviceType[])
@@ -73,6 +127,38 @@ export default function ReportsPage({ onDeviceInfo }: Props) {
   const activeAlerts = useMemo(() => {
     const out: { device: Device; alert: Alert }[] = []
     const seenDevices = new Set<string>()
+
+    // 0. หากมีผลกระทบจากการล่ม (ทั้งจำลองหรือล่มจริงแบบลูกโซ่) ให้แสดงในรายการแจ้งเตือนด้วย
+    for (const imp of impactedDevices) {
+      const dev = devices.find(d => d.id === imp.device_id)
+      if (!dev) continue
+      if (imp.impact_state === 'root_down' && hasSimFaults) {
+        out.push({
+          device: dev,
+          alert: {
+            id: `sim-down-${dev.id}`,
+            icon: '',
+            title: `${t('sim.state_root_down')}: ${dev.name}`,
+            severity: 'crit',
+            timeMinutesAgo: 1,
+          },
+        })
+        seenDevices.add(String(dev.id))
+      } else if (imp.impact_state === 'unreachable' || imp.impact_state === 'degraded') {
+        const chain = imp.dependency_path.join(' ➔ ')
+        out.push({
+          device: dev,
+          alert: {
+            id: `sim-cascade-${dev.id}`,
+            icon: '',
+            title: `${t(`sim.state_${imp.impact_state}`)} (${chain})`,
+            severity: imp.impact_state === 'unreachable' ? 'crit' : 'warn',
+            timeMinutesAgo: 1,
+          },
+        })
+        seenDevices.add(String(dev.id))
+      }
+    }
 
     // 1. ดึง Alert จริงที่มีระดับ warn หรือ crit จากฐานข้อมูล
     for (const a of dbAlerts) {
@@ -92,8 +178,8 @@ export default function ReportsPage({ onDeviceInfo }: Props) {
         if (a.severity !== 'info') out.push({ device: d, alert: a })
       }
     }
-    return out.slice(0, 10)
-  }, [devices, dbAlerts, tick])
+    return out.slice(0, 12)
+  }, [devices, dbAlerts, tick, impactedDevices, hasSimFaults, t])
 
   // ── Donut ──
   const R = 42
@@ -224,6 +310,153 @@ export default function ReportsPage({ onDeviceInfo }: Props) {
                 </span>
               ))}
             </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Outage & Device-to-Device Impact Section */}
+      <div className={styles.cols} data-testid="reports-outage-section">
+        {/* Left: Active Outages & Cascading Chains */}
+        <div className={styles.card}>
+          <div className={styles.outageHeader}>
+            <div>
+              <div className={styles.cardTitle} style={{ marginBottom: 2, display: 'flex', alignItems: 'center', gap: 6 }}>
+                <ServerCrash size={16} style={{ color: 'var(--status-critical)' }} />
+                <span>{t('reports.outageChainTitle')}</span>
+              </div>
+              <div className={styles.outageSub}>
+                {hasSimFaults ? t('reports.outageChainSimSub') : t('reports.outageChainLiveSub')}
+              </div>
+            </div>
+            {hasSimFaults && (
+              <button
+                type="button"
+                className={styles.resetSimBtn}
+                onClick={() => {
+                  resetSimulation()
+                  setSimMode(false)
+                }}
+              >
+                <RotateCcw size={12} />
+                <span>{t('sim.resetSandbox')}</span>
+              </button>
+            )}
+          </div>
+
+          <div className={styles.outageMiniKpis}>
+            <div className={styles.miniKpi}>
+              <span className={styles.miniKpiVal} style={{ color: 'var(--status-critical)' }}>
+                {effectiveReport.summary.root_down_count}
+              </span>
+              <span className={styles.miniKpiLbl}>{t('sim.kpiRootDown')}</span>
+            </div>
+            <div className={styles.miniKpi}>
+              <span className={styles.miniKpiVal} style={{ color: 'var(--status-critical)' }}>
+                {effectiveReport.summary.unreachable_count}
+              </span>
+              <span className={styles.miniKpiLbl}>{t('sim.kpiUnreachable')}</span>
+            </div>
+            <div className={styles.miniKpi}>
+              <span className={styles.miniKpiVal} style={{ color: 'var(--status-warning)' }}>
+                {effectiveReport.summary.degraded_count}
+              </span>
+              <span className={styles.miniKpiLbl}>{t('sim.kpiDegraded')}</span>
+            </div>
+          </div>
+
+          {impactedDevices.length === 0 ? (
+            <div className={styles.emptyText}>{t('reports.noOutageImpact')}</div>
+          ) : (
+            <div className={styles.outageList}>
+              {impactedDevices.map(item => {
+                const dev = devices.find(d => d.id === item.device_id)
+                const chainText =
+                  item.dependency_path.length > 1
+                    ? item.dependency_path.join(' ➔ ')
+                    : t(`sim.reason_${item.impact_state}`)
+                return (
+                  <button
+                    key={item.device_id}
+                    type="button"
+                    className={styles.outageRow}
+                    onClick={() => dev && onDeviceInfo(dev)}
+                  >
+                    <span className={styles.outageIcon}>{DEVICE_ICON[item.dtype]}</span>
+                    <div className={styles.outageInfo}>
+                      <div className={styles.outageName}>
+                        <span>{item.name}</span>
+                        <span className={styles.floorBadge}>{`F${item.floor}`}</span>
+                      </div>
+                      <div className={styles.outageChain} data-testid="report-dependency-chain">
+                        {chainText}
+                      </div>
+                    </div>
+                    <span
+                      className={`${styles.sev} ${
+                        item.impact_state === 'degraded' ? styles.warn : styles.crit
+                      }`}
+                    >
+                      {t(`sim.state_${item.impact_state}`)}
+                    </span>
+                  </button>
+                )
+              })}
+            </div>
+          )}
+        </div>
+
+        {/* Right: Device-by-Device Impact Matrix (What happens if Device X goes down) */}
+        <div className={styles.card}>
+          <div className={styles.outageHeader}>
+            <div>
+              <div className={styles.cardTitle} style={{ marginBottom: 2, display: 'flex', alignItems: 'center', gap: 6 }}>
+                <GitFork size={16} style={{ color: 'var(--accent-primary)' }} />
+                <span>{t('reports.impactMatrixTitle')}</span>
+              </div>
+              <div className={styles.outageSub}>{t('reports.impactMatrixSub')}</div>
+            </div>
+          </div>
+
+          <div className={styles.outageList}>
+            {effectiveReport.spof_ranking.map(cand => {
+              const isSelectedDown = downDeviceIds.has(cand.device_id)
+              return (
+                <div key={cand.device_id} className={styles.matrixRow}>
+                  <span className={styles.outageIcon}>{DEVICE_ICON[cand.dtype]}</span>
+                  <div className={styles.outageInfo}>
+                    <div className={styles.outageName}>
+                      <span>{cand.name}</span>
+                      <span className={styles.floorBadge}>{`F${cand.floor}`}</span>
+                      <span className={styles.matrixCountBadge}>
+                        {t('sim.spofMeta', {
+                          unreachable: cand.unreachable_count,
+                          degraded: cand.degraded_count,
+                        })}
+                      </span>
+                    </div>
+                    <div className={styles.outageChain}>
+                      {cand.affected_device_names.length > 0
+                        ? `${t('reports.affectsLabel')}: ${cand.affected_device_names.join(', ')}`
+                        : t('sim.noDownstreamImpact')}
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    className={`${styles.simTriggerBtn} ${isSelectedDown ? styles.simTriggerActive : ''}`}
+                    onClick={() => {
+                      if (isSelectedDown) {
+                        toggleDeviceDown(cand.device_id)
+                      } else {
+                        simulateSingleDeviceDown(cand.device_id)
+                      }
+                    }}
+                  >
+                    <FlaskConical size={12} />
+                    <span>{isSelectedDown ? t('sim.restoreDevice') : t('sim.failDevice')}</span>
+                  </button>
+                </div>
+              )
+            })}
           </div>
         </div>
       </div>

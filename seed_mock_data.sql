@@ -119,5 +119,27 @@ CROSS JOIN generate_series(0, 5) AS s(n)
 WHERE d.enabled = true
 ON CONFLICT (device_id, sampled_at, oid, labels) DO NOTHING;
 
+-- 6. Insert Topology Links (Campus Hierarchy + Redundant Path)
+INSERT INTO topology_links (source_device_id, target_device_id, source_port, target_port, link_type, bandwidth_mbps, is_redundant, auto_inferred)
+SELECT s.id, t.id, v.src_port, v.dst_port, v.ltype, v.bw, v.red, false
+FROM (
+    VALUES
+        ('RTR-01',     'SW-CORE-01', 'Te0/1/0',   'Te1/1/1',  'wan',        10000, false),
+        ('SW-CORE-01', 'SW-DIST-01', 'Te1/1/2',   'Te1/1/1',  'trunk',      10000, false),
+        ('SW-CORE-01', 'SRV-01',     'Gi1/0/1',   'eno1',     'access',      1000, false),
+        ('SW-CORE-01', 'SRV-02',     'Gi1/0/2',   'eno1',     'access',      1000, false),
+        ('SW-DIST-01', 'SW-B1',      'Gi1/0/1',   'Gi0/1',    'trunk',       1000, false),
+        ('SW-CORE-01', 'SW-B1',      'Gi1/0/3',   'Gi0/2',    'redundancy',  1000, true),
+        ('SW-DIST-01', 'SW-C1',      'Gi1/0/2',   'Gi0/1',    'trunk',       1000, false),
+        ('SW-DIST-01', 'SW-IT1',     'Gi1/0/3',   'Gi0/1',    'trunk',       1000, false),
+        ('SW-DIST-01', 'AP-A1',      'Gi1/0/10',  'eth0',     'access',      1000, false),
+        ('SW-DIST-01', 'AP-A2',      'Gi1/0/11',  'eth0',     'access',      1000, false),
+        ('SW-B1',      'AP-B1',      'Gi0/10',    'eth0',     'access',      1000, false),
+        ('SW-C1',      'AP-C1',      'Gi0/10',    'eth0',     'access',      1000, false)
+) AS v(src_name, dst_name, src_port, dst_port, ltype, bw, red)
+JOIN devices s ON s.name = v.src_name
+JOIN devices t ON t.name = v.dst_name
+ON CONFLICT (source_device_id, target_device_id, source_port) DO NOTHING;
+
 COMMIT;
 

@@ -28,10 +28,16 @@ from .models import (
     LocalNetworkInfo,
     AlertOut,
     AlertCreate,
+    TopologyLinkCreate,
+    TopologyLinkOut,
+    SimulationImpactRequest,
+    SimulationImpactResponse,
+    ApplyFaultsRequest,
 )
 from .placement import pick_free_spot, pick_smart_spot, resolve_room_from_coords, project_gps_to_canvas
 from .snmp import snmp_get_oid, OID_SYS_DESCR, OID_SYS_UPTIME
 from .discovery import scan_network_cidr, ping_ip, detect_local_network_info
+from .topology import infer_topology_links, compute_blast_radius
 from .collector import (
     collect_device_interfaces,
     sync_device_interfaces,
@@ -914,6 +920,152 @@ async def simulate_sample_statuses():
     except Exception as e:
         logger.error(f"Simulate statuses failed: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+# ── Topology Links & Blast-Radius Simulation Endpoints ──────
+
+def _serialize_link(row: asyncpg.Record) -> TopologyLinkOut:
+    return TopologyLinkOut(
+        id=str(row["id"]),
+        source_device_id=str(row["source_device_id"]),
+        target_device_id=str(row["target_device_id"]),
+        source_port=row["source_port"],
+        target_port=row["target_port"],
+        link_type=row["link_type"],
+        bandwidth_mbps=row["bandwidth_mbps"],
+        is_redundant=row["is_redundant"],
+        auto_inferred=row["auto_inferred"],
+    )
+
+async def _ensure_links_or_infer(pool: asyncpg.Pool) -> List[dict]:
+    rows = await repository.fetch_topology_links(pool)
+    if not rows:
+        devs = [dict(r) for r in await repository.fetch_devices_with_telemetry(pool)]
+        if len(devs) >= 2:
+            ifaces = [dict(r) for r in await repository.fetch_all_interfaces(pool)]
+            inferred = infer_topology_links(devs, ifaces)
+            if inferred:
+                rows = await repository.replace_auto_inferred_links(pool, inferred)
+    return [
+        {
+            "id": str(r["id"]),
+            "source_device_id": str(r["source_device_id"]),
+            "target_device_id": str(r["target_device_id"]),
+            "source_port": r["source_port"],
+            "target_port": r["target_port"],
+            "link_type": r["link_type"],
+            "bandwidth_mbps": r["bandwidth_mbps"],
+            "is_redundant": r["is_redundant"],
+            "auto_inferred": r["auto_inferred"],
+        }
+        for r in rows
+    ]
+
+@app.get("/api/v1/topology/links", response_model=List[TopologyLinkOut])
+async def list_topology_links():
+    pool = await get_db_pool()
+    links = await _ensure_links_or_infer(pool)
+    return [TopologyLinkOut(**l) for l in links]
+
+@app.post("/api/v1/topology/links", response_model=TopologyLinkOut, status_code=status.HTTP_201_CREATED)
+async def create_topology_link(payload: TopologyLinkCreate):
+    pool = await get_db_pool()
+    try:
+        src_id = int(payload.source_device_id)
+        dst_id = int(payload.target_device_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid device ID")
+
+    if src_id == dst_id:
+        raise HTTPException(status_code=400, detail="Source and target devices must be different")
+
+    try:
+        row = await repository.insert_topology_link(
+            pool=pool,
+            source_device_id=src_id,
+            target_device_id=dst_id,
+            source_port=payload.source_port,
+            target_port=payload.target_port,
+            link_type=payload.link_type,
+            bandwidth_mbps=payload.bandwidth_mbps,
+            is_redundant=payload.is_redundant,
+            auto_inferred=False,
+        )
+        return _serialize_link(row)
+    except asyncpg.UniqueViolationError:
+        raise HTTPException(status_code=400, detail="Topology link between these ports already exists")
+    except asyncpg.ForeignKeyViolationError:
+        raise HTTPException(status_code=404, detail="One or both devices not found")
+
+@app.delete("/api/v1/topology/links/{link_id}")
+async def remove_topology_link(link_id: int):
+    pool = await get_db_pool()
+    res = await repository.delete_topology_link(pool, link_id)
+    if res == "DELETE 0":
+        raise HTTPException(status_code=404, detail="Topology link not found")
+    return {"success": True, "deleted_id": str(link_id)}
+
+@app.post("/api/v1/topology/infer", response_model=List[TopologyLinkOut])
+async def infer_topology():
+    pool = await get_db_pool()
+    devs = [dict(r) for r in await repository.fetch_devices_with_telemetry(pool)]
+    ifaces = [dict(r) for r in await repository.fetch_all_interfaces(pool)]
+    inferred = infer_topology_links(devs, ifaces)
+    rows = await repository.replace_auto_inferred_links(pool, inferred)
+    return [_serialize_link(r) for r in rows]
+
+@app.post("/api/v1/simulate/impact", response_model=SimulationImpactResponse)
+async def simulate_impact(payload: SimulationImpactRequest):
+    pool = await get_db_pool()
+    devs = [dict(r) for r in await repository.fetch_devices_with_telemetry(pool)]
+    links = await _ensure_links_or_infer(pool)
+    report = compute_blast_radius(
+        devices=devs,
+        links=links,
+        down_device_ids=payload.down_device_ids,
+        down_link_ids=payload.down_link_ids,
+        include_spof=payload.include_spof,
+    )
+    return SimulationImpactResponse(**report)
+
+@app.post("/api/v1/simulate/apply-faults")
+async def apply_faults_to_live_db(payload: ApplyFaultsRequest):
+    pool = await get_db_pool()
+    devs = [dict(r) for r in await repository.fetch_devices_with_telemetry(pool)]
+    links = await _ensure_links_or_infer(pool)
+    report = compute_blast_radius(
+        devices=devs,
+        links=links,
+        down_device_ids=payload.down_device_ids,
+        down_link_ids=payload.down_link_ids,
+        include_spof=False,
+    )
+    root_down_ids = [
+        int(item["device_id"])
+        for item in report["device_impacts"]
+        if item["impact_state"] == "root_down" and str(item["device_id"]).isdigit()
+    ]
+    unreachable_ids = [
+        int(item["device_id"])
+        for item in report["device_impacts"]
+        if item["impact_state"] == "unreachable" and str(item["device_id"]).isdigit()
+    ]
+    degraded_ids = [
+        int(item["device_id"])
+        for item in report["device_impacts"]
+        if item["impact_state"] == "degraded" and str(item["device_id"]).isdigit()
+    ]
+    applied = await repository.apply_simulated_faults(
+        pool=pool,
+        root_down_ids=root_down_ids,
+        unreachable_ids=unreachable_ids,
+        degraded_ids=degraded_ids,
+        clear_existing_simulated=payload.clear_existing_simulated,
+    )
+    return {
+        "success": True,
+        "message": "Simulated outage and cascading impacts applied to database",
+        "applied": applied,
+    }
 
 # ── Alert API Endpoints ─────────────────────────────────────
 

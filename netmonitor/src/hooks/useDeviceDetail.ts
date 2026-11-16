@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import type { Alert, Device, DeviceDetail, InterfaceTrafficItem, MetricValue, Port, PortStatus, TimeRange, TrafficSeries } from '../types'
 import { useNetwork } from '../context/networkContext'
 import { useSimulation } from '../context/simulationContext'
+import { useFaultSimOptional } from '../context/faultSimContext'
 import { buildDeviceDetail } from '../services/detailFactory'
 import { createEmptyTrafficSeries } from '../services/traffic'
 import { fetchAlerts, fetchDeviceInterfaces, pollDeviceTraffic, fetchDeviceTraffic, fetchDeviceDetail } from '../services/api'
@@ -20,6 +21,8 @@ interface RealTelemetry {
 export function useDeviceDetail(device: Device | null, timeRange: TimeRange) {
   const { devices } = useNetwork()
   const { tick } = useSimulation()
+  const faultSim = useFaultSimOptional()
+  const links = faultSim?.links
   const [dbAlerts, setDbAlerts] = useState<Alert[]>([])
   const [interfaces, setInterfaces] = useState<InterfaceTrafficItem[]>([])
   const [selectedInterface, setSelectedInterface] = useState<string>('all')
@@ -147,7 +150,6 @@ export function useDeviceDetail(device: Device | null, timeRange: TimeRange) {
 
   const detail = useMemo<DeviceDetail | null>(() => {
     if (!device) return null
-
     const isRealDevice = Boolean(
       device.ip &&
       device.credential_ref !== 'simulated' &&
@@ -235,12 +237,12 @@ export function useDeviceDetail(device: Device | null, timeRange: TimeRange) {
     }
 
     // กรณีเป็นอุปกรณ์จำลองที่ไม่มี IP
-    const base = buildDeviceDetail(device, devices, tick)
+    const base = buildDeviceDetail(device, devices, tick, links)
     if (dbAlerts.length > 0) {
       return { ...base, alerts: dbAlerts }
     }
     return base
-  }, [device, devices, tick, dbAlerts, interfaces, realTelemetry])
+  }, [device, devices, tick, dbAlerts, interfaces, realTelemetry, links])
 
   const series = useMemo<TrafficSeries | null>(() => {
     if (!device) return null

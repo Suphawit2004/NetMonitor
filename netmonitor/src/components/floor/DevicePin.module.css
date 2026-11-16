@@ -469,3 +469,108 @@
   from { opacity: 1; }
   to   { opacity: 0; }
 }
+
+/* ── Simulation & Link-Edit States ── */
+.linkSource .pin {
+  outline: 2px solid var(--accent-primary, #3b82f6);
+  outline-offset: 3px;
+  box-shadow: 0 0 14px rgba(59, 130, 246, 0.75);
+}
+
+.impact_root_down .pin {
+  border-color: var(--status-critical, #ef4444) !important;
+  color: var(--status-critical, #ef4444) !important;
+  background: rgba(127, 29, 29, 0.92) !important;
+  box-shadow: 0 0 16px rgba(239, 68, 68, 0.75);
+  animation: simPulse 1.4s ease-in-out infinite;
+}
+
+.impact_unreachable .pin {
+  border-color: var(--status-critical, #ef4444) !important;
+  border-style: dashed !important;
+  color: var(--status-critical, #ef4444) !important;
+  opacity: 0.72;
+}
+
+.impact_unreachable .name {
+  opacity: 0.75;
+  border-color: rgba(239, 68, 68, 0.6);
+}
+
+.impact_degraded .pin {
+  border-color: var(--status-warning, #f59e0b) !important;
+  border-style: dashed !important;
+  color: var(--status-warning, #f59e0b) !important;
+  box-shadow: 0 0 12px rgba(245, 158, 11, 0.55);
+}
+
+@keyframes simPulse {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.08); }
+}
+
+.simTag {
+  position: absolute;
+  bottom: -7px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 9px;
+  font-weight: 800;
+  line-height: 1;
+  padding: 1px 4px;
+  border-radius: 3px;
+  letter-spacing: 0.3px;
+  pointer-events: none;
+  white-space: nowrap;
+}
+
+.simTagDown {
+  background: #dc2626;
+  color: #fff;
+}
+
+.simTagCut {
+  background: #7f1d1d;
+  color: #fecaca;
+  border: 1px solid #ef4444;
+}
+
+.simTagAlt {
+  background: #d97706;
+  color: #fff;
+}
+
+.btnSimDown,
+.btnSimRestore {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  padding: 6px 8px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  width: 100%;
+  margin-bottom: 4px;
+}
+
+.btnSimDown {
+  background: rgba(239, 68, 68, 0.14);
+  border: 1px solid rgba(239, 68, 68, 0.5);
+  color: var(--status-critical, #ef4444);
+}
+
+.btnSimDown:hover {
+  background: rgba(239, 68, 68, 0.25);
+}
+
+.btnSimRestore {
+  background: rgba(16, 185, 129, 0.14);
+  border: 1px solid rgba(16, 185, 129, 0.5);
+  color: var(--status-online, #10b981);
+}
+
+.btnSimRestore:hover {
+  background: rgba(16, 185, 129, 0.25);
+}

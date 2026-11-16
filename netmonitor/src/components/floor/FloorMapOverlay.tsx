@@ -5,6 +5,8 @@ import { useSettings } from '../../context/settingsContext'
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
 import type { Device, Room, DeviceType } from '../../types'
+import { useNetwork } from '../../context/networkContext'
+import { useFaultSimOptional } from '../../context/faultSimContext'
 import {
   Network,
   Router,
@@ -36,6 +38,8 @@ interface Props {
   devices: Device[]
   rooms: Room[]
   currentFloor: 1 | 2
+  linkSourceDeviceId?: string | null
+  onDeviceSelectForLink?: (device: Device) => void
   onFloorChange?: (floor: 1 | 2) => void
   onDeviceInfo: (device: Device) => void
   onDeviceMove: (id: string, x: number, y: number, lat?: number, lon?: number) => void
@@ -100,6 +104,8 @@ export default function FloorMapOverlay({
   devices,
   rooms,
   currentFloor,
+  linkSourceDeviceId = null,
+  onDeviceSelectForLink,
   onFloorChange,
   onDeviceInfo,
   onDeviceMove,
@@ -108,11 +114,17 @@ export default function FloorMapOverlay({
 }: Props) {
   const { t } = useTranslation()
   const { settings } = useSettings()
+  const { devices: allDevices } = useNetwork()
+  const faultSim = useFaultSimOptional()
+  const isSimMode = faultSim?.isSimMode ?? false
+  const isLinkEditMode = faultSim?.isLinkEditMode ?? false
+  const showLinks = faultSim?.showLinks ?? true
   const isLight = settings.theme === 'light'
   const mapContainerRef = useRef<HTMLDivElement | null>(null)
   const mapRef = useRef<L.Map | null>(null)
   const tileLayerRef = useRef<L.TileLayer | null>(null)
   const roomGroupRef = useRef<L.LayerGroup | null>(null)
+  const linkGroupRef = useRef<L.LayerGroup | null>(null)
   const markerGroupRef = useRef<L.LayerGroup | null>(null)
   const handleGroupRef = useRef<L.LayerGroup | null>(null)
   const buildingBorderRef = useRef<L.Polygon | null>(null)
@@ -215,9 +227,11 @@ export default function FloorMapOverlay({
 
     // Layer Groups
     const roomGroup = L.layerGroup().addTo(map)
+    const linkGroup = L.layerGroup().addTo(map)
     const markerGroup = L.layerGroup().addTo(map)
     const handleGroup = L.layerGroup().addTo(map)
     roomGroupRef.current = roomGroup
+    linkGroupRef.current = linkGroup
     markerGroupRef.current = markerGroup
     handleGroupRef.current = handleGroup
 
@@ -526,6 +540,93 @@ export default function FloorMapOverlay({
     })
   }, [mapReady, rooms, overlayOpacity, zoomLevel, buildingBounds, currentFloor, onFloorChange, t, isLight])
 
+  // ── 5.5. เรนเดอร์เส้นเชื่อม Topology Links บนแผนที่ ─────────────
+  useEffect(() => {
+    if (!mapReady || !linkGroupRef.current) return
+    const group = linkGroupRef.current
+    group.clearLayers()
+
+    if (isEditingBuilding || !showLinks || !faultSim) return
+
+    const deviceMap = new Map(allDevices.map(d => [d.id, d]))
+    const getGps = (dev: Device): [number, number] => {
+      if (typeof dev.x === 'number' && typeof dev.y === 'number') {
+        return canvasToGps(dev.x, dev.y, buildingBounds)
+      }
+      if (typeof dev.latitude === 'number' && typeof dev.longitude === 'number') {
+        return [dev.latitude, dev.longitude]
+      }
+      return canvasToGps(40, 40, buildingBounds)
+    }
+
+    faultSim.links.forEach(link => {
+      const src = deviceMap.get(link.source_device_id)
+      const dst = deviceMap.get(link.target_device_id)
+      if (!src || !dst) return
+      const srcOnFloor = src.floor === currentFloor
+      const dstOnFloor = dst.floor === currentFloor
+      if (!srcOnFloor && !dstOnFloor) return
+
+      const state = faultSim.impactReport.link_states[link.id] ?? 'active'
+      const isCrossFloor = srcOnFloor !== dstOnFloor
+      const localDev = srcOnFloor ? src : dst
+      const remoteDev = srcOnFloor ? dst : src
+
+      const p1 = getGps(localDev)
+      const p2: [number, number] = isCrossFloor
+        ? canvasToGps(localDev.x + 36, Math.max(20, localDev.y - 28), buildingBounds)
+        : getGps(remoteDev)
+
+      const color =
+        state === 'severed'
+          ? '#ef4444'
+          : state === 'isolated'
+            ? '#f87171'
+            : state === 'failover_active'
+              ? '#f59e0b'
+              : link.is_redundant
+                ? '#06b6d4'
+                : link.link_type === 'wan'
+                  ? '#f59e0b'
+                  : '#3b82f6'
+
+      const dashArray =
+        state === 'severed' || state === 'failover_active' || link.is_redundant || isCrossFloor
+          ? '6, 5'
+          : undefined
+
+      const polyline = L.polyline([p1, p2], {
+        color,
+        weight: state === 'severed' || state === 'failover_active' ? 3.5 : 2.5,
+        opacity: state === 'isolated' ? 0.35 : 0.85,
+        dashArray,
+      })
+
+      polyline.bindTooltip(`${src.name} ↔ ${dst.name} (${link.bandwidth_mbps} Mbps)`, {
+        sticky: true,
+        opacity: 0.92,
+      })
+
+      if (isSimMode) {
+        polyline.on('click', () => faultSim.toggleLinkDown(link.id))
+      } else if (isLinkEditMode) {
+        polyline.on('click', () => faultSim.removeLink(link.id))
+      }
+
+      group.addLayer(polyline)
+    })
+  }, [
+    mapReady,
+    allDevices,
+    currentFloor,
+    buildingBounds,
+    isEditingBuilding,
+    showLinks,
+    isSimMode,
+    isLinkEditMode,
+    faultSim,
+  ])
+
   // ── 6. เรนเดอร์หมุดอุปกรณ์ (Zoom-responsive Scaling Pins) ──────
   useEffect(() => {
     if (!mapReady || !markerGroupRef.current) return
@@ -552,16 +653,30 @@ export default function FloorMapOverlay({
         device.status === 'online' ? 'pinStatusOnline' :
         device.status === 'warning' ? 'pinStatusWarning' : 'pinStatusOffline'
 
+      const impactState = isSimMode ? faultSim?.impactMap.get(device.id) : undefined
+      const simClass =
+        impactState && impactState !== 'healthy' ? `mapSim_${impactState}` : ''
+      const linkSrcClass = isLinkEditMode && linkSourceDeviceId === device.id ? 'mapLinkSource' : ''
+      const simBadgeHtml =
+        impactState === 'root_down'
+          ? '<span class="mapSimBadge mapSimBadgeDown">DOWN</span>'
+          : impactState === 'unreachable'
+            ? '<span class="mapSimBadge mapSimBadgeCut">CUT</span>'
+            : impactState === 'degraded'
+              ? '<span class="mapSimBadge mapSimBadgeAlt">ALT</span>'
+              : ''
+
       const emoji = getDeviceIconEmoji(device.dtype)
       const cleanName = device.name.replace(/^["']+|["']+$/g, '').trim()
 
       const html = `
         <div class="mapPinWrap">
           <div class="pinScaleBox" style="transform: scale(${pinScale.toFixed(2)}); transform-origin: 13px 13px;">
-            <div class="pinIconBox ${statusClass}">
+            <div class="pinIconBox ${statusClass} ${simClass} ${linkSrcClass}">
               <span class="pinEmoji">${emoji}</span>
               <span class="pinDotPulse"></span>
               ${device.locked ? `<span class="mapPinLockBadge">${LOCK_BADGE_SVG}</span>` : ''}
+              ${simBadgeHtml}
             </div>
             ${showNameTag ? `<div class="pinNameTag" title="${cleanName}">${cleanName}</div>` : ''}
           </div>
@@ -649,10 +764,37 @@ export default function FloorMapOverlay({
         onDeviceMoveEnd(device.id)
       })
 
+      if (isSimMode && faultSim) {
+        marker.on('click', () => {
+          marker.closePopup()
+          faultSim.toggleDeviceDown(device.id)
+        })
+      } else if (isLinkEditMode && onDeviceSelectForLink) {
+        marker.on('click', () => {
+          marker.closePopup()
+          onDeviceSelectForLink(device)
+        })
+      }
+
       group.addLayer(marker)
       deviceMarkersRef.current.push({ marker, device })
     })
-  }, [mapReady, devices, zoomLevel, buildingBounds, isEditingBuilding, onDeviceMove, onDeviceMoveEnd, onToggleLock, t])
+  }, [
+    mapReady,
+    devices,
+    zoomLevel,
+    buildingBounds,
+    isEditingBuilding,
+    onDeviceMove,
+    onDeviceMoveEnd,
+    onToggleLock,
+    t,
+    isSimMode,
+    isLinkEditMode,
+    linkSourceDeviceId,
+    onDeviceSelectForLink,
+    faultSim,
+  ])
 
   // ── 7. Event Delegation สำหรับปุ่มเปิด Device Info ใน Popup ────
   useEffect(() => {

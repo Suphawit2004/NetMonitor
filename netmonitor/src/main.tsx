@@ -7,6 +7,7 @@ import ToastProvider from './components/ui/Toast'
 import SettingsProvider from './context/SettingsProvider'
 import SimulationProvider from './context/SimulationProvider'
 import NetworkProvider from './context/NetworkProvider'
+import FaultSimProvider from './context/FaultSimProvider'
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
@@ -14,7 +15,9 @@ createRoot(document.getElementById('root')!).render(
       <SettingsProvider>
         <SimulationProvider>
           <NetworkProvider>
-            <App />
+            <FaultSimProvider>
+              <App />
+            </FaultSimProvider>
           </NetworkProvider>
         </SimulationProvider>
       </SettingsProvider>

@@ -3,7 +3,10 @@ import { useTranslation } from 'react-i18next'
 import type { Device, Room } from '../../types'
 import { getBuildingRealDimensions, getStoredBuildingBounds, canvasToGps } from '../../services/mapGeo'
 import { saveStoredRooms, resetStoredRooms, syncStairsAcrossFloors, removeStairsAcrossFloors } from '../../services/roomStore'
+import { useNetwork } from '../../context/networkContext'
+import { useFaultSimOptional } from '../../context/faultSimContext'
 import DevicePin, { type PopupPlacement } from './DevicePin'
+import TopologyLinksLayer from './TopologyLinksLayer'
 import {
   Server,
   Building2,
@@ -136,6 +139,8 @@ interface Props {
   rooms: Room[]
   currentFloor: 1 | 2
   bgImage?: string | null
+  linkSourceDeviceId?: string | null
+  onDeviceSelectForLink?: (device: Device) => void
   onDeviceInfo: (device: Device) => void
   onDeviceMove: (id: string, x: number, y: number, lat?: number, lon?: number) => void
   onDeviceMoveEnd: (id: string) => void
@@ -178,6 +183,8 @@ export default function FloorCanvas({
   rooms,
   currentFloor,
   bgImage = null,
+  linkSourceDeviceId = null,
+  onDeviceSelectForLink,
   onDeviceInfo,
   onDeviceMove,
   onDeviceMoveEnd,
@@ -187,6 +194,11 @@ export default function FloorCanvas({
   onEditingRoomsChange,
 }: Props) {
   const { t } = useTranslation()
+  const { devices: allDevices } = useNetwork()
+  const faultSim = useFaultSimOptional()
+  const isSimMode = faultSim?.isSimMode ?? false
+  const isLinkEditMode = faultSim?.isLinkEditMode ?? false
+  const showLinks = faultSim?.showLinks ?? true
 
   // ── 0. คำนวณขนาดและสัดส่วนอาคารจริงจากแผนที่ดาวเทียม ───────────────
   const buildingDim = useMemo(() => getBuildingRealDimensions(), [currentFloor])
@@ -324,11 +336,29 @@ export default function FloorCanvas({
   // Refs สำหรับ listener
   const devicesRef = useRef(devices)
   const scaleRef   = useRef(scale)
-  const callbacksRef = useRef({ onDeviceInfo, onDeviceMove, onDeviceMoveEnd })
+  const callbacksRef = useRef({
+    onDeviceInfo,
+    onDeviceMove,
+    onDeviceMoveEnd,
+    isSimMode,
+    isLinkEditMode,
+    onToggleDeviceDown: faultSim?.toggleDeviceDown,
+    onDeviceSelectForLink,
+  })
 
   useEffect(() => { devicesRef.current = devices }, [devices])
   useEffect(() => { scaleRef.current = scale }, [scale])
-  useEffect(() => { callbacksRef.current = { onDeviceInfo, onDeviceMove, onDeviceMoveEnd } })
+  useEffect(() => {
+    callbacksRef.current = {
+      onDeviceInfo,
+      onDeviceMove,
+      onDeviceMoveEnd,
+      isSimMode,
+      isLinkEditMode,
+      onToggleDeviceDown: faultSim?.toggleDeviceDown,
+      onDeviceSelectForLink,
+    }
+  })
   useEffect(() => () => clearPopupTimers(), [clearPopupTimers])
 
   const zoom = useCallback((delta: number) => {
@@ -481,7 +511,13 @@ export default function FloorCanvas({
           const dev = devicesRef.current.find(d => d.id === dragId)
           if (dev) {
             hidePopupNow()
-            callbacksRef.current.onDeviceInfo(dev)
+            if (callbacksRef.current.isLinkEditMode && callbacksRef.current.onDeviceSelectForLink) {
+              callbacksRef.current.onDeviceSelectForLink(dev)
+            } else if (callbacksRef.current.isSimMode && callbacksRef.current.onToggleDeviceDown) {
+              callbacksRef.current.onToggleDeviceDown(dev.id)
+            } else {
+              callbacksRef.current.onDeviceInfo(dev)
+            }
           }
         } else {
           if (pendingDrag.current && planRef.current) {
@@ -757,6 +793,23 @@ export default function FloorCanvas({
             />
           )}
 
+          {/* Topology Links SVG Layer */}
+          {!isEditingRooms && showLinks && faultSim && (
+            <TopologyLinksLayer
+              allDevices={allDevices}
+              currentFloor={currentFloor}
+              planW={PLAN_W}
+              planH={PLAN_H}
+              links={faultSim.links}
+              linkStates={faultSim.impactReport.link_states}
+              isSimMode={isSimMode}
+              isLinkEditMode={isLinkEditMode}
+              onToggleLinkDown={faultSim.toggleLinkDown}
+              onDeleteLink={faultSim.removeLink}
+              onFloorChange={onFloorChange}
+            />
+          )}
+
           {/* Device Pins Layer - ซ่อนในขณะกำลังปรับแต่งผังห้อง */}
           {!isEditingRooms && devices.map(device => (
             <DevicePin
@@ -766,11 +819,15 @@ export default function FloorCanvas({
               isPopupOpen={openPopup?.kind === 'pin' && openPopup.id === device.id}
               isFading={fading && openPopup?.kind === 'pin' && openPopup.id === device.id}
               popupPlacement={getPopupPlacement(device.x, device.y, PLAN_W, PLAN_H)}
+              impactState={isSimMode ? faultSim?.impactMap.get(device.id) : undefined}
+              isSimMode={isSimMode}
+              isLinkSource={isLinkEditMode && linkSourceDeviceId === device.id}
               onPinMouseDown={handlePinMouseDown}
               onHoverStart={handleHoverStart}
               onHoverEnd={handleHoverEnd}
               onToggleLock={onToggleLock}
               onDeviceInfo={onDeviceInfo}
+              onToggleSimulateDown={faultSim?.toggleDeviceDown}
             />
           ))}
         </div>
