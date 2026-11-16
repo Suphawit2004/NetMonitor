@@ -71,18 +71,6 @@
   box-shadow: 0 4px 14px rgba(0, 0, 0, 0.5);
   transition: border-color 0.15s ease, background-color 0.15s ease;
 }
-
-.roomOutage {
-  border-color: #ef4444 !important;
-  background: rgba(239, 68, 68, 0.16) !important;
-  box-shadow: 0 0 18px rgba(239, 68, 68, 0.28), 0 4px 14px rgba(0, 0, 0, 0.5);
-}
-
-.roomDegraded {
-  border-color: #f59e0b !important;
-  background: rgba(245, 158, 11, 0.13) !important;
-  box-shadow: 0 0 14px rgba(245, 158, 11, 0.22), 0 4px 14px rgba(0, 0, 0, 0.5);
-}
 .roomLabel {
   position: absolute;
   bottom: 6px;
@@ -179,6 +167,18 @@
 .roomEditing.roomServer {
   border-color: #818cf8 !important;
   background: radial-gradient(ellipse at top left, rgba(99, 102, 241, 0.3), rgba(15, 23, 42, 0.9)) !important;
+}
+
+.room.roomOutage {
+  border-color: #ef4444 !important;
+  background: rgba(239, 68, 68, 0.16) !important;
+  box-shadow: 0 0 18px rgba(239, 68, 68, 0.28), 0 4px 14px rgba(0, 0, 0, 0.5);
+}
+
+.room.roomDegraded {
+  border-color: #f59e0b !important;
+  background: rgba(245, 158, 11, 0.14) !important;
+  box-shadow: 0 0 14px rgba(245, 158, 11, 0.24), 0 4px 14px rgba(0, 0, 0, 0.5);
 }
 
 /* Stair Floor Connector Link Badge */
