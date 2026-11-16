@@ -12,13 +12,11 @@ import {
   RotateCcw,
   Database,
   ServerCrash,
-  ShieldAlert,
   Link2Off,
   CheckCircle2,
+  ArrowRight,
 } from 'lucide-react'
 import styles from './ImpactDrawer.module.css'
-
-type DrawerTab = 'devices' | 'spof'
 
 interface Props {
   onFocusDevice?: (device: Device) => void
@@ -36,19 +34,22 @@ export default function ImpactDrawer({ onFocusDevice }: Props) {
     toggleDeviceDown,
     toggleLinkDown,
     simulateSingleDeviceDown,
-    applyPreset,
     resetSimulation,
     setSimMode,
     commitSimulationToDb,
   } = useFaultSim()
   const { showToast } = useToast()
 
-  const [tab, setTab] = useState<DrawerTab>('devices')
   const [confirmApplyOpen, setConfirmApplyOpen] = useState(false)
   const [applying, setApplying] = useState(false)
 
   const deviceById = useMemo(() => new Map(devices.map(d => [d.id, d])), [devices])
   const linkById = useMemo(() => new Map(links.map(l => [l.id, l])), [links])
+
+  const quickCandidates = useMemo(
+    () => impactReport.spof_ranking.filter(c => c.unreachable_count + c.degraded_count > 0).slice(0, 3),
+    [impactReport.spof_ranking],
+  )
 
   const impactedDevices = useMemo(() => {
     const order = { root_down: 0, unreachable: 1, degraded: 2, healthy: 3 }
@@ -104,33 +105,52 @@ export default function ImpactDrawer({ onFocusDevice }: Props) {
         </button>
       </div>
 
-      {/* Quick Presets */}
+      {/* Step 1: Pick device to fail (Dropdown + Top Quick Chips + Active Faults) */}
       <div className={styles.section}>
-        <div className={styles.sectionLabel}>{t('sim.presetsTitle')}</div>
-        <div className={styles.presetGrid}>
-          <button type="button" className={styles.presetBtn} onClick={() => applyPreset('core-router')}>
-            {t('sim.presetCoreRouter')}
-          </button>
-          <button type="button" className={styles.presetBtn} onClick={() => applyPreset('core-switch')}>
-            {t('sim.presetCoreSwitch')}
-          </button>
-          <button type="button" className={styles.presetBtn} onClick={() => applyPreset('floor1-power')}>
-            {t('sim.presetFloor1Power')}
-          </button>
-          <button type="button" className={styles.presetBtn} onClick={() => applyPreset('top-spof')}>
-            {t('sim.presetTopSpof')}
-          </button>
-        </div>
-      </div>
+        <div className={styles.sectionLabel}>{t('sim.pickDeviceLabel')}</div>
+        <select
+          className={styles.deviceSelect}
+          value=""
+          aria-label={t('sim.pickDeviceLabel')}
+          onChange={e => {
+            if (e.target.value) simulateSingleDeviceDown(e.target.value)
+          }}
+        >
+          <option value="">{t('sim.selectDevicePlaceholder')}</option>
+          {impactReport.spof_ranking.map(c => (
+            <option key={c.device_id} value={c.device_id}>
+              {`${c.name} (${t('sim.affectsCountShort', { count: c.unreachable_count + c.degraded_count })})`}
+            </option>
+          ))}
+          {devices
+            .filter(d => d.dtype !== 'router' && d.dtype !== 'switch')
+            .map(d => (
+              <option key={d.id} value={d.id}>
+                {`${d.name} (F${d.floor})`}
+              </option>
+            ))}
+        </select>
 
-      {/* Active Fault Chips */}
-      <div className={styles.section}>
-        <div className={styles.sectionLabel}>
-          {t('sim.selectedFaults', { count: downDeviceIds.size + downLinkIds.size })}
-        </div>
-        {!hasFaults ? (
-          <div className={styles.hintBox}>{t('sim.clickToFailHint')}</div>
-        ) : (
+        {quickCandidates.length > 0 && (
+          <div className={styles.quickRow}>
+            {quickCandidates.map(cand => {
+              const active = downDeviceIds.has(cand.device_id)
+              return (
+                <button
+                  key={cand.device_id}
+                  type="button"
+                  className={`${styles.quickBtn} ${active ? styles.quickBtnActive : ''}`}
+                  onClick={() => toggleDeviceDown(cand.device_id)}
+                >
+                  <span>{cand.name}</span>
+                  <span className={styles.quickCount}>{cand.unreachable_count + cand.degraded_count}</span>
+                </button>
+              )
+            })}
+          </div>
+        )}
+
+        {hasFaults && (
           <div className={styles.chips}>
             {[...downDeviceIds].map(id => {
               const dev = deviceById.get(id)
@@ -172,158 +192,114 @@ export default function ImpactDrawer({ onFocusDevice }: Props) {
         )}
       </div>
 
-      {/* Device-Only KPIs */}
-      <div className={styles.kpiGrid}>
-        <div className={`${styles.kpiCard} ${summary.root_down_count > 0 ? styles.kpiCrit : ''}`}>
-          <div className={styles.kpiVal}>{summary.root_down_count}</div>
-          <div className={styles.kpiLabel}>{t('sim.kpiRootDown')}</div>
+      {/* Step 2: Compact Summary Strip */}
+      {hasFaults && (
+        <div className={styles.summaryStrip}>
+          <span className={styles.sumCrit}>
+            {`${t('sim.kpiRootDown')} ${summary.root_down_count}`}
+          </span>
+          <span className={styles.sumDot}>·</span>
+          <span className={styles.sumCrit}>
+            {`${t('sim.kpiUnreachable')} ${summary.unreachable_count}`}
+          </span>
+          {summary.degraded_count > 0 && (
+            <>
+              <span className={styles.sumDot}>·</span>
+              <span className={styles.sumWarn}>
+                {`${t('sim.kpiDegraded')} ${summary.degraded_count}`}
+              </span>
+            </>
+          )}
         </div>
-        <div className={`${styles.kpiCard} ${summary.unreachable_count > 0 ? styles.kpiCrit : ''}`}>
-          <div className={styles.kpiVal}>{summary.unreachable_count}</div>
-          <div className={styles.kpiLabel}>{t('sim.kpiUnreachable')}</div>
-        </div>
-        <div className={`${styles.kpiCard} ${summary.degraded_count > 0 ? styles.kpiWarn : ''}`}>
-          <div className={styles.kpiVal}>{summary.degraded_count}</div>
-          <div className={styles.kpiLabel}>{t('sim.kpiDegraded')}</div>
-        </div>
-      </div>
+      )}
 
-      {/* Detail Tabs (Strictly Devices & SPOF) */}
-      <div className={styles.tabs} role="tablist">
-        <button
-          type="button"
-          role="tab"
-          aria-selected={tab === 'devices'}
-          className={`${styles.tabBtn} ${tab === 'devices' ? styles.tabActive : ''}`}
-          onClick={() => setTab('devices')}
-        >
-          {t('sim.tabDevices')} ({impactedDevices.length})
-        </button>
-        <button
-          type="button"
-          role="tab"
-          aria-selected={tab === 'spof'}
-          className={`${styles.tabBtn} ${tab === 'spof' ? styles.tabActive : ''}`}
-          onClick={() => setTab('spof')}
-        >
-          {t('sim.tabSpof')}
-        </button>
-      </div>
-
+      {/* Affected Devices List */}
       <div className={styles.body}>
-        {tab === 'devices' && (
-          impactedDevices.length === 0 ? (
-            <div className={styles.emptyState}>
-              <CheckCircle2 size={20} style={{ color: 'var(--status-online)' }} />
-              <span>{t('sim.noImpactYet')}</span>
-            </div>
-          ) : (
-            <div className={styles.list}>
-              {impactedDevices.map(item => {
-                const dev = deviceById.get(item.device_id)
-                const badgeClass =
-                  item.impact_state === 'root_down'
-                    ? styles.badgeRoot
-                    : item.impact_state === 'unreachable'
-                      ? styles.badgeUnreach
-                      : styles.badgeDegraded
-
-                const chainText =
-                  item.dependency_path.length > 1
-                    ? item.dependency_path.join(' ➔ ')
-                    : t(`sim.reason_${item.impact_state}`, { defaultValue: item.reason })
-
-                return (
-                  <button
-                    key={item.device_id}
-                    type="button"
-                    className={styles.listRow}
-                    onClick={() => dev && onFocusDevice?.(dev)}
-                    title={chainText}
-                  >
-                    <span className={styles.rowIcon}>{DEVICE_ICON[item.dtype]}</span>
-                    <div className={styles.rowInfo}>
-                      <div className={styles.rowTitle}>
-                        <span>{item.name}</span>
-                        <span className={styles.rowFloor}>{`F${item.floor}`}</span>
-                      </div>
-                      <div className={styles.chainText} data-testid="dependency-chain">
-                        {chainText}
-                      </div>
-                    </div>
-                    <span className={`${styles.stateBadge} ${badgeClass}`}>
-                      {t(`sim.state_${item.impact_state}`)}
-                    </span>
-                  </button>
-                )
-              })}
-            </div>
-          )
-        )}
-
-        {tab === 'spof' && (
+        {impactedDevices.length === 0 ? (
+          <div className={styles.emptyState}>
+            <CheckCircle2 size={22} style={{ color: 'var(--status-online)' }} />
+            <div className={styles.emptyText}>{t('sim.clickToFailHint')}</div>
+          </div>
+        ) : (
           <div className={styles.list}>
-            {impactReport.spof_ranking.map((cand, idx) => (
-              <div key={cand.device_id} className={styles.spofRow}>
-                <div className={styles.spofRank}>{`#${idx + 1}`}</div>
-                <div className={styles.rowInfo}>
-                  <div className={styles.rowTitle}>
-                    <span>{cand.name}</span>
-                    <span className={styles.rowFloor}>{`F${cand.floor}`}</span>
-                  </div>
-                  <div className={styles.rowSub}>
-                    {t('sim.spofMeta', {
-                      unreachable: cand.unreachable_count,
-                      degraded: cand.degraded_count,
-                    })}
-                  </div>
-                  {cand.affected_device_names.length > 0 && (
-                    <div className={styles.spofPeers}>
-                      {cand.affected_device_names.slice(0, 5).join(', ')}
-                      {cand.affected_device_names.length > 5
-                        ? ` +${cand.affected_device_names.length - 5}`
-                        : ''}
-                    </div>
-                  )}
-                </div>
+            {impactedDevices.map(item => {
+              const dev = deviceById.get(item.device_id)
+              const badgeClass =
+                item.impact_state === 'root_down'
+                  ? styles.badgeRoot
+                  : item.impact_state === 'unreachable'
+                    ? styles.badgeUnreach
+                    : styles.badgeDegraded
+
+              const chainText =
+                item.dependency_path.length > 1
+                  ? item.dependency_path.join(' ➔ ')
+                  : t(`sim.reason_${item.impact_state}`, { defaultValue: item.reason })
+
+              return (
                 <button
+                  key={item.device_id}
                   type="button"
-                  className={styles.spofTestBtn}
-                  onClick={() => {
-                    simulateSingleDeviceDown(cand.device_id)
-                    setTab('devices')
-                  }}
-                  title={t('sim.testThisSpof')}
+                  className={styles.listRow}
+                  onClick={() => dev && onFocusDevice?.(dev)}
+                  title={t('sim.openDeviceDetailHint')}
                 >
-                  <ShieldAlert size={12} />
-                  <span>{t('sim.testBtn')}</span>
+                  <span className={styles.rowIcon}>{DEVICE_ICON[item.dtype]}</span>
+                  <div className={styles.rowInfo}>
+                    <div className={styles.rowTitle}>
+                      <span>{item.name}</span>
+                      <span className={styles.rowFloor}>{`F${item.floor}`}</span>
+                    </div>
+                    <div className={styles.chainText} data-testid="dependency-chain">
+                      {chainText}
+                    </div>
+                  </div>
+                  <span className={`${styles.stateBadge} ${badgeClass}`}>
+                    {t(`sim.state_${item.impact_state}`)}
+                  </span>
+                  <ArrowRight size={12} className={styles.rowArrow} />
                 </button>
-              </div>
-            ))}
+              )
+            })}
           </div>
         )}
       </div>
 
-      {/* Footer Actions */}
+      {/* Simple Footer */}
       <div className={styles.footer}>
-        <button
-          type="button"
-          className={styles.resetBtn}
-          disabled={!hasFaults}
-          onClick={resetSimulation}
-        >
-          <RotateCcw size={13} />
-          <span>{t('sim.resetSandbox')}</span>
-        </button>
-        <button
-          type="button"
-          className={styles.applyBtn}
-          disabled={!hasFaults || applying}
-          onClick={() => setConfirmApplyOpen(true)}
-        >
-          <Database size={13} />
-          <span>{applying ? t('sim.applying') : t('sim.applyToDb')}</span>
-        </button>
+        <div className={styles.footerRow}>
+          <button
+            type="button"
+            className={styles.resetBtn}
+            disabled={!hasFaults}
+            onClick={resetSimulation}
+          >
+            <RotateCcw size={13} />
+            <span>{t('sim.resetSandbox')}</span>
+          </button>
+          <button
+            type="button"
+            className={styles.doneBtn}
+            onClick={() => {
+              resetSimulation()
+              setSimMode(false)
+            }}
+          >
+            <span>{t('sim.exitSim')}</span>
+          </button>
+        </div>
+
+        {hasFaults && (
+          <button
+            type="button"
+            className={styles.applyLinkBtn}
+            disabled={applying}
+            onClick={() => setConfirmApplyOpen(true)}
+          >
+            <Database size={12} />
+            <span>{applying ? t('sim.applying') : t('sim.applyToDb')}</span>
+          </button>
+        )}
       </div>
 
       <ConfirmDialog

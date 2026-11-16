@@ -22,7 +22,8 @@ import {
   XCircle,
   FlaskConical,
   Cable,
-  GitFork,
+  Eye,
+  EyeOff,
   Wand2,
   X,
 } from 'lucide-react'
@@ -64,8 +65,6 @@ export default function FloorPlanPage({
   } = useFaultSim()
   const { showToast } = useToast()
   const [linkSourceId, setLinkSourceId] = useState<string | null>(null)
-  const [linkType, setLinkType] = useState<LinkType>('trunk')
-  const [linkBandwidth, setLinkBandwidth] = useState<number>(1000)
   const [linkRedundant, setLinkRedundant] = useState<boolean>(false)
 
   const handleSelectDeviceForLink = useCallback(async (dev: Device) => {
@@ -79,19 +78,32 @@ export default function FloorPlanPage({
       return
     }
     const srcDev = devices.find(d => d.id === linkSourceId)
+    // Auto-select sensible link type & bandwidth from the two devices
+    let autoType: LinkType = 'access'
+    let autoBw = 1000
+    if (linkRedundant) {
+      autoType = 'redundancy'
+    } else if (srcDev?.dtype === 'router' || dev.dtype === 'router') {
+      autoType = 'wan'
+      autoBw = 10000
+    } else if (srcDev?.dtype === 'switch' && dev.dtype === 'switch') {
+      autoType = 'trunk'
+      autoBw = 10000
+    }
+
     await createLink({
       source_device_id: linkSourceId,
       target_device_id: dev.id,
-      link_type: linkRedundant ? 'redundancy' : linkType,
-      bandwidth_mbps: linkBandwidth,
-      is_redundant: linkRedundant || linkType === 'redundancy',
+      link_type: autoType,
+      bandwidth_mbps: autoBw,
+      is_redundant: linkRedundant,
     })
     setLinkSourceId(null)
     showToast(
       t('topology.linkCreated', { src: srcDev?.name ?? linkSourceId, dst: dev.name }),
       'success',
     )
-  }, [linkSourceId, devices, createLink, linkRedundant, linkType, linkBandwidth, showToast, t])
+  }, [linkSourceId, devices, createLink, linkRedundant, showToast, t])
 
   const handleToggleLinkEdit = useCallback(() => {
     setLinkSourceId(null)
@@ -309,28 +321,16 @@ export default function FloorPlanPage({
 
           {/* Group 3: Right Action Buttons */}
           <div className={styles.toolbarRight}>
-            <div className={styles.linkControlGroup} role="group" aria-label="Topology Links">
-              <button
-                className={`${styles.linkToggleBtn} ${showLinks ? styles.linkToggleActive : ''}`}
-                onClick={toggleShowLinks}
-                title={t('topology.toggleLinksTitle')}
-                type="button"
-              >
-                <GitFork size={13} />
-                <span>{t('topology.linksBtn')}</span>
-              </button>
-
-              <button
-                className={`${styles.linkEditBtn} ${isLinkEditMode ? styles.linkEditActive : ''}`}
-                onClick={handleToggleLinkEdit}
-                title={t('topology.editLinksTitle')}
-                type="button"
-                data-testid="toggle-link-edit-btn"
-              >
-                <Cable size={13} />
-                <span>{isLinkEditMode ? t('topology.doneLinks') : t('topology.editLinks')}</span>
-              </button>
-            </div>
+            <button
+              className={`${styles.linkEditBtn} ${isLinkEditMode ? styles.linkEditActive : ''}`}
+              onClick={handleToggleLinkEdit}
+              title={t('topology.editLinksTitle')}
+              type="button"
+              data-testid="toggle-link-edit-btn"
+            >
+              <Cable size={13} />
+              <span>{isLinkEditMode ? t('topology.doneLinks') : t('topology.editLinks')}</span>
+            </button>
 
             <button
               className={`${styles.simBtn} ${isSimMode ? styles.simBtnActive : ''}`}
@@ -378,31 +378,10 @@ export default function FloorPlanPage({
                 : t('topology.pickFirstDevice')}
             </span>
             <div className={styles.linkEditControls}>
-              <select
-                className={styles.linkSelect}
-                value={linkType}
-                onChange={e => setLinkType(e.target.value as LinkType)}
-                aria-label={t('topology.linkTypeLabel')}
-              >
-                <option value="trunk">Trunk (10G/1G)</option>
-                <option value="uplink">Uplink</option>
-                <option value="access">Access</option>
-                <option value="wan">WAN</option>
-                <option value="redundancy">Redundancy (Backup)</option>
-              </select>
-              <select
-                className={styles.linkSelect}
-                value={linkBandwidth}
-                onChange={e => setLinkBandwidth(Number(e.target.value))}
-                aria-label="Bandwidth"
-              >
-                <option value={1000}>1 Gbps</option>
-                <option value={10000}>10 Gbps</option>
-              </select>
               <label className={styles.linkCheckLabel}>
                 <input
                   type="checkbox"
-                  checked={linkRedundant || linkType === 'redundancy'}
+                  checked={linkRedundant}
                   onChange={e => setLinkRedundant(e.target.checked)}
                 />
                 <span>{t('topology.redundantLabel')}</span>
@@ -418,11 +397,21 @@ export default function FloorPlanPage({
                 <Wand2 size={12} />
                 <span>{t('topology.autoInferBtn')}</span>
               </button>
+              <button
+                type="button"
+                className={styles.inferBtn}
+                onClick={toggleShowLinks}
+                title={t('topology.toggleLinksTitle')}
+              >
+                {showLinks ? <EyeOff size={12} /> : <Eye size={12} />}
+                <span>{showLinks ? t('topology.hideLinks') : t('topology.showLinks')}</span>
+              </button>
               {linkSourceId && (
                 <button
                   type="button"
                   className={styles.cancelSrcBtn}
                   onClick={() => setLinkSourceId(null)}
+                  title={t('common.cancel')}
                 >
                   <X size={12} />
                 </button>
