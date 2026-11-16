@@ -260,3 +260,212 @@ async def acknowledge_alert(pool: asyncpg.Pool, alert_id: int, acknowledged_by: 
         "UPDATE alerts SET acknowledged = true, acknowledged_by = $1 WHERE id = $2",
         acknowledged_by, alert_id
     )
+
+
+async def fetch_topology_links(pool: asyncpg.Pool) -> List[asyncpg.Record]:
+    """Retrieves all topology links ordered by ID."""
+    return await pool.fetch(
+        """
+        SELECT id, source_device_id, target_device_id, source_port, target_port,
+               link_type, bandwidth_mbps, is_redundant, auto_inferred
+        FROM topology_links
+        ORDER BY id ASC
+        """
+    )
+
+
+async def fetch_all_interfaces(pool: asyncpg.Pool) -> List[asyncpg.Record]:
+    """Retrieves all interfaces across devices for topology inference."""
+    return await pool.fetch(
+        """
+        SELECT id, device_id, if_index, name, description, speed_bps, admin_status, oper_status
+        FROM interfaces
+        ORDER BY device_id ASC, if_index ASC
+        """
+    )
+
+
+async def insert_topology_link(
+    pool: asyncpg.Pool,
+    source_device_id: int,
+    target_device_id: int,
+    source_port: Optional[str],
+    target_port: Optional[str],
+    link_type: str,
+    bandwidth_mbps: int,
+    is_redundant: bool,
+    auto_inferred: bool = False,
+) -> asyncpg.Record:
+    """Inserts a topology link between two devices."""
+    return await pool.fetchrow(
+        """
+        INSERT INTO topology_links (
+            source_device_id, target_device_id, source_port, target_port,
+            link_type, bandwidth_mbps, is_redundant, auto_inferred
+        )
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+        RETURNING id, source_device_id, target_device_id, source_port, target_port,
+                  link_type, bandwidth_mbps, is_redundant, auto_inferred
+        """,
+        source_device_id,
+        target_device_id,
+        source_port,
+        target_port,
+        link_type,
+        bandwidth_mbps,
+        is_redundant,
+        auto_inferred,
+    )
+
+
+async def delete_topology_link(pool: asyncpg.Pool, link_id: int) -> str:
+    """Deletes a topology link by ID."""
+    return await pool.execute("DELETE FROM topology_links WHERE id = $1", link_id)
+
+
+async def replace_auto_inferred_links(
+    pool: asyncpg.Pool,
+    inferred_links: List[Dict[str, Any]],
+) -> List[asyncpg.Record]:
+    """Replaces previously auto-inferred links while preserving user-created manual links."""
+    async with pool.acquire() as conn:
+        async with conn.transaction():
+            await conn.execute("DELETE FROM topology_links WHERE auto_inferred = true")
+            existing = await conn.fetch(
+                "SELECT source_device_id, target_device_id FROM topology_links"
+            )
+            manual_pairs = {
+                (min(r["source_device_id"], r["target_device_id"]), max(r["source_device_id"], r["target_device_id"]))
+                for r in existing
+            }
+            for item in inferred_links:
+                sid = int(item["source_device_id"])
+                tid = int(item["target_device_id"])
+                pair = (min(sid, tid), max(sid, tid))
+                if pair in manual_pairs:
+                    continue
+                await conn.execute(
+                    """
+                    INSERT INTO topology_links (
+                        source_device_id, target_device_id, source_port, target_port,
+                        link_type, bandwidth_mbps, is_redundant, auto_inferred
+                    )
+                    VALUES ($1, $2, $3, $4, $5, $6, $7, true)
+                    ON CONFLICT (source_device_id, target_device_id, source_port) DO NOTHING
+                    """,
+                    sid,
+                    tid,
+                    item.get("source_port"),
+                    item.get("target_port"),
+                    item.get("link_type", "uplink"),
+                    int(item.get("bandwidth_mbps", 1000)),
+                    bool(item.get("is_redundant", False)),
+                )
+    return await fetch_topology_links(pool)
+
+
+async def apply_simulated_faults(
+    pool: asyncpg.Pool,
+    root_down_ids: List[int],
+    unreachable_ids: List[int],
+    degraded_ids: List[int],
+    clear_existing_simulated: bool = True,
+) -> Dict[str, int]:
+    """
+    Persists simulated outage & cascading impact into poll_runs and alerts.
+    Tags impacted devices as credential_ref = 'simulated' so background SNMP poller does not overwrite.
+    """
+    async with pool.acquire() as conn:
+        async with conn.transaction():
+            if clear_existing_simulated:
+                await conn.execute(
+                    """
+                    DELETE FROM alerts
+                    WHERE device_id IN (SELECT id FROM devices WHERE credential_ref = 'simulated')
+                      AND severity IN ('warn', 'crit')
+                    """
+                )
+
+            for dev_id in root_down_ids:
+                await conn.execute(
+                    "UPDATE devices SET credential_ref = 'simulated', enabled = true WHERE id = $1",
+                    dev_id,
+                )
+                await conn.execute(
+                    "DELETE FROM alerts WHERE device_id = $1 AND severity IN ('warn', 'crit')",
+                    dev_id,
+                )
+                await conn.execute(
+                    """
+                    INSERT INTO alerts (device_id, severity, icon, title, description, created_at, acknowledged)
+                    VALUES ($1, 'crit', '', $2, $3, now(), false)
+                    """,
+                    dev_id,
+                    "Simulated Device Outage (Root Cause)",
+                    "Device simulated as DOWN in Topology Blast-Radius Simulator.",
+                )
+                await conn.execute(
+                    """
+                    INSERT INTO poll_runs (device_id, status, error_message, started_at, finished_at)
+                    VALUES ($1, 'failed', 'Simulated fault injection: device down', now(), now())
+                    """,
+                    dev_id,
+                )
+
+            for dev_id in unreachable_ids:
+                await conn.execute(
+                    "UPDATE devices SET credential_ref = 'simulated', enabled = true WHERE id = $1",
+                    dev_id,
+                )
+                await conn.execute(
+                    "DELETE FROM alerts WHERE device_id = $1 AND severity IN ('warn', 'crit')",
+                    dev_id,
+                )
+                await conn.execute(
+                    """
+                    INSERT INTO alerts (device_id, severity, icon, title, description, created_at, acknowledged)
+                    VALUES ($1, 'crit', '', $2, $3, now(), false)
+                    """,
+                    dev_id,
+                    "Cascading Outage: Unreachable from Gateway",
+                    "Upstream device or link down caused total loss of connectivity.",
+                )
+                await conn.execute(
+                    """
+                    INSERT INTO poll_runs (device_id, status, error_message, started_at, finished_at)
+                    VALUES ($1, 'failed', 'Cascading unreachable from simulated upstream outage', now(), now())
+                    """,
+                    dev_id,
+                )
+
+            for dev_id in degraded_ids:
+                await conn.execute(
+                    "UPDATE devices SET credential_ref = 'simulated', enabled = true WHERE id = $1",
+                    dev_id,
+                )
+                await conn.execute(
+                    "DELETE FROM alerts WHERE device_id = $1 AND severity IN ('warn', 'crit')",
+                    dev_id,
+                )
+                await conn.execute(
+                    """
+                    INSERT INTO alerts (device_id, severity, icon, title, description, created_at, acknowledged)
+                    VALUES ($1, 'warn', '', $2, $3, now(), false)
+                    """,
+                    dev_id,
+                    "Redundancy Lost (Degraded Path)",
+                    "Primary path disrupted; operating on backup uplink with reduced redundancy.",
+                )
+                await conn.execute(
+                    """
+                    INSERT INTO poll_runs (device_id, status, error_message, started_at, finished_at)
+                    VALUES ($1, 'warning', 'Simulated failover to redundant path', now(), now())
+                    """,
+                    dev_id,
+                )
+
+    return {
+        "root_down": len(root_down_ids),
+        "unreachable": len(unreachable_ids),
+        "degraded": len(degraded_ids),
+    }

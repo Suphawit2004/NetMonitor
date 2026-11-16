@@ -3,9 +3,11 @@ import { useTranslation } from 'react-i18next'
 import type { Device, Port, TimeRange } from '../types'
 import { useNetwork } from '../context/networkContext'
 import { useSimulation } from '../context/simulationContext'
+import { useFaultSimOptional } from '../context/faultSimContext'
 import { useToast } from '../components/ui/toast-context'
 import { useDeviceDetail } from '../hooks/useDeviceDetail'
 import { VLAN_NAMES } from '../services/detailFactory'
+import { computeBlastRadius } from '../services/topologyEngine'
 import { TIME_RANGES } from '../services/traffic'
 import { portName } from '../i18n/format'
 import { levelColor } from '../components/detail/metricColors'
@@ -14,7 +16,7 @@ import TrafficChart from '../components/detail/TrafficChart'
 import AlertList from '../components/detail/AlertList'
 import { acknowledgeAlert } from '../services/api'
 import { DEVICE_ICON } from '../constants/deviceMeta'
-import { Activity, Zap, Loader2, Copy, Check, AlertCircle, AlertTriangle, ArrowRight } from 'lucide-react'
+import { Activity, Zap, Loader2, Copy, Check, AlertCircle, AlertTriangle, ArrowRight, FlaskConical } from 'lucide-react'
 import styles from './DeviceDetailPage.module.css'
 
 const STATUS_META = {
@@ -43,6 +45,7 @@ export default function DeviceDetailPage({
   const { t } = useTranslation()
   const { devices, connectDevice, retryDevices } = useNetwork()
   const { live, intervalSec } = useSimulation()
+  const faultSim = useFaultSimOptional()
   const { showToast } = useToast()
   const [tab, setTab] = useState<Tab>('ports')
   const [timeRange, setTimeRange] = useState<TimeRange>('15m')
@@ -102,6 +105,24 @@ export default function DeviceDetailPage({
       .map(p => ({ port: p, peer: devices.find(d => d.id === p.peerId) }))
       .filter((x): x is { port: Port; peer: Device } => !!x.peer)
   }, [detail, devices])
+
+  const blastPreview = useMemo(() => {
+    if (!device || !faultSim) return null
+    return computeBlastRadius(
+      devices,
+      faultSim.links,
+      new Set([device.id]),
+      new Set(),
+      false,
+    )
+  }, [device, devices, faultSim])
+
+  const downstreamImpacted = useMemo(() => {
+    if (!blastPreview) return []
+    return blastPreview.device_impacts.filter(
+      x => x.impact_state === 'unreachable' || x.impact_state === 'degraded',
+    )
+  }, [blastPreview])
 
   if (!device || !detail || !series) {
     return (
@@ -552,6 +573,71 @@ export default function DeviceDetailPage({
 
               <AlertList alerts={detail.alerts} onViewAll={onViewAllAlerts} onAcknowledge={handleAcknowledgeAlert} />
             </div>
+
+            {blastPreview && faultSim && (
+              <div className={styles.blastCard} data-testid="device-blast-card">
+                <div className={styles.blastHeader}>
+                  <div>
+                    <div className={styles.chartTitle}>{t('sim.deviceBlastTitle')}</div>
+                    <div className={styles.chartSub}>{t('sim.deviceBlastSub')}</div>
+                  </div>
+                  <button
+                    type="button"
+                    className={styles.blastSimBtn}
+                    onClick={() => {
+                      faultSim.simulateSingleDeviceDown(dev.id)
+                      if (onNavigateFloor) onNavigateFloor(dev.floor)
+                      else onBack()
+                    }}
+                  >
+                    <FlaskConical size={13} />
+                    <span>{t('sim.simulateOnMap')}</span>
+                  </button>
+                </div>
+                <div className={styles.blastMetrics}>
+                  <div className={styles.blastStat}>
+                    <span className={styles.blastVal}>{blastPreview.summary.unreachable_count}</span>
+                    <span className={styles.blastLbl}>{t('sim.kpiUnreachable')}</span>
+                  </div>
+                  <div className={styles.blastStat}>
+                    <span className={styles.blastVal}>{blastPreview.summary.degraded_count}</span>
+                    <span className={styles.blastLbl}>{t('sim.kpiDegraded')}</span>
+                  </div>
+                </div>
+                <div className={styles.blastPeersWrap}>
+                  <div className={styles.blastPeersLabel}>{t('sim.affectedDevicesList')}</div>
+                  {downstreamImpacted.length === 0 ? (
+                    <div className={styles.noneText}>{t('sim.noDownstreamImpact')}</div>
+                  ) : (
+                    <div className={styles.blastPeerList}>
+                      {downstreamImpacted.map(item => {
+                        const targetDev = devices.find(d => d.id === item.device_id)
+                        const chain = item.dependency_path.join(' ➔ ')
+                        return (
+                          <button
+                            key={item.device_id}
+                            type="button"
+                            className={`${styles.blastPeerChip} ${
+                              item.impact_state === 'unreachable'
+                                ? styles.blastPeerCrit
+                                : styles.blastPeerWarn
+                            }`}
+                            onClick={() => targetDev && onNavigateDevice(targetDev)}
+                            title={chain}
+                          >
+                            <span>{DEVICE_ICON[item.dtype]}</span>
+                            <span>{item.name}</span>
+                            <span className={styles.blastPeerState}>
+                              ({t(`sim.state_${item.impact_state}`)})
+                            </span>
+                          </button>
+                        )
+                      })}
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
           </div>
         </div>
       </div>

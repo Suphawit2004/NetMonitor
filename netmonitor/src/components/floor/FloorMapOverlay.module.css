@@ -957,5 +957,46 @@
   box-shadow: 0 0 15px rgba(37, 99, 235, 0.4), 0 4px 10px rgba(15, 23, 42, 0.15);
 }
 
+:global(.mapSim_root_down) {
+  border-color: #ef4444 !important;
+  background: rgba(127, 29, 29, 0.95) !important;
+  box-shadow: 0 0 14px rgba(239, 68, 68, 0.85) !important;
+}
+
+:global(.mapSim_unreachable) {
+  border-color: #ef4444 !important;
+  border-style: dashed !important;
+  opacity: 0.7;
+}
+
+:global(.mapSim_degraded) {
+  border-color: #f59e0b !important;
+  border-style: dashed !important;
+  box-shadow: 0 0 12px rgba(245, 158, 11, 0.65) !important;
+}
+
+:global(.mapLinkSource) {
+  outline: 2px solid #3b82f6;
+  outline-offset: 3px;
+}
+
+:global(.mapSimBadge) {
+  position: absolute;
+  bottom: -6px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 8px;
+  font-weight: 800;
+  line-height: 1;
+  padding: 1px 3px;
+  border-radius: 3px;
+  color: #fff;
+  pointer-events: none;
+}
+
+:global(.mapSimBadgeDown) { background: #dc2626; }
+:global(.mapSimBadgeCut)  { background: #7f1d1d; border: 1px solid #ef4444; }
+:global(.mapSimBadgeAlt)  { background: #d97706; }
+
 
 

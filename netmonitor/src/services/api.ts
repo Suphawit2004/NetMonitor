@@ -10,10 +10,13 @@ import type {
   TrafficSeries,
   InterfaceTrafficItem,
   PollTrafficResponse,
+  TopologyLink,
+  LinkType,
 } from '../types'
 import { ALL_DEVICES } from '../data/mockData'
 import { getStoredBuildingBounds, canvasToGps } from './mapGeo'
 import { getStoredRooms } from './roomStore'
+import { inferTopologyLinks as inferLinksClient } from './topologyEngine'
 
 // ─────────────────────────────────────────────
 // Mock API layer — เลียนแบบ backend จริง
@@ -585,4 +588,155 @@ export async function fetchDeviceTraffic(
     console.warn(`Failed to fetch traffic series for device ${deviceId}`, err)
   }
   return null
+}
+
+// ── Topology Links & Failure Simulation API ────────────
+
+const LINKS_STORAGE_KEY = 'netmonitor:topology_links_db'
+
+function loadStoredLinks(devices: Device[]): TopologyLink[] {
+  try {
+    const raw = typeof window !== 'undefined' ? window.localStorage.getItem(LINKS_STORAGE_KEY) : null
+    if (raw) {
+      const parsed = JSON.parse(raw) as TopologyLink[]
+      if (Array.isArray(parsed) && parsed.length > 0) return parsed
+    }
+  } catch {
+    // ignore storage errors
+  }
+  const inferred = inferLinksClient(devices)
+  saveStoredLinks(inferred)
+  return inferred
+}
+
+function saveStoredLinks(links: TopologyLink[]): void {
+  try {
+    if (typeof window !== 'undefined') {
+      window.localStorage.setItem(LINKS_STORAGE_KEY, JSON.stringify(links))
+    }
+  } catch {
+    // ignore
+  }
+}
+
+export async function fetchTopologyLinks(fallbackDevices: Device[] = []): Promise<TopologyLink[]> {
+  try {
+    const res = await fetch(`${API_BASE}/topology/links`)
+    if (res.ok) {
+      const data = (await res.json()) as TopologyLink[]
+      saveStoredLinks(data)
+      return data
+    }
+  } catch (err) {
+    console.warn('Backend API unavailable for topology links, using local fallback', err)
+  }
+  return loadStoredLinks(fallbackDevices.length > 0 ? fallbackDevices : db)
+}
+
+export async function createTopologyLink(input: {
+  source_device_id: string
+  target_device_id: string
+  source_port?: string
+  target_port?: string
+  link_type: LinkType
+  bandwidth_mbps: number
+  is_redundant: boolean
+}): Promise<TopologyLink> {
+  try {
+    const res = await fetch(`${API_BASE}/topology/links`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(input),
+    })
+    if (res.ok) {
+      const created = (await res.json()) as TopologyLink
+      const existing = loadStoredLinks(db)
+      saveStoredLinks([...existing, created])
+      return created
+    }
+  } catch (err) {
+    console.warn('Backend API unavailable for createTopologyLink, using local fallback', err)
+  }
+  const existing = loadStoredLinks(db)
+  const localLink: TopologyLink = {
+    id: `local-link-${Date.now().toString(36)}`,
+    ...input,
+    auto_inferred: false,
+  }
+  saveStoredLinks([...existing, localLink])
+  return localLink
+}
+
+export async function deleteTopologyLink(linkId: string): Promise<boolean> {
+  try {
+    const res = await fetch(`${API_BASE}/topology/links/${encodeURIComponent(linkId)}`, {
+      method: 'DELETE',
+    })
+    if (res.ok) {
+      const existing = loadStoredLinks(db).filter(l => l.id !== linkId)
+      saveStoredLinks(existing)
+      return true
+    }
+  } catch (err) {
+    console.warn('Backend API unavailable for deleteTopologyLink, using local fallback', err)
+  }
+  const existing = loadStoredLinks(db).filter(l => l.id !== linkId)
+  saveStoredLinks(existing)
+  return true
+}
+
+export async function inferTopologyLinks(fallbackDevices: Device[] = []): Promise<TopologyLink[]> {
+  try {
+    const res = await fetch(`${API_BASE}/topology/infer`, { method: 'POST' })
+    if (res.ok) {
+      const data = (await res.json()) as TopologyLink[]
+      saveStoredLinks(data)
+      return data
+    }
+  } catch (err) {
+    console.warn('Backend API unavailable for inferTopologyLinks, using local fallback', err)
+  }
+  const current = loadStoredLinks(fallbackDevices.length > 0 ? fallbackDevices : db)
+  const manual = current.filter(l => !l.auto_inferred)
+  const inferred = inferLinksClient(fallbackDevices.length > 0 ? fallbackDevices : db)
+  const manualPairs = new Set(
+    manual.map(l =>
+      l.source_device_id < l.target_device_id
+        ? `${l.source_device_id}::${l.target_device_id}`
+        : `${l.target_device_id}::${l.source_device_id}`,
+    ),
+  )
+  const merged = [
+    ...manual,
+    ...inferred.filter(l => {
+      const key =
+        l.source_device_id < l.target_device_id
+          ? `${l.source_device_id}::${l.target_device_id}`
+          : `${l.target_device_id}::${l.source_device_id}`
+      return !manualPairs.has(key)
+    }),
+  ]
+  saveStoredLinks(merged)
+  return merged
+}
+
+export async function applySimulatedFaults(
+  downDeviceIds: string[],
+  downLinkIds: string[],
+): Promise<boolean> {
+  try {
+    const res = await fetch(`${API_BASE}/simulate/apply-faults`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        down_device_ids: downDeviceIds,
+        down_link_ids: downLinkIds,
+        clear_existing_simulated: true,
+      }),
+    })
+    return res.ok
+  } catch (err) {
+    console.warn('Backend API unavailable for applySimulatedFaults', err)
+    return false
+  }
 }

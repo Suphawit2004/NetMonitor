@@ -168,3 +168,66 @@ export interface PollTrafficResponse {
   timestamp: string
   interfaces: InterfaceTrafficItem[]
 }
+
+// ─────────────────────────────────────────────
+// Topology Links & Failure Simulation types
+// ─────────────────────────────────────────────
+
+export type LinkType = 'wan' | 'uplink' | 'trunk' | 'access' | 'redundancy'
+export type ImpactState = 'healthy' | 'root_down' | 'unreachable' | 'degraded'
+export type LinkImpactState = 'active' | 'severed' | 'isolated' | 'failover_active'
+
+export interface TopologyLink {
+  id: string
+  source_device_id: string
+  target_device_id: string
+  source_port?: string | null
+  target_port?: string | null
+  link_type: LinkType
+  bandwidth_mbps: number
+  is_redundant: boolean
+  auto_inferred?: boolean
+}
+
+export interface DeviceImpactDetail {
+  device_id: string
+  name: string
+  dtype: DeviceType
+  floor: 1 | 2
+  impact_state: ImpactState
+  reason: string
+  caused_by_device_id?: string | null
+  caused_by_name?: string | null
+  dependency_path: string[]
+  lost_upstream_ids: string[]
+  remaining_path_count: number
+}
+
+export interface SpofCandidate {
+  device_id: string
+  name: string
+  dtype: DeviceType
+  floor: 1 | 2
+  unreachable_count: number
+  degraded_count: number
+  affected_device_names: string[]
+  score: number
+}
+
+export interface BlastRadiusSummary {
+  total_devices: number
+  root_down_count: number
+  unreachable_count: number
+  degraded_count: number
+  healthy_count: number
+}
+
+export interface BlastRadiusReport {
+  down_device_ids: string[]
+  down_link_ids: string[]
+  summary: BlastRadiusSummary
+  device_impacts: DeviceImpactDetail[]
+  link_states: Record<string, LinkImpactState>
+  affected_floors: number[]
+  spof_ranking: SpofCandidate[]
+}

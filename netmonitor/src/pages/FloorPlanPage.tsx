@@ -1,11 +1,13 @@
 import { useMemo, useState, useEffect, useCallback, lazy, Suspense } from 'react'
 import { useTranslation } from 'react-i18next'
-import type { Device, DeviceType, Room } from '../types'
+import type { Device, DeviceType, LinkType, Room } from '../types'
 import { getStoredRooms, saveStoredRooms } from '../services/roomStore'
 import { useNetwork } from '../context/networkContext'
+import { useFaultSim } from '../context/faultSimContext'
 import { useToast } from '../components/ui/toast-context'
 import FloorSidebar from '../components/floor/FloorSidebar'
 import FloorCanvas from '../components/floor/FloorCanvas'
+import ImpactDrawer from '../components/simulation/ImpactDrawer'
 import {
   SlidersHorizontal,
   ChevronLeft,
@@ -19,6 +21,11 @@ import {
   CheckCircle2,
   AlertTriangle,
   XCircle,
+  FlaskConical,
+  Cable,
+  GitFork,
+  Wand2,
+  X,
 } from 'lucide-react'
 import styles from './FloorPlanPage.module.css'
 
@@ -44,8 +51,52 @@ export default function FloorPlanPage({
     devices, loading,
     moveDevice, commitDevicePosition, toggleLock, setFloorLockAll, simulateSampleStatuses,
   } = useNetwork()
+  const {
+    isSimMode,
+    isLinkEditMode,
+    showLinks,
+    toggleSimMode,
+    toggleLinkEditMode,
+    toggleShowLinks,
+    createLink,
+    reInferLinks,
+  } = useFaultSim()
   const { showToast } = useToast()
   const [simulating, setSimulating] = useState(false)
+  const [linkSourceId, setLinkSourceId] = useState<string | null>(null)
+  const [linkType, setLinkType] = useState<LinkType>('trunk')
+  const [linkBandwidth, setLinkBandwidth] = useState<number>(1000)
+  const [linkRedundant, setLinkRedundant] = useState<boolean>(false)
+
+  const handleSelectDeviceForLink = useCallback(async (dev: Device) => {
+    if (!linkSourceId) {
+      setLinkSourceId(dev.id)
+      showToast(t('topology.selectTargetPrompt', { name: dev.name }), 'info')
+      return
+    }
+    if (linkSourceId === dev.id) {
+      setLinkSourceId(null)
+      return
+    }
+    const srcDev = devices.find(d => d.id === linkSourceId)
+    await createLink({
+      source_device_id: linkSourceId,
+      target_device_id: dev.id,
+      link_type: linkRedundant ? 'redundancy' : linkType,
+      bandwidth_mbps: linkBandwidth,
+      is_redundant: linkRedundant || linkType === 'redundancy',
+    })
+    setLinkSourceId(null)
+    showToast(
+      t('topology.linkCreated', { src: srcDev?.name ?? linkSourceId, dst: dev.name }),
+      'success',
+    )
+  }, [linkSourceId, devices, createLink, linkRedundant, linkType, linkBandwidth, showToast, t])
+
+  const handleToggleLinkEdit = useCallback(() => {
+    setLinkSourceId(null)
+    toggleLinkEditMode()
+  }, [toggleLinkEditMode])
 
   const handleLoadSampleStatuses = async () => {
     try {
@@ -271,6 +322,41 @@ export default function FloorPlanPage({
           {/* Group 3: Right Action Buttons */}
           <div className={styles.toolbarRight}>
             <button
+              className={`${styles.linkToggleBtn} ${showLinks ? styles.linkToggleActive : ''}`}
+              onClick={toggleShowLinks}
+              title={t('topology.toggleLinksTitle')}
+              type="button"
+            >
+              <GitFork size={13} />
+              <span>{t('topology.linksBtn')}</span>
+            </button>
+
+            <button
+              className={`${styles.linkEditBtn} ${isLinkEditMode ? styles.linkEditActive : ''}`}
+              onClick={handleToggleLinkEdit}
+              title={t('topology.editLinksTitle')}
+              type="button"
+              data-testid="toggle-link-edit-btn"
+            >
+              <Cable size={13} />
+              <span>{isLinkEditMode ? t('topology.doneLinks') : t('topology.editLinks')}</span>
+            </button>
+
+            <button
+              className={`${styles.simBtn} ${isSimMode ? styles.simBtnActive : ''}`}
+              onClick={() => {
+                setLinkSourceId(null)
+                toggleSimMode()
+              }}
+              title={t('sim.toggleSimTitle')}
+              type="button"
+              data-testid="toggle-sim-btn"
+            >
+              <FlaskConical size={13} />
+              <span>{t('sim.button')}</span>
+            </button>
+
+            <button
               className={`${styles.moveModeBtn} ${isMoveMode ? styles.moveModeActive : ''}`}
               onClick={handleToggleMoveMode}
               title={isMoveMode ? t('floor.lockPositionsTitle') : t('floor.moveModeTitle')}
@@ -302,6 +388,69 @@ export default function FloorPlanPage({
           </div>
         </div>
 
+        {isLinkEditMode && (
+          <div className={styles.linkEditBar} data-testid="link-edit-bar">
+            <span className={styles.linkEditPrompt}>
+              {linkSourceId
+                ? t('topology.pickSecondDevice', {
+                    name: devices.find(d => d.id === linkSourceId)?.name ?? linkSourceId,
+                  })
+                : t('topology.pickFirstDevice')}
+            </span>
+            <div className={styles.linkEditControls}>
+              <select
+                className={styles.linkSelect}
+                value={linkType}
+                onChange={e => setLinkType(e.target.value as LinkType)}
+                aria-label={t('topology.linkTypeLabel')}
+              >
+                <option value="trunk">Trunk (10G/1G)</option>
+                <option value="uplink">Uplink</option>
+                <option value="access">Access</option>
+                <option value="wan">WAN</option>
+                <option value="redundancy">Redundancy (Backup)</option>
+              </select>
+              <select
+                className={styles.linkSelect}
+                value={linkBandwidth}
+                onChange={e => setLinkBandwidth(Number(e.target.value))}
+                aria-label="Bandwidth"
+              >
+                <option value={1000}>1 Gbps</option>
+                <option value={10000}>10 Gbps</option>
+              </select>
+              <label className={styles.linkCheckLabel}>
+                <input
+                  type="checkbox"
+                  checked={linkRedundant || linkType === 'redundancy'}
+                  onChange={e => setLinkRedundant(e.target.checked)}
+                />
+                <span>{t('topology.redundantLabel')}</span>
+              </label>
+              <button
+                type="button"
+                className={styles.inferBtn}
+                onClick={async () => {
+                  await reInferLinks()
+                  showToast(t('topology.inferDone'), 'success')
+                }}
+              >
+                <Wand2 size={12} />
+                <span>{t('topology.autoInferBtn')}</span>
+              </button>
+              {linkSourceId && (
+                <button
+                  type="button"
+                  className={styles.cancelSrcBtn}
+                  onClick={() => setLinkSourceId(null)}
+                >
+                  <X size={12} />
+                </button>
+              )}
+            </div>
+          </div>
+        )}
+
         <div className={styles.canvasArea}>
           {viewMode === 'map' ? (
             <Suspense fallback={<div className={styles.mapLoading}>{t('common.loading')}</div>}>
@@ -309,6 +458,8 @@ export default function FloorPlanPage({
                 devices={visibleDevices}
                 rooms={floorRooms}
                 currentFloor={currentFloor}
+                linkSourceDeviceId={linkSourceId}
+                onDeviceSelectForLink={handleSelectDeviceForLink}
                 onFloorChange={handleFloorChange}
                 onDeviceInfo={onDeviceInfo}
                 onDeviceMove={moveDevice}
@@ -321,6 +472,8 @@ export default function FloorPlanPage({
               devices={visibleDevices}
               rooms={floorRooms}
               currentFloor={currentFloor}
+              linkSourceDeviceId={linkSourceId}
+              onDeviceSelectForLink={handleSelectDeviceForLink}
               onFloorChange={handleFloorChange}
               onDeviceInfo={onDeviceInfo}
               onDeviceMove={moveDevice}
@@ -352,6 +505,13 @@ export default function FloorPlanPage({
           )}
         </div>
       </div>
+
+      <ImpactDrawer
+        onFocusDevice={dev => {
+          if (dev.floor !== currentFloor) handleFloorChange(dev.floor)
+          onDeviceInfo(dev)
+        }}
+      />
 
       {scanOpen && (
         <Suspense fallback={null}>

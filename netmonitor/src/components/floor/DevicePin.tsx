@@ -1,8 +1,8 @@
 import { memo } from 'react'
 import { useTranslation } from 'react-i18next'
-import type { Device } from '../../types'
+import type { Device, ImpactState } from '../../types'
 import { DEVICE_ICON } from '../../constants/deviceMeta'
-import { Lock, Unlock, Info, CheckCircle2, AlertTriangle, XCircle } from 'lucide-react'
+import { Lock, Unlock, Info, CheckCircle2, AlertTriangle, XCircle, ZapOff, RotateCcw } from 'lucide-react'
 import styles from './DevicePin.module.css'
 
 export type PopupPlacement = 'above' | 'below' | 'left' | 'right'
@@ -13,21 +13,30 @@ interface Props {
   isPopupOpen: boolean                              // ← ควบคุมจากภายนอก
   isFading: boolean                                 // ← กำลังจางหาย (ก่อนปิด)
   popupPlacement?: PopupPlacement                   // ← ทิศทาง popup (default: 'above')
+  impactState?: ImpactState
+  isSimMode?: boolean
+  isLinkSource?: boolean
   onPinMouseDown: (device: Device, e: React.MouseEvent) => void
   onHoverStart: (device: Device) => void            // ← เมาส์เข้า pin → เปิด popup
   onHoverEnd: () => void                            // ← เมาส์ออก → เริ่มนับเวลาปิด
   onToggleLock: (id: string) => void
   onDeviceInfo?: (device: Device) => void
+  onToggleSimulateDown?: (id: string) => void
 }
 
 function DevicePin({
   device, isDragging, isPopupOpen, isFading,
   popupPlacement = 'above',
-  onPinMouseDown, onHoverStart, onHoverEnd, onToggleLock, onDeviceInfo,
+  impactState,
+  isSimMode = false,
+  isLinkSource = false,
+  onPinMouseDown, onHoverStart, onHoverEnd, onToggleLock, onDeviceInfo, onToggleSimulateDown,
 }: Props) {
   const { t } = useTranslation()
   const isLocked = !!device.locked
   const cleanName = device.name.replace(/^["']+|["']+$/g, '').trim()
+  const simImpactClass =
+    isSimMode && impactState && impactState !== 'healthy' ? styles[`impact_${impactState}`] : ''
 
   return (
     <div
@@ -36,6 +45,8 @@ function DevicePin({
         isDragging  ? styles.dragging : '',
         isLocked    ? styles.locked   : '',
         isPopupOpen ? styles.popupOpen : '',
+        isLinkSource ? styles.linkSource : '',
+        simImpactClass,
       ].filter(Boolean).join(' ')}
       style={{ left: device.x, top: device.y }}
       onMouseDown={e => onPinMouseDown(device, e)}
@@ -55,6 +66,15 @@ function DevicePin({
           <span className={styles.lockBadge} aria-hidden="true">
             <Lock size={10} className={styles.lockIcon} />
           </span>
+        )}
+        {isSimMode && impactState === 'root_down' && (
+          <span className={`${styles.simTag} ${styles.simTagDown}`}>DOWN</span>
+        )}
+        {isSimMode && impactState === 'unreachable' && (
+          <span className={`${styles.simTag} ${styles.simTagCut}`}>CUT</span>
+        )}
+        {isSimMode && impactState === 'degraded' && (
+          <span className={`${styles.simTag} ${styles.simTagAlt}`}>ALT</span>
         )}
       </div>
 
@@ -107,6 +127,18 @@ function DevicePin({
           </div>
 
           <div className={styles.popupActions}>
+            {isSimMode && onToggleSimulateDown && (
+              <button
+                className={impactState === 'root_down' ? styles.btnSimRestore : styles.btnSimDown}
+                onClick={e => {
+                  e.stopPropagation()
+                  onToggleSimulateDown(device.id)
+                }}
+              >
+                {impactState === 'root_down' ? <RotateCcw size={13} /> : <ZapOff size={13} />}
+                <span>{impactState === 'root_down' ? t('sim.restoreDevice') : t('sim.failDevice')}</span>
+              </button>
+            )}
             {onDeviceInfo && (
               <button
                 className={styles.btnDetail}

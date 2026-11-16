@@ -1,8 +1,9 @@
 import { useEffect, useState, useMemo, lazy, Suspense } from 'react'
 import { useTranslation } from 'react-i18next'
-import { AlertTriangle } from 'lucide-react'
+import { AlertTriangle, FlaskConical, RotateCcw, X } from 'lucide-react'
 import type { Device } from './types'
 import { useNetwork } from './context/networkContext'
+import { useFaultSim } from './context/faultSimContext'
 import Navbar, { type NavPage } from './components/layout/Navbar'
 import FloorPlanPage from './pages/FloorPlanPage'
 import styles from './App.module.css'
@@ -53,6 +54,7 @@ function parseRoute(): { page: Page; deviceId: string | null; floor: 1 | 2 } {
 export default function App() {
   const { t } = useTranslation()
   const { devices, error, selectedDevice, selectDevice, retryDevices } = useNetwork()
+  const { isSimMode, impactReport, resetSimulation, setSimMode } = useFaultSim()
 
   const initialRoute = useMemo(() => parseRoute(), [])
   const [page, setPage] = useState<Page>(initialRoute.page)
@@ -142,6 +144,42 @@ export default function App() {
         onNavigate={handleNavigate}
         onSelectDevice={handleSelectDeviceFromSearch}
       />
+      {isSimMode && (
+        <div className={styles.simBanner} role="status" data-testid="sim-sandbox-banner">
+          <div className={styles.simBannerLeft}>
+            <FlaskConical size={15} />
+            <strong>{t('sim.bannerTitle')}</strong>
+            <span className={styles.simBannerMeta}>
+              {t('sim.bannerCounts', {
+                down: impactReport.summary.root_down_count,
+                unreachable: impactReport.summary.unreachable_count,
+                degraded: impactReport.summary.degraded_count,
+              })}
+            </span>
+          </div>
+          <div className={styles.simBannerActions}>
+            <button
+              type="button"
+              className={styles.simBannerBtn}
+              onClick={resetSimulation}
+            >
+              <RotateCcw size={12} />
+              <span>{t('sim.resetSandbox')}</span>
+            </button>
+            <button
+              type="button"
+              className={styles.simBannerClose}
+              onClick={() => {
+                resetSimulation()
+                setSimMode(false)
+              }}
+            >
+              <X size={13} />
+              <span>{t('sim.exitSim')}</span>
+            </button>
+          </div>
+        </div>
+      )}
       {error && (
         <div className={styles.errorBanner} role="alert">
           <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>

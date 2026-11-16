@@ -81,6 +81,21 @@ CREATE TABLE alerts (
     acknowledged_by VARCHAR(100)
 );
 
+CREATE TABLE topology_links (
+    id                  BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    source_device_id    BIGINT NOT NULL REFERENCES devices(id) ON DELETE CASCADE,
+    target_device_id    BIGINT NOT NULL REFERENCES devices(id) ON DELETE CASCADE,
+    source_port         TEXT,
+    target_port         TEXT,
+    link_type           TEXT NOT NULL DEFAULT 'uplink' CHECK (link_type IN ('wan', 'uplink', 'trunk', 'access', 'redundancy')),
+    bandwidth_mbps      INTEGER NOT NULL DEFAULT 1000 CHECK (bandwidth_mbps > 0),
+    is_redundant        BOOLEAN NOT NULL DEFAULT FALSE,
+    auto_inferred       BOOLEAN NOT NULL DEFAULT FALSE,
+    created_at          TIMESTAMPTZ NOT NULL DEFAULT now(),
+    CHECK (source_device_id <> target_device_id),
+    UNIQUE (source_device_id, target_device_id, source_port)
+);
+
 CREATE INDEX poll_runs_device_started_idx ON poll_runs (device_id, started_at DESC);
 CREATE INDEX interface_samples_sampled_at_idx ON interface_samples (sampled_at DESC);
 CREATE INDEX device_metric_samples_name_time_idx ON device_metric_samples (device_id, metric_name, sampled_at DESC);
@@ -89,3 +104,5 @@ CREATE INDEX idx_alerts_device_id ON alerts (device_id);
 CREATE INDEX idx_alerts_created_at ON alerts (created_at DESC);
 CREATE INDEX idx_devices_floor ON devices (floor);
 CREATE INDEX idx_devices_enabled ON devices (enabled);
+CREATE INDEX idx_topology_links_source ON topology_links (source_device_id);
+CREATE INDEX idx_topology_links_target ON topology_links (target_device_id);
