@@ -193,6 +193,7 @@ export default function App() {
         {page === 'floor' && (
           <FloorPlanPage
             onDeviceInfo={openDeviceInfo}
+            onOpenFullDetail={handleDeviceClick}
             currentFloor={currentFloor}
             onFloorChange={handleFloorChange}
           />
@@ -211,7 +212,10 @@ export default function App() {
             <DeviceListPage onDeviceClick={handleDeviceClick} />
           )}
           {page === 'reports' && (
-            <ReportsPage onDeviceInfo={openDeviceInfo} />
+            <ReportsPage
+              onDeviceInfo={openDeviceInfo}
+              onOpenFullDetail={handleDeviceClick}
+            />
           )}
 
 

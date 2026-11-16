@@ -40,9 +40,10 @@ const STATUS_META: { key: DeviceStatus; color: string }[] = [
 
 interface Props {
   onDeviceInfo: (device: Device) => void
+  onOpenFullDetail?: (device: Device) => void
 }
 
-export default function ReportsPage({ onDeviceInfo }: Props) {
+export default function ReportsPage({ onDeviceInfo, onOpenFullDetail }: Props) {
   const { t } = useTranslation()
   const { devices, retryDevices } = useNetwork()
   const { tick } = useSimulation()
@@ -347,7 +348,7 @@ export default function ReportsPage({ onDeviceInfo }: Props) {
                     key={item.device_id}
                     type="button"
                     className={styles.outageRow}
-                    onClick={() => dev && onDeviceInfo(dev)}
+                    onClick={() => dev && (onOpenFullDetail ? onOpenFullDetail(dev) : onDeviceInfo(dev))}
                   >
                     <span className={styles.outageIcon}>{DEVICE_ICON[item.dtype]}</span>
                     <div className={styles.outageInfo}>
@@ -388,10 +389,15 @@ export default function ReportsPage({ onDeviceInfo }: Props) {
           <div className={styles.outageList}>
             {effectiveReport.spof_ranking.map(cand => {
               const isSelectedDown = downDeviceIds.has(cand.device_id)
+              const candDev = devices.find(d => d.id === cand.device_id)
               return (
                 <div key={cand.device_id} className={styles.matrixRow}>
                   <span className={styles.outageIcon}>{DEVICE_ICON[cand.dtype]}</span>
-                  <div className={styles.outageInfo}>
+                  <div
+                    className={styles.outageInfo}
+                    style={{ cursor: 'pointer' }}
+                    onClick={() => candDev && (onOpenFullDetail ? onOpenFullDetail(candDev) : onDeviceInfo(candDev))}
+                  >
                     <div className={styles.outageName}>
                       <span>{cand.name}</span>
                       <span className={styles.floorBadge}>{`F${cand.floor}`}</span>

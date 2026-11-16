@@ -34,6 +34,7 @@ const NetworkScanModal = lazy(() => import('../components/discovery/NetworkScanM
 
 interface Props {
   onDeviceInfo: (device: Device) => void
+  onOpenFullDetail?: (device: Device) => void
   currentFloor?: 1 | 2
   onFloorChange?: (floor: 1 | 2) => void
 }
@@ -42,6 +43,7 @@ type StatusFilter = 'all' | 'online' | 'warning' | 'offline'
 
 export default function FloorPlanPage({
   onDeviceInfo,
+  onOpenFullDetail,
   currentFloor: controlledFloor,
   onFloorChange,
 }: Props) {
@@ -486,8 +488,12 @@ export default function FloorPlanPage({
 
       <ImpactDrawer
         onFocusDevice={dev => {
-          if (dev.floor !== currentFloor) handleFloorChange(dev.floor)
-          onDeviceInfo(dev)
+          if (onOpenFullDetail) {
+            onOpenFullDetail(dev)
+          } else {
+            if (dev.floor !== currentFloor) handleFloorChange(dev.floor)
+            onDeviceInfo(dev)
+          }
         }}
       />
 
