@@ -501,6 +501,7 @@ const th = {
     pickSecondDevice: 'เลือก {{name}} แล้ว — คลิกเครื่องปลายทางเพื่อเชื่อมสาย',
     selectTargetPrompt: 'เลือก {{name}} เป็นต้นทาง — คลิกเครื่องปลายทางต่อได้เลย',
     linkCreated: 'เชื่อมสาย {{src}} ↔ {{dst}} สำเร็จ',
+    alreadyLinked: '{{src}} กับ {{dst}} เชื่อมสายกันอยู่แล้ว — คลิก × บนเส้นเพื่อลบ',
     redundantLabel: 'เป็นสายสำรอง',
     autoInferBtn: 'เชื่อมอัตโนมัติ',
     hideLinks: 'ซ่อนเส้น',

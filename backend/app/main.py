@@ -978,6 +978,16 @@ async def create_topology_link(payload: TopologyLinkCreate):
     if src_id == dst_id:
         raise HTTPException(status_code=400, detail="Source and target devices must be different")
 
+    existing = await repository.find_existing_topology_link(
+        pool=pool,
+        source_device_id=src_id,
+        target_device_id=dst_id,
+        source_port=payload.source_port,
+        target_port=payload.target_port,
+    )
+    if existing:
+        raise HTTPException(status_code=400, detail="Topology link between these devices already exists")
+
     try:
         row = await repository.insert_topology_link(
             pool=pool,
@@ -1013,10 +1023,18 @@ async def infer_topology():
     rows = await repository.replace_auto_inferred_links(pool, inferred)
     return [_serialize_link(r) for r in rows]
 
+def _dev_with_status(row: Any) -> dict:
+    d = dict(row)
+    if "status" not in d:
+        d["status"] = compute_device_status(row) if "enabled" in d else "online"
+    return d
+
+
 @app.post("/api/v1/simulate/impact", response_model=SimulationImpactResponse)
 async def simulate_impact(payload: SimulationImpactRequest):
     pool = await get_db_pool()
-    devs = [dict(r) for r in await repository.fetch_devices_with_telemetry(pool)]
+    rows = await repository.fetch_devices_with_telemetry(pool)
+    devs = [_dev_with_status(r) for r in rows]
     links = await _ensure_links_or_infer(pool)
     report = compute_blast_radius(
         devices=devs,
@@ -1030,7 +1048,8 @@ async def simulate_impact(payload: SimulationImpactRequest):
 @app.post("/api/v1/simulate/apply-faults")
 async def apply_faults_to_live_db(payload: ApplyFaultsRequest):
     pool = await get_db_pool()
-    devs = [dict(r) for r in await repository.fetch_devices_with_telemetry(pool)]
+    rows = await repository.fetch_devices_with_telemetry(pool)
+    devs = [_dev_with_status(r) for r in rows]
     links = await _ensure_links_or_infer(pool)
     report = compute_blast_radius(
         devices=devs,

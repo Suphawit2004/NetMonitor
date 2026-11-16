@@ -120,3 +120,44 @@ async def test_simulate_impact_endpoint_with_mocked_db():
             assert data["summary"]["unreachable_count"] == 6
             assert "affected_rooms" not in data
             assert "affected_vlans" not in data
+
+
+def test_offline_backup_router_excluded_from_active_root_gateways():
+    devices = [
+        {"id": "16", "name": "RTR-PRIMARY", "dtype": "router", "status": "warning", "floor": 1, "x": 100.0, "y": 100.0},
+        {"id": "17", "name": "RTR-BACKUP", "dtype": "router", "status": "offline", "floor": 2, "x": 100.0, "y": 100.0},
+        {"id": "1", "name": "Switch-Core", "dtype": "switch", "status": "online", "floor": 2, "x": 200.0, "y": 100.0},
+        {"id": "9", "name": "AP-01", "dtype": "ap", "status": "online", "floor": 2, "x": 250.0, "y": 150.0},
+    ]
+    links = [
+        {"id": "1", "source_device_id": "16", "target_device_id": "1", "link_type": "wan", "bandwidth_mbps": 10000, "is_redundant": False},
+        {"id": "2", "source_device_id": "17", "target_device_id": "1", "link_type": "wan", "bandwidth_mbps": 10000, "is_redundant": False},
+        {"id": "3", "source_device_id": "1", "target_device_id": "9", "link_type": "access", "bandwidth_mbps": 1000, "is_redundant": False},
+    ]
+    report = compute_blast_radius(devices, links, down_device_ids=["16"], down_link_ids=[], include_spof=False)
+    by_id = {item["device_id"]: item for item in report["device_impacts"]}
+    assert by_id["1"]["impact_state"] == "unreachable"
+    assert by_id["9"]["impact_state"] == "unreachable"
+
+
+@pytest.mark.asyncio
+async def test_duplicate_undirected_link_rejected_with_400():
+    mock_pool = AsyncMock()
+    with (
+        patch("app.main.get_db_pool", return_value=mock_pool),
+        patch("app.repository.find_existing_topology_link", return_value={"id": 99}),
+    ):
+        transport = ASGITransport(app=app)
+        async with AsyncClient(transport=transport, base_url="http://test") as ac:
+            res = await ac.post(
+                "/api/v1/topology/links",
+                json={
+                    "source_device_id": "3",
+                    "target_device_id": "1",
+                    "link_type": "trunk",
+                    "bandwidth_mbps": 10000,
+                    "is_redundant": False,
+                },
+            )
+            assert res.status_code == 400
+            assert "already exists" in res.json()["detail"].lower()

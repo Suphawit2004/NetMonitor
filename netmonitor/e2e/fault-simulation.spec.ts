@@ -78,4 +78,91 @@ test.describe('Device-to-Device Failure Impact Simulation', () => {
     await firstOutageRow.click();
     await expect(page).toHaveURL(/.*#\/detail\?id=/);
   });
+
+  test('TC-SIM-04: Link Edit mode creates new link, rejects duplicate undirected pair, and deletes via SVG X badge with DB cleanup', async ({ page }) => {
+    await page.getByRole('tab', { name: /แผนผัง|Floor Plan/i }).click();
+    await page.getByRole('button', { name: /^2D$/i }).click();
+
+    const { devs, links } = await page.evaluate(async () => {
+      const [dRes, lRes] = await Promise.all([
+        fetch('/api/v1/devices').then(r => r.json()),
+        fetch('/api/v1/topology/links').then(r => r.json()),
+      ]);
+      return { devs: dRes, links: lRes };
+    });
+    const f1Devs = devs.filter((d: { floor: number }) => d.floor === 1);
+    const linkedPairs = new Set<string>(
+      links.map((l: { source_device_id: string; target_device_id: string }) => {
+        const a = String(l.source_device_id);
+        const b = String(l.target_device_id);
+        return a < b ? `${a}::${b}` : `${b}::${a}`;
+      }),
+    );
+
+    let pairA: { id: string; name: string } | null = null;
+    let pairB: { id: string; name: string } | null = null;
+    for (let i = 0; i < f1Devs.length && !pairA; i++) {
+      for (let j = i + 1; j < f1Devs.length; j++) {
+        const a = String(f1Devs[i].id);
+        const b = String(f1Devs[j].id);
+        const key = a < b ? `${a}::${b}` : `${b}::${a}`;
+        if (!linkedPairs.has(key)) {
+          pairA = f1Devs[i];
+          pairB = f1Devs[j];
+          break;
+        }
+      }
+    }
+    expect(pairA).toBeTruthy();
+    expect(pairB).toBeTruthy();
+
+    const cleanA = pairA!.name.replace(/^["']+|["']+$/g, '').trim();
+    const cleanB = pairB!.name.replace(/^["']+|["']+$/g, '').trim();
+    const pinA = page.locator(`div[class*="_device_"][aria-label*="${cleanA}"]`).first();
+    const pinB = page.locator(`div[class*="_device_"][aria-label*="${cleanB}"]`).first();
+
+    let createdId: string | null = null;
+    try {
+      await page.getByTestId('toggle-link-edit-btn').click();
+      await expect(page.getByTestId('link-edit-bar')).toBeVisible();
+
+      const svgLayer = page.locator('svg[aria-label="Network topology links"]');
+      const initialLines = await svgLayer.locator('line[class*="lineBase"]').count();
+
+      // 1. Connect A -> B
+      await pinA.click({ force: true });
+      await pinB.click({ force: true });
+      await expect(svgLayer.locator('line[class*="lineBase"]')).toHaveCount(initialLines + 1, { timeout: 5000 });
+
+      const updatedLinks = await page.evaluate(() => fetch('/api/v1/topology/links').then(r => r.json()));
+      const created = updatedLinks.find(
+        (l: { id: string; auto_inferred: boolean; source_device_id: string; target_device_id: string }) =>
+          !l.auto_inferred &&
+          ((l.source_device_id === pairA!.id && l.target_device_id === pairB!.id) ||
+            (l.source_device_id === pairB!.id && l.target_device_id === pairA!.id)),
+      );
+      expect(created).toBeTruthy();
+      createdId = created.id;
+
+      // 2. Clicking B -> A again prevents duplicate link creation
+      await pinB.click({ force: true });
+      await pinA.click({ force: true });
+      await expect(svgLayer.locator('line[class*="lineBase"]')).toHaveCount(initialLines + 1);
+
+      // 3. Delete via SVG X badge cleanly removes the link from UI and Postgres
+      const deleteBadge = svgLayer.locator('g[class*="deleteBadge"]').last();
+      await deleteBadge.click();
+      await expect(svgLayer.locator('line[class*="lineBase"]')).toHaveCount(initialLines, { timeout: 5000 });
+
+      const afterDeleteLinks = await page.evaluate(() => fetch('/api/v1/topology/links').then(r => r.json()));
+      expect(afterDeleteLinks.some((l: { id: string }) => l.id === createdId)).toBe(false);
+      createdId = null;
+
+      await page.getByTestId('toggle-link-edit-btn').click();
+    } finally {
+      if (createdId) {
+        await page.evaluate(id => fetch(`/api/v1/topology/links/${id}`, { method: 'DELETE' }), createdId);
+      }
+    }
+  });
 });

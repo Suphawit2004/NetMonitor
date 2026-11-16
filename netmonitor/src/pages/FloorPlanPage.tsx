@@ -54,12 +54,15 @@ export default function FloorPlanPage({
     moveDevice, commitDevicePosition, toggleLock, setFloorLockAll,
   } = useNetwork()
   const {
+    links,
     isSimMode,
     isLinkEditMode,
     showLinks,
+    setSimMode,
     toggleSimMode,
     toggleLinkEditMode,
     toggleShowLinks,
+    resetSimulation,
     createLink,
     reInferLinks,
   } = useFaultSim()
@@ -78,6 +81,22 @@ export default function FloorPlanPage({
       return
     }
     const srcDev = devices.find(d => d.id === linkSourceId)
+    const alreadyConnected = links.some(
+      l =>
+        !l.source_port &&
+        !l.target_port &&
+        ((l.source_device_id === linkSourceId && l.target_device_id === dev.id) ||
+          (l.source_device_id === dev.id && l.target_device_id === linkSourceId)),
+    )
+    if (alreadyConnected) {
+      setLinkSourceId(null)
+      showToast(
+        t('topology.alreadyLinked', { src: srcDev?.name ?? linkSourceId, dst: dev.name }),
+        'info',
+      )
+      return
+    }
+
     // Auto-select sensible link type & bandwidth from the two devices
     let autoType: LinkType = 'access'
     let autoBw = 1000
@@ -91,19 +110,24 @@ export default function FloorPlanPage({
       autoBw = 10000
     }
 
-    await createLink({
-      source_device_id: linkSourceId,
-      target_device_id: dev.id,
-      link_type: autoType,
-      bandwidth_mbps: autoBw,
-      is_redundant: linkRedundant,
-    })
-    setLinkSourceId(null)
-    showToast(
-      t('topology.linkCreated', { src: srcDev?.name ?? linkSourceId, dst: dev.name }),
-      'success',
-    )
-  }, [linkSourceId, devices, createLink, linkRedundant, showToast, t])
+    try {
+      await createLink({
+        source_device_id: linkSourceId,
+        target_device_id: dev.id,
+        link_type: autoType,
+        bandwidth_mbps: autoBw,
+        is_redundant: linkRedundant,
+      })
+      setLinkSourceId(null)
+      showToast(
+        t('topology.linkCreated', { src: srcDev?.name ?? linkSourceId, dst: dev.name }),
+        'success',
+      )
+    } catch (err) {
+      setLinkSourceId(null)
+      showToast(err instanceof Error ? err.message : t('common.error'), 'error')
+    }
+  }, [linkSourceId, devices, links, createLink, linkRedundant, showToast, t])
 
   const handleToggleLinkEdit = useCallback(() => {
     setLinkSourceId(null)
@@ -336,8 +360,13 @@ export default function FloorPlanPage({
               className={`${styles.simBtn} ${isSimMode ? styles.simBtnActive : ''}`}
               onClick={() => {
                 setLinkSourceId(null)
-                if (!isSimMode) setSidebarOpen(false)
-                toggleSimMode()
+                if (isSimMode) {
+                  resetSimulation()
+                  setSimMode(false)
+                } else {
+                  setSidebarOpen(false)
+                  toggleSimMode()
+                }
               }}
               title={t('sim.toggleSimTitle')}
               type="button"

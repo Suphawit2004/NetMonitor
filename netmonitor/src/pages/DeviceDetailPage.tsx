@@ -347,8 +347,8 @@ export default function DeviceDetailPage({
                 <div className={styles.sectionTitle}>
                   {t('detail.interfacesUp', { used: detail.portsUsed, total: detail.portsTotal })}
                 </div>
-                {detail.ports.map(port => (
-                  <div key={port.num} className={styles.portItem}>
+                {detail.ports.map((port, idx) => (
+                  <div key={`${port.num}-${idx}`} className={styles.portItem}>
                     <span className={styles.portNum}>{port.num}</span>
                     <span className={`${styles.portBadge} ${styles[port.status]}`}>
                       {port.status.toUpperCase()}
@@ -389,9 +389,9 @@ export default function DeviceDetailPage({
                 {neighbors.length === 0 && (
                   <div className={styles.noneText}>{t('detail.noNeighbors')}</div>
                 )}
-                {neighbors.map(({ port, peer }) => (
+                {neighbors.map(({ port, peer }, idx) => (
                   <button
-                    key={port.num}
+                    key={`${port.num}-${peer.id}-${idx}`}
                     className={styles.neighborItem}
                     onClick={() => onNavigateDevice(peer)}
                     title={t('detail.viewPeer', { name: peer.name })}
@@ -577,7 +577,7 @@ export default function DeviceDetailPage({
                       const color = pct >= 80 ? 'var(--status-warning)' : pct >= 50 ? 'var(--accent-primary)' : 'var(--status-online)'
                       const y = 12 + i * 20
                       return (
-                        <g key={p.num}>
+                        <g key={`${p.num}-${i}`}>
                           <text x="8" y={y + 10} fontSize="12" fill="var(--text-muted)">{p.num}</text>
                           <rect x="34" y={y} width="200" height="12" rx="3" fill="var(--bg-elevated)" />
                           <rect x="34" y={y} width={width} height="12" rx="3" fill={color} />

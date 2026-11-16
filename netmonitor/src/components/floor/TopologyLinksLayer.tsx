@@ -17,6 +17,41 @@ interface Props {
   onFloorChange?: (floor: 1 | 2) => void
 }
 
+const BADGE_T_CANDIDATES = [0.5, 0.32, 0.68, 0.22, 0.78]
+const PIN_CLEARANCE_PX = 26
+
+function pickClearBadgePoint(
+  x1: number,
+  y1: number,
+  x2: number,
+  y2: number,
+  floorPins: Device[],
+  srcId: string,
+  dstId: string,
+): { mx: number; my: number } {
+  let best = { mx: (x1 + x2) / 2, my: (y1 + y2) / 2 }
+  let bestMinDist = -1
+
+  for (const tFrac of BADGE_T_CANDIDATES) {
+    const cx = x1 + (x2 - x1) * tFrac
+    const cy = y1 + (y2 - y1) * tFrac
+    let minDist = Infinity
+    for (const pin of floorPins) {
+      if (pin.id === srcId || pin.id === dstId) continue
+      const d = Math.hypot(cx - pin.x, cy - pin.y)
+      if (d < minDist) minDist = d
+    }
+    if (minDist >= PIN_CLEARANCE_PX) {
+      return { mx: cx, my: cy }
+    }
+    if (minDist > bestMinDist) {
+      bestMinDist = minDist
+      best = { mx: cx, my: cy }
+    }
+  }
+  return best
+}
+
 function TopologyLinksLayer({
   allDevices,
   currentFloor,
@@ -34,6 +69,11 @@ function TopologyLinksLayer({
   const deviceById = useMemo(
     () => new Map(allDevices.map(d => [d.id, d])),
     [allDevices],
+  )
+
+  const floorPins = useMemo(
+    () => allDevices.filter(d => d.floor === currentFloor),
+    [allDevices, currentFloor],
   )
 
   const renderedLinks = useMemo(() => {
@@ -54,8 +94,7 @@ function TopologyLinksLayer({
         const y1 = src.y
         const x2 = dst.x
         const y2 = dst.y
-        const mx = (x1 + x2) / 2
-        const my = (y1 + y2) / 2
+        const { mx, my } = pickClearBadgePoint(x1, y1, x2, y2, floorPins, src.id, dst.id)
 
         return {
           link,
@@ -71,7 +110,7 @@ function TopologyLinksLayer({
         }
       })
       .filter((x): x is NonNullable<typeof x> => x !== null)
-  }, [links, deviceById, currentFloor, linkStates, isSimMode])
+  }, [links, deviceById, floorPins, currentFloor, linkStates, isSimMode])
 
   if (renderedLinks.length === 0) return null
 

@@ -285,6 +285,35 @@ async def fetch_all_interfaces(pool: asyncpg.Pool) -> List[asyncpg.Record]:
     )
 
 
+async def find_existing_topology_link(
+    pool: asyncpg.Pool,
+    source_device_id: int,
+    target_device_id: int,
+    source_port: Optional[str],
+    target_port: Optional[str],
+) -> Optional[asyncpg.Record]:
+    """Finds an existing undirected topology link between two devices on the same ports (treating NULL ports as equal)."""
+    sp = (source_port or "").strip()
+    tp = (target_port or "").strip()
+    return await pool.fetchrow(
+        """
+        SELECT id FROM topology_links
+        WHERE (
+            (source_device_id = $1 AND target_device_id = $2
+             AND COALESCE(source_port, '') = $3 AND COALESCE(target_port, '') = $4)
+            OR
+            (source_device_id = $2 AND target_device_id = $1
+             AND COALESCE(source_port, '') = $4 AND COALESCE(target_port, '') = $3)
+        )
+        LIMIT 1
+        """,
+        source_device_id,
+        target_device_id,
+        sp,
+        tp,
+    )
+
+
 async def insert_topology_link(
     pool: asyncpg.Pool,
     source_device_id: int,

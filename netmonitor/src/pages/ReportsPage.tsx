@@ -446,11 +446,18 @@ export default function ReportsPage({ onDeviceInfo, onOpenFullDetail }: Props) {
             // eslint-disable-next-line react-hooks/purity
             const minutesAgo = alert.timeMinutesAgo ?? (alert.createdAt ? Math.max(1, Math.round((Date.now() - new Date(alert.createdAt).getTime()) / 60000)) : 0)
             return (
-              <button
+              <div
                 key={`${device.id}-${alert.id}`}
-                type="button"
+                role="button"
+                tabIndex={0}
                 className={styles.alertItem}
                 onClick={() => onDeviceInfo(device)}
+                onKeyDown={e => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault()
+                    onDeviceInfo(device)
+                  }
+                }}
                 title={t('reports.openInfo', { name: device.name })}
               >
                 <span className={styles.alertIcon} aria-hidden="true" style={{ display: 'inline-flex', alignItems: 'center' }}>
@@ -480,7 +487,7 @@ export default function ReportsPage({ onDeviceInfo, onOpenFullDetail }: Props) {
                     <span>รับทราบ</span>
                   </button>
                 )}
-              </button>
+              </div>
             )
           })
         )}

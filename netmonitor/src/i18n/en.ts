@@ -501,6 +501,7 @@ const en = {
     pickSecondDevice: 'Selected {{name}} — click target device to connect',
     selectTargetPrompt: 'Selected {{name}} — click target device',
     linkCreated: 'Connected {{src}} ↔ {{dst}}',
+    alreadyLinked: '{{src}} and {{dst}} are already connected — click × on the line to remove',
     redundantLabel: 'Backup link',
     autoInferBtn: 'Auto-Connect',
     hideLinks: 'Hide lines',

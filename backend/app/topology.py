@@ -170,6 +170,9 @@ def infer_topology_links(
 
 
 def _find_root_gateways(devices: List[Dict[str, Any]], links: List[Dict[str, Any]]) -> List[str]:
+    online_routers = [str(d["id"]) for d in devices if d.get("dtype") == "router" and d.get("status") != "offline"]
+    if online_routers:
+        return online_routers
     routers = [str(d["id"]) for d in devices if d.get("dtype") == "router"]
     if routers:
         return routers

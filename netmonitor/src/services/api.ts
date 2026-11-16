@@ -676,7 +676,20 @@ export async function createTopologyLink(input: {
       saveStoredLinks([...existing, created])
       return created
     }
+    if (res.status >= 400 && res.status < 500) {
+      let detail = `Failed to create topology link (${res.status})`
+      try {
+        const errBody = (await res.json()) as { detail?: string }
+        if (errBody?.detail) detail = errBody.detail
+      } catch {
+        // ignore JSON parse error
+      }
+      throw new Error(detail)
+    }
   } catch (err) {
+    if (err instanceof Error && !(err instanceof TypeError)) {
+      throw err
+    }
     console.warn('Backend API unavailable for createTopologyLink, using local fallback', err)
   }
   const existing = loadStoredLinks(db)
