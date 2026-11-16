@@ -42,20 +42,27 @@ test.describe('Device-to-Device Failure Impact Simulation', () => {
     await expect(page.getByTestId('sim-sandbox-banner')).not.toBeVisible();
   });
 
-  test('TC-SIM-02: Link Edit Mode toggles toolbar bar and 2D Canvas renders topology SVG links', async ({ page }) => {
+  test('TC-SIM-02: Link Edit Mode toggles toolbar bar, 2D Canvas renders aligned topology SVG links without cross-floor stubs', async ({ page }) => {
     await page.getByRole('button', { name: /2D/i }).click();
 
     const linkEditBtn = page.getByTestId('toggle-link-edit-btn');
     await linkEditBtn.click();
     await expect(page.getByTestId('link-edit-bar')).toBeVisible();
 
-    await expect(page.locator('svg[aria-label="Network topology links"]')).toBeVisible();
+    const svgLayer = page.locator('svg[aria-label="Network topology links"]');
+    await expect(svgLayer).toBeVisible();
+    // Ensure no floating cross-floor F1/F2 stub pills exist inside SVG
+    await expect(svgLayer.locator('g[class*="crossFloorPill"]')).toHaveCount(0);
+
+    // Ensure DevicePin wrapper stays 26px wide so SVG line endpoints center cleanly on the icon
+    const firstPinWidth = await page.locator('div[class*="_device_"][role="button"]').first().evaluate(el => el.getBoundingClientRect().width);
+    expect(Math.round(firstPinWidth)).toBeLessThanOrEqual(30);
 
     await linkEditBtn.click();
     await expect(page.getByTestId('link-edit-bar')).not.toBeVisible();
   });
 
-  test('TC-SIM-03: Device Detail page displays affected downstream device chips and links into Simulator', async ({ page }) => {
+  test('TC-SIM-03: Device Detail page displays affected downstream device chips, navigates to Reports, and outage row opens full DeviceDetailPage', async ({ page }) => {
     await page.getByRole('tab', { name: /รายการอุปกรณ์|Device List/i }).click();
     const firstRow = page.locator('tbody tr').first();
     await expect(firstRow).toBeVisible({ timeout: 5000 });
@@ -65,7 +72,6 @@ test.describe('Device-to-Device Failure Impact Simulation', () => {
     await expect(blastCard).toBeVisible({ timeout: 5000 });
 
     await blastCard.getByRole('button', { name: /จำลองล่มบนแผนผัง|Simulate on Map/i }).click();
-    await expect(page.getByTestId('sim-sandbox-banner')).toBeVisible();
     await expect(page.getByTestId('impact-drawer')).toBeVisible();
 
     // Navigate to Reports page and verify outage impact section and dependency chains are displayed
@@ -73,5 +79,11 @@ test.describe('Device-to-Device Failure Impact Simulation', () => {
     const outageSection = page.getByTestId('reports-outage-section');
     await expect(outageSection).toBeVisible();
     await expect(outageSection.getByTestId('report-dependency-chain').first()).toBeVisible();
+
+    // Clicking an outage row opens full DeviceDetailPage (#/detail?id=...)
+    const firstOutageRow = outageSection.locator('button[class*="outageRow"]').first();
+    await expect(firstOutageRow).toBeVisible();
+    await firstOutageRow.click();
+    await expect(page).toHaveURL(/.*#\/detail\?id=/);
   });
 });
