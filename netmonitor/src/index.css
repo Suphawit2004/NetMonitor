@@ -39,43 +39,43 @@
 }
 
 [data-theme="light"] {
-  /* ── Rich Warm Beige / Sand Light Theme (สีเนื้อเข้มขึ้น นวลตา อ่านชัด) ── */
-  --bg-canvas: #e5d8c5;
-  --bg-surface: #f2e8d9;
-  --bg-elevated: #eadcc8;
-  --bg-subtle: #decbb2;
-  --border-subtle: #d6c3a9;
-  --border-default: #bfa889;
-  --border-hover: #967e60;
-  --border-focus: #1d4ed8;
+  /* ── Deep Warm Tan / Kraft-Brown Light Theme (สีเนื้อเข้มแซมน้ำตาล อ่านชัด สบายตา) ── */
+  --bg-canvas: #d5bfa6;
+  --bg-surface: #e7d7c1;
+  --bg-elevated: #decab1;
+  --bg-subtle: #cfb79b;
+  --border-subtle: #c5ab8d;
+  --border-default: #aa8c6b;
+  --border-hover: #836647;
+  --border-focus: #1e40af;
 
-  --text-primary: #1f1710;
-  --text-secondary: #3f3124;
-  --text-muted: #574636;
-  --text-subtle: #665442;
+  --text-primary: #1a1109;
+  --text-secondary: #332417;
+  --text-muted: #493524;
+  --text-subtle: #5a4430;
 
-  --accent-primary: #1d4ed8;
-  --accent-subtle: rgba(29, 78, 216, 0.10);
-  --accent-hover: #1e40af;
+  --accent-primary: #1e40af;
+  --accent-subtle: rgba(30, 64, 175, 0.12);
+  --accent-hover: #1e3a8a;
 
-  --status-online: #047857;
-  --status-online-bg: #dff2e8;
-  --status-warning: #b45309;
-  --status-warning-bg: #fcebcf;
-  --status-critical: #dc2626;
-  --status-critical-bg: #fadede;
-  --status-unmanaged: #665442;
+  --status-online: #065f46;
+  --status-online-bg: #d3ecd9;
+  --status-warning: #92400e;
+  --status-warning-bg: #f6e0b8;
+  --status-critical: #b91c1c;
+  --status-critical-bg: #f5d3d3;
+  --status-unmanaged: #5a4430;
 
-  --chart-inbound: #059669;
-  --chart-outbound: #1d4ed8;
+  --chart-inbound: #047857;
+  --chart-outbound: #1e40af;
 
-  --shadow-sm: 0 1px 2px 0 rgba(48, 34, 18, 0.07);
-  --shadow-md: 0 4px 12px -2px rgba(48, 34, 18, 0.10);
-  --shadow-lg: 0 10px 24px -4px rgba(48, 34, 18, 0.14);
+  --shadow-sm: 0 1px 2px 0 rgba(36, 22, 10, 0.10);
+  --shadow-md: 0 4px 12px -2px rgba(36, 22, 10, 0.14);
+  --shadow-lg: 0 10px 24px -4px rgba(36, 22, 10, 0.18);
 
-  --scrollbar-track: #e5d8c5;
-  --scrollbar-thumb: #bfa889;
-  --scrollbar-thumb-hover: #967e60;
+  --scrollbar-track: #d5bfa6;
+  --scrollbar-thumb: #aa8c6b;
+  --scrollbar-thumb-hover: #836647;
 }
 
 /* ─── Reset & Base ─── */
