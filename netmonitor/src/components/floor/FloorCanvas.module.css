@@ -600,93 +600,94 @@
    Light Mode Theme Adaptation for 2D Canvas
    ───────────────────────────────────────────── */
 :global([data-theme="light"]) .floorPlan {
-  border: 2px dashed rgba(2, 132, 199, 0.45);
-  box-shadow: 0 0 20px rgba(2, 132, 199, 0.12), 0 10px 30px rgba(15, 23, 42, 0.08);
+  border: 1.5px dashed rgba(100, 116, 139, 0.45);
+  box-shadow: 0 4px 18px -2px rgba(15, 23, 42, 0.06);
 }
 
 :global([data-theme="light"]) .gridInner {
   background: #ffffff;
   background-image:
-    linear-gradient(rgba(189, 200, 214, 0.45) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(189, 200, 214, 0.45) 1px, transparent 1px);
+    linear-gradient(rgba(203, 213, 225, 0.35) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(203, 213, 225, 0.35) 1px, transparent 1px);
 }
 
 :global([data-theme="light"]) .room {
-  border-color: rgba(2, 132, 199, 0.65);
-  background: rgba(2, 132, 199, 0.08);
-  box-shadow: 0 4px 14px rgba(15, 23, 42, 0.06);
+  border-width: 1.5px;
+  border-color: rgba(2, 132, 199, 0.45);
+  background: rgba(14, 165, 233, 0.04);
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.04);
 }
 
 :global([data-theme="light"]) .roomLabel {
-  color: var(--text-primary);
-  background: rgba(255, 255, 255, 0.92);
+  color: var(--text-secondary);
+  background: rgba(255, 255, 255, 0.96);
   border: 1px solid var(--border-default);
-  box-shadow: 0 2px 6px rgba(15, 23, 42, 0.08);
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.05);
 }
 
 :global([data-theme="light"]) .roomStairs {
   border-color: #d97706 !important;
   background: repeating-linear-gradient(
     45deg,
-    rgba(245, 158, 11, 0.1),
-    rgba(245, 158, 11, 0.1) 8px,
-    rgba(245, 158, 11, 0.2) 8px,
-    rgba(245, 158, 11, 0.2) 12px
+    rgba(245, 158, 11, 0.06),
+    rgba(245, 158, 11, 0.06) 8px,
+    rgba(245, 158, 11, 0.12) 8px,
+    rgba(245, 158, 11, 0.12) 12px
   ) !important;
 }
 
 :global([data-theme="light"]) .roomStairs .roomLabel {
   color: #92400e;
-  background: rgba(254, 243, 199, 0.95);
-  border-color: rgba(217, 119, 6, 0.5);
+  background: #fffbeb;
+  border-color: rgba(217, 119, 6, 0.45);
 }
 
 :global([data-theme="light"]) .roomServer {
   border-color: #6366f1 !important;
-  background: radial-gradient(ellipse at top left, rgba(99, 102, 241, 0.15), rgba(241, 245, 249, 0.95)) !important;
-  box-shadow: inset 0 0 16px rgba(99, 102, 241, 0.12);
+  background: rgba(99, 102, 241, 0.05) !important;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.04);
 }
 
 :global([data-theme="light"]) .roomServer .roomLabel {
   color: #3730a3;
-  background: rgba(238, 242, 255, 0.95);
-  border-color: rgba(99, 102, 241, 0.5);
+  background: #eef2ff;
+  border-color: rgba(99, 102, 241, 0.4);
 }
 
 :global([data-theme="light"]) .roomRestroom {
   border-color: #0891b2 !important;
-  background: radial-gradient(ellipse at top left, rgba(6, 182, 212, 0.15), rgba(241, 245, 249, 0.95)) !important;
-  box-shadow: inset 0 0 16px rgba(6, 182, 212, 0.12);
+  background: rgba(6, 182, 212, 0.05) !important;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.04);
 }
 
 :global([data-theme="light"]) .roomRestroom .roomLabel {
   color: #155e75;
-  background: rgba(236, 254, 255, 0.95);
-  border-color: rgba(6, 182, 212, 0.5);
+  background: #ecfeff;
+  border-color: rgba(6, 182, 212, 0.4);
 }
 
 :global([data-theme="light"]) .room.roomOutage {
   border-color: #ef4444 !important;
-  background: rgba(239, 68, 68, 0.14) !important;
-  box-shadow: 0 0 18px rgba(239, 68, 68, 0.25), 0 4px 14px rgba(15, 23, 42, 0.08);
+  background: rgba(239, 68, 68, 0.07) !important;
+  box-shadow: 0 2px 8px rgba(220, 38, 38, 0.08), 0 1px 3px rgba(15, 23, 42, 0.05);
 }
 
 :global([data-theme="light"]) .room.roomOutage .roomLabel {
   color: #991b1b;
-  background: rgba(254, 226, 226, 0.95);
-  border-color: rgba(239, 68, 68, 0.5);
+  background: #fef2f2;
+  border-color: rgba(220, 38, 38, 0.4);
 }
 
 :global([data-theme="light"]) .room.roomDegraded {
   border-color: #d97706 !important;
-  background: rgba(245, 158, 11, 0.14) !important;
-  box-shadow: 0 0 14px rgba(245, 158, 11, 0.22), 0 4px 14px rgba(15, 23, 42, 0.08);
+  background: rgba(245, 158, 11, 0.08) !important;
+  box-shadow: 0 2px 8px rgba(217, 119, 6, 0.08), 0 1px 3px rgba(15, 23, 42, 0.05);
 }
 
 :global([data-theme="light"]) .room.roomDegraded .roomLabel {
   color: #92400e;
-  background: rgba(254, 243, 199, 0.95);
-  border-color: rgba(245, 158, 11, 0.5);
+  background: #fffbeb;
+  border-color: rgba(217, 119, 6, 0.4);
 }
 
 :global([data-theme="light"]) .stairLink {

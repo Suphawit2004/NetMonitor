@@ -582,3 +582,38 @@
 .btnSimRestore:hover {
   background: rgba(16, 185, 129, 0.25);
 }
+
+/* Light Theme adaptation for crisp architectural readability */
+:global([data-theme="light"]) .online {
+  background: #ffffff;
+  border-color: #059669;
+  color: #047857;
+  box-shadow: 0 1px 4px rgba(15, 23, 42, 0.09);
+}
+:global([data-theme="light"]) .warning {
+  background: #ffffff;
+  border-color: #d97706;
+  color: #b45309;
+  box-shadow: 0 1px 4px rgba(15, 23, 42, 0.09);
+}
+:global([data-theme="light"]) .offline {
+  background: #ffffff;
+  border-color: #dc2626;
+  color: #dc2626;
+  box-shadow: 0 1px 4px rgba(15, 23, 42, 0.09);
+}
+:global([data-theme="light"]) .dot_online,
+:global([data-theme="light"]) .dot_warning,
+:global([data-theme="light"]) .dot_offline {
+  box-shadow: none;
+}
+:global([data-theme="light"]) .lockBadge {
+  background: #ffffff;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.14);
+}
+:global([data-theme="light"]) .name {
+  color: #0f172a;
+  background: rgba(255, 255, 255, 0.96);
+  border-color: #cbd5e1;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.07);
+}

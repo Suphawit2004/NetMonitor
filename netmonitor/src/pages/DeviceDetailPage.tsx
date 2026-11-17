@@ -277,10 +277,10 @@ export default function DeviceDetailPage({
               title={onNavigateFloor ? `คลิกเพื่อไปยัง ${t('floor.tab', { floor: device.floor })}` : undefined}
               style={{ cursor: onNavigateFloor ? 'pointer' : 'default' }}
             >
-              <div className={styles.infoLabel} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <div className={styles.infoLabel} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 6 }}>
                 <span>Location</span>
                 {onNavigateFloor && (
-                  <span style={{ fontSize: 12, color: 'var(--accent-primary)', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                  <span style={{ fontSize: 12, color: 'var(--accent-primary)', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: 3, whiteSpace: 'nowrap', flexShrink: 0 }}>
                     {t('floor.tab', { floor: device.floor })} <ArrowRight size={12} />
                   </span>
                 )}

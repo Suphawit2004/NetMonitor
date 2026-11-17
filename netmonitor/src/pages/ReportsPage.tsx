@@ -261,7 +261,7 @@ export default function ReportsPage({ onDeviceInfo, onOpenFullDetail }: Props) {
               <text x="60" y="56" textAnchor="middle" fontSize="20" fontWeight="700" fill="var(--text-primary)">
                 {total}
               </text>
-              <text x="60" y="74" textAnchor="middle" fontSize="12" fill="var(--text-muted)">
+              <text x="60" y="71" textAnchor="middle" fontSize="10" fontWeight="500" fill="var(--text-muted)">
                 {t('nav.list')}
               </text>
             </svg>

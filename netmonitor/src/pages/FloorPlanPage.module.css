@@ -476,6 +476,16 @@
   gap: 8px;
 }
 
+:global([data-theme="light"]) .emptyCard {
+  background: rgba(255, 255, 255, 0.96);
+  border-color: var(--border-default);
+  box-shadow: var(--shadow-lg);
+}
+
+:global([data-theme="light"]) .emptyTitle {
+  color: var(--text-primary);
+}
+
 .emptySub {
   font-size: 12px;
   color: var(--text-muted);
