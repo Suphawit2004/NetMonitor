@@ -150,8 +150,16 @@ test.describe('Device-to-Device Failure Impact Simulation', () => {
       await expect(svgLayer.locator('line[class*="lineBase"]')).toHaveCount(initialLines + 1);
 
       // 3. Delete via SVG X badge cleanly removes the link from UI and Postgres
-      const deleteBadge = svgLayer.locator('g[class*="deleteBadge"]').last();
-      await deleteBadge.click();
+      const deleteBadge = svgLayer.locator(`g[data-link-id="${createdId}"] g[class*="deleteBadge"]`);
+      await expect(deleteBadge).toBeVisible({ timeout: 5000 });
+      const [delRes] = await Promise.all([
+        page.waitForResponse(
+          res => res.url().includes(`/api/v1/topology/links/${createdId}`) && res.request().method() === 'DELETE',
+          { timeout: 10000 },
+        ),
+        deleteBadge.click({ force: true }),
+      ]);
+      expect(delRes.ok()).toBe(true);
       await expect(svgLayer.locator('line[class*="lineBase"]')).toHaveCount(initialLines, { timeout: 5000 });
 
       const afterDeleteLinks = await page.evaluate(() => fetch('/api/v1/topology/links').then(r => r.json()));

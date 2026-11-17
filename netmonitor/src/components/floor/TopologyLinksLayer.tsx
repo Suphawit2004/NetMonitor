@@ -156,7 +156,7 @@ function TopologyLinksLayer({
         const len = Math.hypot(x2 - x1, y2 - y1)
         const angleDeg = (Math.atan2(y2 - y1, x2 - x1) * 180) / Math.PI
         const { mx, my } = pickClearBadgePoint(x1, y1, x2, y2, floorPins, src.id, dst.id)
-        const hasBadge = state === 'severed' || isLinkEditMode
+        const hasBadge = (isSimMode && state === 'severed') || isLinkEditMode
         const chevron =
           isFailureFlow && len >= 44
             ? pickClearChevronPoint(x1, y1, x2, y2, floorPins, src.id, dst.id, hasBadge ? { mx, my } : null)
@@ -227,7 +227,11 @@ function TopologyLinksLayer({
             : `${src.name} ↔ ${dst.name} (${link.bandwidth_mbps} Mbps)`
 
         return (
-          <g key={link.id} className={interactive ? styles.interactiveGroup : styles.passiveGroup}>
+          <g
+            key={link.id}
+            data-link-id={link.id}
+            className={interactive ? styles.interactiveGroup : styles.passiveGroup}
+          >
             <line
               x1={x1}
               y1={y1}
@@ -284,16 +288,14 @@ function TopologyLinksLayer({
               </line>
             )}
 
-            {state === 'severed' && (
+            {isSimMode && state === 'severed' && (
               <g
                 transform={`translate(${mx}, ${my})`}
                 className={styles.severBadge}
                 onMouseDown={e => e.stopPropagation()}
                 onClick={e => {
-                  if (isSimMode) {
-                    e.stopPropagation()
-                    onToggleLinkDown(link.id)
-                  }
+                  e.stopPropagation()
+                  onToggleLinkDown(link.id)
                 }}
               >
                 <circle r={8} className={styles.severCircle} />
@@ -301,7 +303,7 @@ function TopologyLinksLayer({
               </g>
             )}
 
-            {isLinkEditMode && state !== 'severed' && (
+            {isLinkEditMode && (
               <g
                 transform={`translate(${mx}, ${my})`}
                 className={styles.deleteBadge}
