@@ -1,9 +1,11 @@
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import type { ImpactState, LinkType, TopologyLink } from '../types'
 import { useNetwork } from './networkContext'
 import * as api from '../services/api'
 import { computeBlastRadius, inferTopologyLinks } from '../services/topologyEngine'
 import { FaultSimContext, type FaultSimContextValue, type SimulationPreset } from './faultSimContext'
+
+const EMPTY_LINK_IDS = new Set<string>()
 
 export default function FaultSimProvider({ children }: { children: ReactNode }) {
   const { devices, retryDevices } = useNetwork()
@@ -16,20 +18,31 @@ export default function FaultSimProvider({ children }: { children: ReactNode }) 
   const [downDeviceIds, setDownDeviceIds] = useState<Set<string>>(() => new Set())
   const [downLinkIds, setDownLinkIds] = useState<Set<string>>(() => new Set())
 
-  // Load topology links whenever devices are available
+  const devicesRef = useRef(devices)
   useEffect(() => {
-    if (devices.length === 0) return
+    devicesRef.current = devices
+  }, [devices])
+
+  const deviceTopologyKey = useMemo(
+    () => devices.map(d => `${d.id}:${d.floor}`).join(','),
+    [devices],
+  )
+
+  // Load topology links only when device inventory or floor assignments change
+  useEffect(() => {
+    const snapshot = devicesRef.current
+    if (snapshot.length === 0) return
     let cancelled = false
     Promise.resolve().then(() => {
       if (!cancelled) setLinksLoading(true)
     })
-    api.fetchTopologyLinks(devices)
+    api.fetchTopologyLinks(snapshot)
       .then(fetched => {
         if (cancelled) return
         if (fetched.length > 0) {
           setLinks(fetched)
         } else {
-          setLinks(inferTopologyLinks(devices))
+          setLinks(inferTopologyLinks(snapshot))
         }
       })
       .finally(() => {
@@ -38,7 +51,7 @@ export default function FaultSimProvider({ children }: { children: ReactNode }) 
     return () => {
       cancelled = true
     }
-  }, [devices])
+  }, [deviceTopologyKey])
 
   const activeLinks = useMemo(
     () => (devices.length === 0 ? [] : links),
@@ -48,6 +61,19 @@ export default function FaultSimProvider({ children }: { children: ReactNode }) 
   const impactReport = useMemo(
     () => computeBlastRadius(devices, activeLinks, downDeviceIds, downLinkIds, true),
     [devices, activeLinks, downDeviceIds, downLinkIds],
+  )
+
+  const liveImpactReport = useMemo(() => {
+    const offlineIds = new Set(devices.filter(d => d.status === 'offline').map(d => d.id))
+    return computeBlastRadius(devices, activeLinks, offlineIds, EMPTY_LINK_IDS, true)
+  }, [devices, activeLinks])
+
+  const effectiveReport = useMemo(
+    () =>
+      isSimMode && (downDeviceIds.size > 0 || downLinkIds.size > 0)
+        ? impactReport
+        : liveImpactReport,
+    [isSimMode, downDeviceIds.size, downLinkIds.size, impactReport, liveImpactReport],
   )
 
   const impactMap = useMemo(() => {
@@ -211,6 +237,8 @@ export default function FaultSimProvider({ children }: { children: ReactNode }) 
       downDeviceIds,
       downLinkIds,
       impactReport,
+      liveImpactReport,
+      effectiveReport,
       impactMap,
       setSimMode,
       toggleSimMode,
@@ -237,6 +265,8 @@ export default function FaultSimProvider({ children }: { children: ReactNode }) 
       downDeviceIds,
       downLinkIds,
       impactReport,
+      liveImpactReport,
+      effectiveReport,
       impactMap,
       setSimMode,
       toggleSimMode,

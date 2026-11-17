@@ -210,15 +210,20 @@ export default function FloorCanvas({
   const isLinkEditMode = faultSim?.isLinkEditMode ?? false
   const showLinks = faultSim?.showLinks ?? true
 
+  const activeFloorReport = useMemo(() => {
+    if (!faultSim) return undefined
+    return isSimMode ? faultSim.impactReport : faultSim.liveImpactReport
+  }, [faultSim, isSimMode])
+
   const zoneImpactMap = useMemo(() => {
     const map = new Map<string, 'outage' | 'degraded'>()
-    if (!faultSim || !isSimMode) return map
-    if (faultSim.downDeviceIds.size === 0 && faultSim.downLinkIds.size === 0) return map
-    for (const z of faultSim.impactReport.affected_zones) {
+    if (!faultSim || !activeFloorReport) return map
+    if (isSimMode && faultSim.downDeviceIds.size === 0 && faultSim.downLinkIds.size === 0) return map
+    for (const z of activeFloorReport.affected_zones) {
       if (z.floor === currentFloor) map.set(z.zone, z.impact_state)
     }
     return map
-  }, [faultSim, isSimMode, currentFloor])
+  }, [faultSim, activeFloorReport, isSimMode, currentFloor])
 
   // ── 0. คำนวณขนาดและสัดส่วนอาคารจริงจากแผนที่ดาวเทียม ───────────────
   const buildingDim = useMemo(() => getBuildingRealDimensions(), [currentFloor])
@@ -817,8 +822,8 @@ export default function FloorCanvas({
               planW={PLAN_W}
               planH={PLAN_H}
               links={faultSim.links}
-              linkStates={faultSim.impactReport.link_states}
-              impactReport={faultSim.impactReport}
+              linkStates={(activeFloorReport ?? faultSim.impactReport).link_states}
+              impactReport={activeFloorReport ?? faultSim.impactReport}
               downLinkIds={faultSim.downLinkIds}
               isSimMode={isSimMode}
               isLinkEditMode={isLinkEditMode}

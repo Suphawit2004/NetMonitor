@@ -4,6 +4,31 @@ import * as api from '../services/api'
 import { getStoredBuildingBounds, canvasToGps } from '../services/mapGeo'
 import { NetworkContext, type NetworkContextValue } from './networkContext'
 
+const LIVE_POLL_INTERVAL_MS = 15_000
+const MUTATION_GUARD_MS = 2_500
+
+function deviceSnapshotKey(list: Device[]): string {
+  return list
+    .map(d => [
+      d.id,
+      d.name,
+      d.dtype,
+      d.status,
+      d.floor,
+      d.x,
+      d.y,
+      d.locked ? 1 : 0,
+      d.ip ?? '',
+      d.model ?? '',
+      d.latitude ?? '',
+      d.longitude ?? '',
+      d.altitude ?? '',
+      d.target_room ?? '',
+      (d.services ?? []).join('\u0001'),
+    ].join('|'))
+    .join('\n')
+}
+
 export default function NetworkProvider({ children }: { children: ReactNode }) {
   const [devices, setDevices] = useState<Device[]>([])
   const [loading, setLoading] = useState(true)
@@ -17,6 +42,8 @@ export default function NetworkProvider({ children }: { children: ReactNode }) {
 
   const loadSeq = useRef(0)
   const mountedRef = useRef(true)
+  const lastMutationAtRef = useRef(0)
+  const bgPollInFlightRef = useRef(false)
   // StrictMode จะ unmount/remount จำลอง — ต้อง set กลับเป็น true ทุกครั้งที่ mount
   useEffect(() => {
     mountedRef.current = true
@@ -47,7 +74,50 @@ export default function NetworkProvider({ children }: { children: ReactNode }) {
       })
   }, [cancelled])
 
+  const silentRefreshDevices = useCallback(() => {
+    if (bgPollInFlightRef.current) return
+    if (Date.now() - lastMutationAtRef.current < MUTATION_GUARD_MS) return
+
+    const seq = loadSeq.current
+    bgPollInFlightRef.current = true
+    api.fetchDevices()
+      .then(list => {
+        if (cancelled(seq)) return
+        if (Date.now() - lastMutationAtRef.current < MUTATION_GUARD_MS) return
+        if (deviceSnapshotKey(list) !== deviceSnapshotKey(devicesRef.current)) {
+          setDevices(list)
+        }
+        setError(null)
+      })
+      .catch(() => {
+        // Keep current UI state untouched during silent background sync failure
+      })
+      .finally(() => {
+        bgPollInFlightRef.current = false
+      })
+  }, [cancelled])
+
   useEffect(() => { loadDevices() }, [loadDevices])
+
+  useEffect(() => {
+    const id = window.setInterval(() => {
+      if (document.visibilityState === 'visible') {
+        silentRefreshDevices()
+      }
+    }, LIVE_POLL_INTERVAL_MS)
+
+    const onVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        silentRefreshDevices()
+      }
+    }
+    document.addEventListener('visibilitychange', onVisibilityChange)
+
+    return () => {
+      window.clearInterval(id)
+      document.removeEventListener('visibilitychange', onVisibilityChange)
+    }
+  }, [silentRefreshDevices])
 
   const retryDevices = useCallback(() => {
     setLoading(true)
@@ -59,19 +129,24 @@ export default function NetworkProvider({ children }: { children: ReactNode }) {
   }, [])
 
   const addDevice = useCallback(async (input: Omit<RawDevice, 'id'>) => {
+    lastMutationAtRef.current = Date.now()
     const created = await api.createDevice(input)
+    lastMutationAtRef.current = Date.now()
     setDevices(prev => [...prev, created])
     return created
   }, [])
 
   const updateDevice = useCallback(async (id: string, patch: Partial<Omit<Device, 'id'>>) => {
+    lastMutationAtRef.current = Date.now()
     const updated = await api.updateDevice(id, patch)
+    lastMutationAtRef.current = Date.now()
     if (updated) setDevices(prev => prev.map(d => (d.id === id ? updated : d)))
     return updated
   }, [])
 
   // ระหว่างลาก pin อัปเดต state ทันที (optimistic) ทั้ง 2D canvas และ GPS (ถ้ามี)
   const moveDevice = useCallback((id: string, x: number, y: number, lat?: number, lon?: number) => {
+    lastMutationAtRef.current = Date.now()
     setDevices(prev => prev.map(d => {
       if (d.id !== id) return d
       const updated: Device = { ...d, x, y }
@@ -85,6 +160,7 @@ export default function NetworkProvider({ children }: { children: ReactNode }) {
 
   // ลากจบ → sync ตำแหน่งล่าสุดทั้ง (x, y) และ (latitude, longitude) โดยคงสถานะ locked เดิมไว้
   const commitDevicePosition = useCallback((id: string) => {
+    lastMutationAtRef.current = Date.now()
     const target = devicesRef.current.find(d => d.id === id)
     if (!target || target.x === undefined || target.y === undefined) return
 
@@ -105,6 +181,7 @@ export default function NetworkProvider({ children }: { children: ReactNode }) {
   }, [])
 
   const toggleLock = useCallback((id: string) => {
+    lastMutationAtRef.current = Date.now()
     const target = devicesRef.current.find(d => d.id === id)
     if (!target) return
     const nextLocked = !target.locked
@@ -113,6 +190,7 @@ export default function NetworkProvider({ children }: { children: ReactNode }) {
   }, [])
 
   const setLockMany = useCallback((ids: string[], locked: boolean) => {
+    lastMutationAtRef.current = Date.now()
     const idSet = new Set(ids)
     ids.forEach(id => {
       api.updateDevice(id, { locked }).catch(err => console.warn('Failed to batch lock', err))
@@ -121,6 +199,7 @@ export default function NetworkProvider({ children }: { children: ReactNode }) {
   }, [])
 
   const setFloorLockAll = useCallback((floor: 1 | 2, locked: boolean) => {
+    lastMutationAtRef.current = Date.now()
     const floorDevs = devicesRef.current.filter(d => d.floor === floor)
     floorDevs.forEach(d => {
       api.updateDevice(d.id, { locked }).catch(err => console.warn('Failed to update floor lock', err))
@@ -129,7 +208,9 @@ export default function NetworkProvider({ children }: { children: ReactNode }) {
   }, [])
 
   const removeDevice = useCallback(async (id: string) => {
+    lastMutationAtRef.current = Date.now()
     await api.deleteDevice(id)
+    lastMutationAtRef.current = Date.now()
     setDevices(prev => prev.filter(d => d.id !== id))
     setSelectedDeviceId(prev => (prev === id ? null : prev))
   }, [])

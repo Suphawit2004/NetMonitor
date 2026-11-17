@@ -6,7 +6,6 @@ import { useSimulation } from '../context/simulationContext'
 import { useFaultSim } from '../context/faultSimContext'
 import { useToast } from '../components/ui/toast-context'
 import { buildDeviceDetail } from '../services/detailFactory'
-import { computeBlastRadius } from '../services/topologyEngine'
 import { fetchAlerts, acknowledgeAlert } from '../services/api'
 import { formatTimeAgo } from '../i18n/format'
 import { DEVICE_ICON } from '../constants/deviceMeta'
@@ -49,11 +48,10 @@ export default function ReportsPage({ onDeviceInfo, onOpenFullDetail }: Props) {
   const { devices, retryDevices } = useNetwork()
   const { tick } = useSimulation()
   const {
-    links,
     isSimMode,
     downDeviceIds,
     downLinkIds,
-    impactReport: simImpactReport,
+    effectiveReport,
     simulateSingleDeviceDown,
     toggleDeviceDown,
     resetSimulation,
@@ -62,14 +60,8 @@ export default function ReportsPage({ onDeviceInfo, onOpenFullDetail }: Props) {
   const { showToast } = useToast()
   const [dbAlerts, setDbAlerts] = useState<Alert[]>([])
 
-  // Compute live outage report: if Sandbox has selected faults, use simImpactReport;
-  // otherwise evaluate blast radius from any currently offline devices in the system.
+  // Determine whether sandbox faults are active for UI counts & labels; effectiveReport handles live fallback.
   const hasSimFaults = isSimMode && (downDeviceIds.size > 0 || downLinkIds.size > 0)
-  const effectiveReport = useMemo(() => {
-    if (hasSimFaults) return simImpactReport
-    const offlineIds = new Set(devices.filter(d => d.status === 'offline').map(d => d.id))
-    return computeBlastRadius(devices, links, offlineIds, new Set(), true)
-  }, [hasSimFaults, simImpactReport, devices, links])
 
   const impactedDevices = useMemo(() => {
     const order = { root_down: 0, unreachable: 1, degraded: 2, healthy: 3 }
@@ -96,10 +88,12 @@ export default function ReportsPage({ onDeviceInfo, onOpenFullDetail }: Props) {
   }
 
   useEffect(() => {
+    let active = true
     fetchAlerts().then(list => {
-      if (list && list.length > 0) setDbAlerts(list)
+      if (active) setDbAlerts(list)
     })
-  }, [tick])
+    return () => { active = false }
+  }, [devices, tick])
 
   const total = devices.length
   const counts = useMemo<Record<DeviceStatus, number>>(() => {

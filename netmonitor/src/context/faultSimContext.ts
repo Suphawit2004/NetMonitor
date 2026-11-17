@@ -12,6 +12,8 @@ export interface FaultSimContextValue {
   downDeviceIds: Set<string>
   downLinkIds: Set<string>
   impactReport: BlastRadiusReport
+  liveImpactReport: BlastRadiusReport
+  effectiveReport: BlastRadiusReport
   impactMap: Map<string, ImpactState>
   setSimMode: (active: boolean) => void
   toggleSimMode: () => void

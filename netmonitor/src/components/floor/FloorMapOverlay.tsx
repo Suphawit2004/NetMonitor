@@ -459,12 +459,13 @@ export default function FloorMapOverlay({
     roomLayersRef.current = []
 
     const zoneStateMap = new Map<string, 'outage' | 'degraded'>()
+    const activeReport = isSimMode ? faultSim?.impactReport : faultSim?.liveImpactReport
     if (
-      isSimMode &&
       faultSim &&
-      (faultSim.downDeviceIds.size > 0 || faultSim.downLinkIds.size > 0)
+      activeReport &&
+      (!isSimMode || faultSim.downDeviceIds.size > 0 || faultSim.downLinkIds.size > 0)
     ) {
-      for (const z of faultSim.impactReport.affected_zones) {
+      for (const z of activeReport.affected_zones) {
         if (z.floor === currentFloor) zoneStateMap.set(z.zone, z.impact_state)
       }
     }
@@ -576,10 +577,11 @@ export default function FloorMapOverlay({
       return canvasToGps(40, 40, buildingBounds)
     }
 
+    const activeReport = isSimMode ? faultSim.impactReport : faultSim.liveImpactReport
     const dirResolver = buildFailureDirectionResolver(
       allDevices,
       faultSim.links,
-      faultSim.impactReport,
+      activeReport,
       faultSim.downLinkIds,
       isSimMode,
     )
@@ -590,7 +592,7 @@ export default function FloorMapOverlay({
       if (!src || !dst) return
       if (src.floor !== currentFloor || dst.floor !== currentFloor) return
 
-      let state = faultSim.impactReport.link_states[link.id] ?? 'active'
+      let state = activeReport.link_states[link.id] ?? 'active'
       if (!isSimMode && state === 'active' && (src.status === 'offline' || dst.status === 'offline')) {
         state = 'isolated'
       }

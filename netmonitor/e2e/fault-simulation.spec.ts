@@ -399,4 +399,40 @@ test.describe('Device-to-Device Failure Impact Simulation', () => {
 
     await drawer.getByRole('button', { name: /เสร็จสิ้น|Done/i }).click();
   });
+
+  test('TC-SIM-08: Live view auto-highlights impacted rooms from real offline devices and silent background sync updates outage UI', async ({ page }) => {
+    let forceCoreOffline = false;
+    await page.route('**/api/v1/devices', async route => {
+      if (route.request().method() !== 'GET') return route.continue();
+      const response = await route.fetch();
+      const json = (await response.json()) as Array<{ id: string; status: string }>;
+      if (forceCoreOffline) {
+        const patched = json.map(d => (String(d.id) === '1' ? { ...d, status: 'offline' } : d));
+        await route.fulfill({ response, json: patched });
+      } else {
+        await route.fulfill({ response, json });
+      }
+    });
+
+    await page.goto('/');
+    await page.waitForLoadState('domcontentloaded');
+    await page.getByRole('button', { name: /^2D$/i }).click();
+    await page.getByRole('tab', { name: /ชั้น 1|Floor 1/i }).click();
+
+    // Confirm ImpactDrawer is NOT open (pure live monitoring mode)
+    await expect(page.getByTestId('impact-drawer')).not.toBeVisible();
+
+    // Flip live DB payload via backend poll route and trigger tab-visibility background sync
+    forceCoreOffline = true;
+    const [pollRes] = await Promise.all([
+      page.waitForResponse(r => r.url().endsWith('/api/v1/devices') && r.request().method() === 'GET', { timeout: 10000 }),
+      page.evaluate(() => document.dispatchEvent(new Event('visibilitychange'))),
+    ]);
+    expect(pollRes.ok()).toBe(true);
+
+    // Server Room automatically highlights red without opening Outage Simulator
+    const liveServerOutage = page.locator('[data-zone-state="outage"][class*="roomServer"]').first();
+    await expect(liveServerOutage).toBeVisible({ timeout: 5000 });
+    await page.unroute('**/api/v1/devices');
+  });
 });
