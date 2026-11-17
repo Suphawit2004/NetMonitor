@@ -189,4 +189,3 @@ snmp_font_end/
 
 ## 📄 เอกสารเพิ่มเติม (Documentation)
 * [HANDOVER.md](HANDOVER.md) — เอกสารส่งมอบระบบฉบับสมบูรณ์ (Architecture, Benchmarks, Detailed Changelog)
-* [DESIGN.md](DESIGN.md) — คู่มือและมาตรฐานการออกแบบ UI/UX Design System
