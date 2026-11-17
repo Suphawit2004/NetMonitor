@@ -39,43 +39,43 @@
 }
 
 [data-theme="light"] {
-  /* ── Deep Warm Tan / Kraft-Brown Light Theme (สีเนื้อเข้มแซมน้ำตาล อ่านชัด สบายตา) ── */
-  --bg-canvas: #d5bfa6;
-  --bg-surface: #e7d7c1;
-  --bg-elevated: #decab1;
-  --bg-subtle: #cfb79b;
-  --border-subtle: #c5ab8d;
-  --border-default: #aa8c6b;
-  --border-hover: #836647;
+  /* ── Balanced Warm Tan / Almond-Beige Light Theme (สีเนื้ออมน้ำตาลนวลกำลังดี) ── */
+  --bg-canvas: #ddd0be;
+  --bg-surface: #ede1cf;
+  --bg-elevated: #e4d4be;
+  --bg-subtle: #d7c3a9;
+  --border-subtle: #cdbaa0;
+  --border-default: #b59c7d;
+  --border-hover: #907556;
   --border-focus: #1e40af;
 
-  --text-primary: #1a1109;
-  --text-secondary: #332417;
-  --text-muted: #493524;
-  --text-subtle: #5a4430;
+  --text-primary: #1d140c;
+  --text-secondary: #3a2b1d;
+  --text-muted: #513e2c;
+  --text-subtle: #624d39;
 
   --accent-primary: #1e40af;
-  --accent-subtle: rgba(30, 64, 175, 0.12);
+  --accent-subtle: rgba(30, 64, 175, 0.11);
   --accent-hover: #1e3a8a;
 
   --status-online: #065f46;
-  --status-online-bg: #d3ecd9;
+  --status-online-bg: #d9efe1;
   --status-warning: #92400e;
-  --status-warning-bg: #f6e0b8;
+  --status-warning-bg: #fae6c3;
   --status-critical: #b91c1c;
-  --status-critical-bg: #f5d3d3;
-  --status-unmanaged: #5a4430;
+  --status-critical-bg: #f8dada;
+  --status-unmanaged: #624d39;
 
   --chart-inbound: #047857;
   --chart-outbound: #1e40af;
 
-  --shadow-sm: 0 1px 2px 0 rgba(36, 22, 10, 0.10);
-  --shadow-md: 0 4px 12px -2px rgba(36, 22, 10, 0.14);
-  --shadow-lg: 0 10px 24px -4px rgba(36, 22, 10, 0.18);
+  --shadow-sm: 0 1px 2px 0 rgba(36, 22, 10, 0.08);
+  --shadow-md: 0 4px 12px -2px rgba(36, 22, 10, 0.12);
+  --shadow-lg: 0 10px 24px -4px rgba(36, 22, 10, 0.16);
 
-  --scrollbar-track: #d5bfa6;
-  --scrollbar-thumb: #aa8c6b;
-  --scrollbar-thumb-hover: #836647;
+  --scrollbar-track: #ddd0be;
+  --scrollbar-thumb: #b59c7d;
+  --scrollbar-thumb-hover: #907556;
 }
 
 /* ─── Reset & Base ─── */
