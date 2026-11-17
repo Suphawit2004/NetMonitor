@@ -272,14 +272,29 @@ test.describe('Device-to-Device Failure Impact Simulation', () => {
     const svgLayer = page.locator('svg[aria-label="Network topology links"]');
 
     // Links directly connected to the hub must flow outward from hubId -> neighbor
+    // Note: Axis-aligned SVG <line> elements (y1===y2 or x1===x2) have 0px bbox height/width in Chromium,
+    // so assert DOM attachment, non-zero geometric length, visibility CSS, and active dash animation.
     const flowFromHub = svgLayer.locator(`line[data-flow-dir^="${hubId}->"]`);
-    await expect(flowFromHub.first()).toBeVisible({ timeout: 5000 });
+    await expect(flowFromHub.first()).toBeAttached({ timeout: 5000 });
     expect(await flowFromHub.count()).toBeGreaterThanOrEqual(2);
 
     const animInfo = await flowFromHub.first().evaluate(el => {
       const cs = getComputedStyle(el);
-      return { animName: cs.animationName, strokeWidth: parseFloat(cs.strokeWidth) };
+      const x1 = Number(el.getAttribute('x1') ?? 0);
+      const y1 = Number(el.getAttribute('y1') ?? 0);
+      const x2 = Number(el.getAttribute('x2') ?? 0);
+      const y2 = Number(el.getAttribute('y2') ?? 0);
+      return {
+        animName: cs.animationName,
+        strokeWidth: parseFloat(cs.strokeWidth),
+        visibility: cs.visibility,
+        display: cs.display,
+        length: Math.hypot(x2 - x1, y2 - y1),
+      };
     });
+    expect(animInfo.display).not.toBe('none');
+    expect(animInfo.visibility).toBe('visible');
+    expect(animInfo.length).toBeGreaterThan(0);
     expect(animInfo.animName).not.toBe('none');
     expect(animInfo.strokeWidth).toBeGreaterThanOrEqual(2.5);
 
@@ -289,7 +304,10 @@ test.describe('Device-to-Device Failure Impact Simulation', () => {
     if (plan.cascadeCheck) {
       await drawer.locator('select').selectOption(plan.cascadeCheck.rootId);
       await page.getByRole('tab', { name: new RegExp(`ชั้น ${plan.cascadeCheck.floor}|Floor ${plan.cascadeCheck.floor}`, 'i') }).click();
-      await expect(svgLayer.locator(`line[data-flow-dir="${plan.cascadeCheck.parentId}->${plan.cascadeCheck.childId}"]`)).toBeVisible();
+      const cascadeLine = svgLayer.locator(`line[data-flow-dir="${plan.cascadeCheck.parentId}->${plan.cascadeCheck.childId}"]`);
+      await expect(cascadeLine).toBeAttached({ timeout: 5000 });
+      const cascadeAnim = await cascadeLine.evaluate(el => getComputedStyle(el).animationName);
+      expect(cascadeAnim).not.toBe('none');
     }
 
     // Switch to Satellite Map and check animated red Leaflet paths
