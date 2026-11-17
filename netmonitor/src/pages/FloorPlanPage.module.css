@@ -477,7 +477,7 @@
 }
 
 :global([data-theme="light"]) .emptyCard {
-  background: rgba(253, 250, 245, 0.97);
+  background: rgba(242, 232, 217, 0.97);
   border-color: var(--border-default);
   box-shadow: var(--shadow-lg);
 }

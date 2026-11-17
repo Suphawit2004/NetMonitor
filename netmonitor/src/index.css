@@ -39,43 +39,43 @@
 }
 
 [data-theme="light"] {
-  /* ── Warm Cream / Sandstone Light Theme (สีเนื้อนวลตา อ่านง่าย ลดแสงสะท้อน) ── */
-  --bg-canvas: #f3ece2;
-  --bg-surface: #fdfaf5;
-  --bg-elevated: #f7f1e7;
-  --bg-subtle: #ede3d4;
-  --border-subtle: #e4d9c8;
-  --border-default: #d2c4af;
-  --border-hover: #ab9b84;
+  /* ── Rich Warm Beige / Sand Light Theme (สีเนื้อเข้มขึ้น นวลตา อ่านชัด) ── */
+  --bg-canvas: #e5d8c5;
+  --bg-surface: #f2e8d9;
+  --bg-elevated: #eadcc8;
+  --bg-subtle: #decbb2;
+  --border-subtle: #d6c3a9;
+  --border-default: #bfa889;
+  --border-hover: #967e60;
   --border-focus: #1d4ed8;
 
-  --text-primary: #261f18;
-  --text-secondary: #4a3f34;
-  --text-muted: #635547;
-  --text-subtle: #786958;
+  --text-primary: #1f1710;
+  --text-secondary: #3f3124;
+  --text-muted: #574636;
+  --text-subtle: #665442;
 
   --accent-primary: #1d4ed8;
-  --accent-subtle: rgba(29, 78, 216, 0.08);
+  --accent-subtle: rgba(29, 78, 216, 0.10);
   --accent-hover: #1e40af;
 
   --status-online: #047857;
-  --status-online-bg: #e7f6ee;
+  --status-online-bg: #dff2e8;
   --status-warning: #b45309;
-  --status-warning-bg: #fef3dc;
+  --status-warning-bg: #fcebcf;
   --status-critical: #dc2626;
-  --status-critical-bg: #fdeaea;
-  --status-unmanaged: #786958;
+  --status-critical-bg: #fadede;
+  --status-unmanaged: #665442;
 
   --chart-inbound: #059669;
   --chart-outbound: #1d4ed8;
 
-  --shadow-sm: 0 1px 2px 0 rgba(48, 34, 18, 0.05);
-  --shadow-md: 0 4px 12px -2px rgba(48, 34, 18, 0.07);
-  --shadow-lg: 0 10px 24px -4px rgba(48, 34, 18, 0.10);
+  --shadow-sm: 0 1px 2px 0 rgba(48, 34, 18, 0.07);
+  --shadow-md: 0 4px 12px -2px rgba(48, 34, 18, 0.10);
+  --shadow-lg: 0 10px 24px -4px rgba(48, 34, 18, 0.14);
 
-  --scrollbar-track: #efe7da;
-  --scrollbar-thumb: #cfc0aa;
-  --scrollbar-thumb-hover: #ab9b84;
+  --scrollbar-track: #e5d8c5;
+  --scrollbar-thumb: #bfa889;
+  --scrollbar-thumb-hover: #967e60;
 }
 
 /* ─── Reset & Base ─── */
