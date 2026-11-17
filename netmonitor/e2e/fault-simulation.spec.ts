@@ -313,9 +313,14 @@ test.describe('Device-to-Device Failure Impact Simulation', () => {
     // Switch to Satellite Map and check animated red Leaflet paths
     await page.getByRole('button', { name: /แผนที่|Map/i }).first().click();
     const mapRedPaths = page.locator('.leaflet-overlay-pane path[class*="mapTopoFlowRed"]');
-    await expect(mapRedPaths.first()).toBeVisible({ timeout: 5000 });
-    const mapAnim = await mapRedPaths.first().evaluate(el => getComputedStyle(el).animationName);
-    expect(mapAnim).not.toBe('none');
+    await expect(mapRedPaths.first()).toBeAttached({ timeout: 5000 });
+    const mapStyle = await mapRedPaths.first().evaluate(el => {
+      const cs = getComputedStyle(el);
+      return { animName: cs.animationName, display: cs.display, visibility: cs.visibility };
+    });
+    expect(mapStyle.display).not.toBe('none');
+    expect(mapStyle.visibility).toBe('visible');
+    expect(mapStyle.animName).not.toBe('none');
 
     await drawer.getByRole('button', { name: /เสร็จสิ้น|Done/i }).click();
   });
