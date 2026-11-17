@@ -147,7 +147,7 @@
 /* ── Popup (click-to-open, không dùng :hover) ── */
 .popup {
   position: absolute;
-  width: 230px;
+  width: 260px;
   background: var(--bg-surface);
   border: 1px solid var(--border-default);
   border-radius: 10px;
@@ -288,10 +288,12 @@
 }
 
 .popupActions {
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
   gap: 6px;
   padding: 8px 10px 12px;
   border-top: 1px solid var(--border-subtle);
+  box-sizing: border-box;
 }
 
 .btnDetail {
@@ -299,7 +301,7 @@
   align-items: center;
   justify-content: center;
   gap: 5px;
-  flex: 1.2;
+  min-width: 0;
   padding: 6px 8px;
   border-radius: 6px;
   border: none;
@@ -309,6 +311,7 @@
   font-weight: 600;
   cursor: pointer;
   white-space: nowrap;
+  box-sizing: border-box;
   transition: opacity 0.15s ease;
 }
 
@@ -322,8 +325,8 @@
   align-items: center;
   justify-content: center;
   gap: 4px;
-  flex: 1;
-  padding: 6px 6px;
+  min-width: 0;
+  padding: 6px 8px;
   border-radius: 6px;
   border: 1px solid var(--border-default);
   background: var(--bg-elevated);
@@ -331,6 +334,7 @@
   font-size: 12px;
   cursor: pointer;
   white-space: nowrap;
+  box-sizing: border-box;
   transition: background 0.12s, border-color 0.12s, color 0.12s;
 }
 .btnLock:hover {
@@ -544,6 +548,7 @@
 
 .btnSimDown,
 .btnSimRestore {
+  grid-column: 1 / -1;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -554,7 +559,8 @@
   font-weight: 600;
   cursor: pointer;
   width: 100%;
-  margin-bottom: 4px;
+  white-space: nowrap;
+  box-sizing: border-box;
 }
 
 .btnSimDown {

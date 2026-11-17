@@ -428,6 +428,30 @@ test.describe('Device-to-Device Failure Impact Simulation', () => {
     await expect(outageServerRoom).toBeVisible({ timeout: 5000 });
     await expect(outageServerRoom).toHaveCSS('border-top-color', 'rgb(239, 68, 68)');
 
+    // Hover a device pin during simulation and confirm all 3 popup buttons stay inside the popup frame on single lines
+    await page.locator('div[class*="_device_"][role="button"]').first().hover({ force: true });
+    const popup = page.locator('div[class*="_popup_"]').first();
+    await expect(popup).toBeVisible({ timeout: 5000 });
+    const popupBox = await popup.evaluate(el => {
+      const pr = el.getBoundingClientRect();
+      const btns = Array.from(el.querySelectorAll('button')).map(b => {
+        const br = b.getBoundingClientRect();
+        return {
+          text: b.textContent?.trim() ?? '',
+          overflowRight: br.right - pr.right,
+          overflowLeft: pr.left - br.left,
+          height: Math.round(br.height),
+        };
+      });
+      return { btnCount: btns.length, btns };
+    });
+    expect(popupBox.btnCount).toBe(3);
+    for (const b of popupBox.btns) {
+      expect(b.overflowRight).toBeLessThanOrEqual(1);
+      expect(b.overflowLeft).toBeLessThanOrEqual(1);
+      expect(b.height).toBeLessThanOrEqual(34);
+    }
+
     await drawer.getByRole('button', { name: /เสร็จสิ้น|Done/i }).click();
   });
 

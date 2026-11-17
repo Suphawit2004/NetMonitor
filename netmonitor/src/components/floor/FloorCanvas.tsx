@@ -163,8 +163,8 @@ interface Props {
 const DRAG_THRESHOLD = 6
 const POPUP_HIDE_DELAY_MS = 3000
 const POPUP_FADE_MS = 380
-const POPUP_H = 250
-const POPUP_W = 230
+const POPUP_H = 265
+const POPUP_W = 260
 
 function getPopupPlacement(x: number, y: number, planW: number, planH: number): PopupPlacement {
   const spaceAbove = y
