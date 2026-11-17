@@ -600,29 +600,29 @@
    Light Mode Theme Adaptation for 2D Canvas
    ───────────────────────────────────────────── */
 :global([data-theme="light"]) .floorPlan {
-  border: 1.5px dashed rgba(100, 116, 139, 0.45);
-  box-shadow: 0 4px 18px -2px rgba(15, 23, 42, 0.06);
+  border: 1.5px dashed rgba(120, 105, 88, 0.45);
+  box-shadow: 0 4px 18px -2px rgba(48, 34, 18, 0.07);
 }
 
 :global([data-theme="light"]) .gridInner {
-  background: #ffffff;
+  background: #fdfaf5;
   background-image:
-    linear-gradient(rgba(203, 213, 225, 0.35) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(203, 213, 225, 0.35) 1px, transparent 1px);
+    linear-gradient(rgba(210, 196, 175, 0.4) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(210, 196, 175, 0.4) 1px, transparent 1px);
 }
 
 :global([data-theme="light"]) .room {
   border-width: 1.5px;
-  border-color: rgba(2, 132, 199, 0.45);
-  background: rgba(14, 165, 233, 0.04);
-  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.04);
+  border-color: rgba(29, 78, 216, 0.38);
+  background: rgba(29, 78, 216, 0.035);
+  box-shadow: 0 1px 3px rgba(48, 34, 18, 0.04);
 }
 
 :global([data-theme="light"]) .roomLabel {
   color: var(--text-secondary);
-  background: rgba(255, 255, 255, 0.96);
+  background: rgba(253, 250, 245, 0.96);
   border: 1px solid var(--border-default);
-  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.05);
+  box-shadow: 0 1px 2px rgba(48, 34, 18, 0.05);
 }
 
 :global([data-theme="light"]) .roomStairs {
@@ -638,14 +638,14 @@
 
 :global([data-theme="light"]) .roomStairs .roomLabel {
   color: #92400e;
-  background: #fffbeb;
+  background: #fef3dc;
   border-color: rgba(217, 119, 6, 0.45);
 }
 
 :global([data-theme="light"]) .roomServer {
   border-color: #6366f1 !important;
-  background: rgba(99, 102, 241, 0.05) !important;
-  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.04);
+  background: rgba(99, 102, 241, 0.045) !important;
+  box-shadow: 0 1px 3px rgba(48, 34, 18, 0.04);
 }
 
 :global([data-theme="light"]) .roomServer .roomLabel {
@@ -656,8 +656,8 @@
 
 :global([data-theme="light"]) .roomRestroom {
   border-color: #0891b2 !important;
-  background: rgba(6, 182, 212, 0.05) !important;
-  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.04);
+  background: rgba(6, 182, 212, 0.045) !important;
+  box-shadow: 0 1px 3px rgba(48, 34, 18, 0.04);
 }
 
 :global([data-theme="light"]) .roomRestroom .roomLabel {
@@ -669,32 +669,32 @@
 :global([data-theme="light"]) .room.roomOutage {
   border-color: #ef4444 !important;
   background: rgba(239, 68, 68, 0.07) !important;
-  box-shadow: 0 2px 8px rgba(220, 38, 38, 0.08), 0 1px 3px rgba(15, 23, 42, 0.05);
+  box-shadow: 0 2px 8px rgba(220, 38, 38, 0.08), 0 1px 3px rgba(48, 34, 18, 0.05);
 }
 
 :global([data-theme="light"]) .room.roomOutage .roomLabel {
   color: #991b1b;
-  background: #fef2f2;
+  background: #fdeaea;
   border-color: rgba(220, 38, 38, 0.4);
 }
 
 :global([data-theme="light"]) .room.roomDegraded {
   border-color: #d97706 !important;
   background: rgba(245, 158, 11, 0.08) !important;
-  box-shadow: 0 2px 8px rgba(217, 119, 6, 0.08), 0 1px 3px rgba(15, 23, 42, 0.05);
+  box-shadow: 0 2px 8px rgba(217, 119, 6, 0.08), 0 1px 3px rgba(48, 34, 18, 0.05);
 }
 
 :global([data-theme="light"]) .room.roomDegraded .roomLabel {
   color: #92400e;
-  background: #fffbeb;
+  background: #fef3dc;
   border-color: rgba(217, 119, 6, 0.4);
 }
 
 :global([data-theme="light"]) .stairLink {
-  background: rgba(254, 243, 199, 0.95);
-  border: 1px solid rgba(217, 119, 6, 0.6);
+  background: #fef3dc;
+  border: 1px solid rgba(217, 119, 6, 0.55);
   color: #92400e;
-  box-shadow: 0 1px 4px rgba(15, 23, 42, 0.08);
+  box-shadow: 0 1px 4px rgba(48, 34, 18, 0.08);
 }
 
 :global([data-theme="light"]) .stairLink:hover {
@@ -703,9 +703,9 @@
 }
 
 :global([data-theme="light"]) .statsBar {
-  background: rgba(246, 248, 250, 0.94);
+  background: rgba(253, 250, 245, 0.95);
   border: 1px solid var(--border-default);
-  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.1);
+  box-shadow: 0 8px 24px rgba(48, 34, 18, 0.1);
 }
 
 :global([data-theme="light"]) .statLbl {
@@ -718,10 +718,10 @@
 :global([data-theme="light"]) .blue   { color: var(--accent-primary); }
 
 :global([data-theme="light"]) .dimBadge {
-  background: rgba(246, 248, 250, 0.94);
+  background: rgba(253, 250, 245, 0.95);
   border: 1px solid var(--border-default);
   color: var(--accent-primary);
-  box-shadow: 0 4px 15px rgba(15, 23, 42, 0.08);
+  box-shadow: 0 4px 15px rgba(48, 34, 18, 0.08);
 }
 
 :global([data-theme="light"]) .editRoomsBtn {
