@@ -254,9 +254,9 @@
 }
 
 .badgeUnreach {
-  background: rgba(239, 68, 68, 0.08);
-  color: var(--status-critical);
-  border: 1px dashed var(--status-critical);
+  background: var(--status-warning-bg);
+  color: var(--status-warning);
+  border: 1px dashed var(--status-warning);
 }
 
 .badgeDegraded {

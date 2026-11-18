@@ -29,13 +29,16 @@ const TYPE_LABEL_KEYS: Record<DeviceType, string> = {
 }
 
 const TYPE_COLOR: Record<DeviceType, string> = {
-  switch: '#4f9eff', ap: '#a78bfa', router: '#f59e0b', server: '#22c55e',
+  switch: 'var(--accent-primary)',
+  ap: '#5b4b8a',
+  router: 'var(--status-warning)',
+  server: 'var(--status-online)',
 }
 
 const STATUS_META: { key: DeviceStatus; color: string }[] = [
-  { key: 'online',  color: '#22c55e' },
-  { key: 'warning', color: '#fbbf24' },
-  { key: 'offline', color: '#ef4444' },
+  { key: 'online',  color: 'var(--status-online)' },
+  { key: 'warning', color: 'var(--status-warning)' },
+  { key: 'offline', color: 'var(--status-critical)' },
 ]
 
 interface Props {
@@ -52,6 +55,7 @@ export default function ReportsPage({ onDeviceInfo, onOpenFullDetail }: Props) {
     downDeviceIds,
     downLinkIds,
     effectiveReport,
+    effectiveDevices,
     simulateSingleDeviceDown,
     toggleDeviceDown,
     resetSimulation,
@@ -79,11 +83,11 @@ export default function ReportsPage({ onDeviceInfo, onOpenFullDetail }: Props) {
     e.stopPropagation()
     const ok = await acknowledgeAlert(alertId)
     if (ok) {
-      showToast('รับทราบการแจ้งเตือนแล้ว', 'success')
+      showToast(t('alerts.ackSuccess'), 'success')
       setDbAlerts(prev => prev.filter(a => String(a.id) !== String(alertId)))
       retryDevices()
     } else {
-      showToast('ไม่สามารถรับทราบการแจ้งเตือนได้', 'error')
+      showToast(t('reports.ackFailed'), 'error')
     }
   }
 
@@ -96,20 +100,11 @@ export default function ReportsPage({ onDeviceInfo, onOpenFullDetail }: Props) {
   }, [devices, tick])
 
   const total = devices.length
-  const counts = useMemo<Record<DeviceStatus, number>>(() => {
-    if (hasSimFaults) {
-      return {
-        online: effectiveReport.summary.healthy_count,
-        warning: effectiveReport.summary.degraded_count,
-        offline: effectiveReport.summary.root_down_count + effectiveReport.summary.unreachable_count,
-      }
-    }
-    return {
-      online:  devices.filter(d => d.status === 'online').length,
-      warning: devices.filter(d => d.status === 'warning').length,
-      offline: devices.filter(d => d.status === 'offline').length,
-    }
-  }, [devices, hasSimFaults, effectiveReport.summary])
+  const counts = useMemo<Record<DeviceStatus, number>>(() => ({
+    online:  effectiveDevices.filter(d => d.status === 'online').length,
+    warning: effectiveDevices.filter(d => d.status === 'warning').length,
+    offline: effectiveDevices.filter(d => d.status === 'offline').length,
+  }), [effectiveDevices])
 
   const typeCounts = useMemo(() => {
     const list: { type: DeviceType; count: number }[] = (Object.keys(TYPE_LABEL_KEYS) as DeviceType[])
@@ -315,7 +310,7 @@ export default function ReportsPage({ onDeviceInfo, onOpenFullDetail }: Props) {
               <span className={styles.miniKpiLbl}>{t('sim.kpiRootDown')}</span>
             </div>
             <div className={styles.miniKpi}>
-              <span className={styles.miniKpiVal} style={{ color: 'var(--status-critical)' }}>
+              <span className={styles.miniKpiVal} style={{ color: 'var(--status-warning)' }}>
                 {effectiveReport.summary.unreachable_count}
               </span>
               <span className={styles.miniKpiLbl}>{t('sim.kpiUnreachable')}</span>
@@ -364,7 +359,9 @@ export default function ReportsPage({ onDeviceInfo, onOpenFullDetail }: Props) {
                     </div>
                     <span
                       className={`${styles.sev} ${
-                        item.impact_state === 'degraded' ? styles.warn : styles.crit
+                        item.impact_state === 'degraded' || item.impact_state === 'unreachable'
+                          ? styles.warn
+                          : styles.crit
                       }`}
                     >
                       {t(`sim.state_${item.impact_state}`)}
@@ -377,8 +374,8 @@ export default function ReportsPage({ onDeviceInfo, onOpenFullDetail }: Props) {
         </div>
 
         {/* Right: Device-by-Device Impact Matrix (What happens if Device X goes down) */}
-        <div className={styles.card}>
-          <div className={styles.outageHeader}>
+        <div className={`${styles.card} ${styles.matrixCard}`}>
+          <div className={styles.matrixHead}>
             <div>
               <div className={styles.cardTitle} style={{ marginBottom: 2, display: 'flex', alignItems: 'center', gap: 6 }}>
                 <GitFork size={16} style={{ color: 'var(--accent-primary)' }} />
@@ -386,14 +383,16 @@ export default function ReportsPage({ onDeviceInfo, onOpenFullDetail }: Props) {
               </div>
               <div className={styles.outageSub}>{t('reports.impactMatrixSub')}</div>
             </div>
+            <span className={styles.matrixBadgeCount}>{`${effectiveReport.spof_ranking.length} / ${devices.length}`}</span>
           </div>
 
-          <div className={styles.outageList}>
+          <div className={styles.matrixFullList}>
             {effectiveReport.spof_ranking.map(cand => {
               const isSelectedDown = downDeviceIds.has(cand.device_id)
               const candDev = devices.find(d => d.id === cand.device_id)
+              const isAlreadyOffline = candDev?.status === 'offline'
               return (
-                <div key={cand.device_id} className={styles.matrixRow}>
+                <div key={cand.device_id} className={`${styles.matrixRow} ${styles.matrixRowCompact}`}>
                   <span className={styles.outageIcon}>{DEVICE_ICON[cand.dtype]}</span>
                   <div
                     className={styles.outageInfo}
@@ -416,27 +415,27 @@ export default function ReportsPage({ onDeviceInfo, onOpenFullDetail }: Props) {
                         : t('sim.noDownstreamImpact')}
                     </div>
                   </div>
-                  <button
-                    type="button"
-                    className={`${styles.simTriggerBtn} ${isSelectedDown ? styles.simTriggerActive : ''}`}
-                    onClick={() => {
-                      if (isSelectedDown) {
-                        toggleDeviceDown(cand.device_id)
-                      } else {
-                        simulateSingleDeviceDown(cand.device_id)
-                      }
-                    }}
-                  >
-                    <FlaskConical size={12} />
-                    <span>{isSelectedDown ? t('sim.restoreDevice') : t('sim.failDevice')}</span>
-                  </button>
+                  {isAlreadyOffline ? (
+                    <span className={`${styles.sev} ${styles.crit}`}>{t('status.offline')}</span>
+                  ) : (
+                    <button
+                      type="button"
+                      className={`${styles.simTriggerBtn} ${isSelectedDown ? styles.simTriggerActive : ''}`}
+                      onClick={() => {
+                        if (isSelectedDown) toggleDeviceDown(cand.device_id)
+                        else simulateSingleDeviceDown(cand.device_id)
+                      }}
+                    >
+                      <FlaskConical size={12} />
+                      <span>{isSelectedDown ? t('sim.restoreDevice') : t('sim.failDevice')}</span>
+                    </button>
+                  )}
                 </div>
               )
             })}
           </div>
         </div>
       </div>
-
       {/* Active alerts */}
       <div className={styles.card}>
         <div className={styles.cardTitle}>{t('reports.activeAlerts', { count: activeAlerts.length })}</div>

@@ -1,8 +1,44 @@
+import ipaddress
+import re
 from typing import Literal, Optional
 from pydantic import BaseModel, Field, field_validator
+from .snmp import sanitize_snmp_community
 
 DeviceStatus = Literal['online', 'warning', 'offline']
 DeviceType = Literal['switch', 'ap', 'router', 'server']
+
+
+def validate_optional_ip(value: Optional[str]) -> Optional[str]:
+    """Validates optional IPv4/IPv6 text while preserving canonical string output for Postgres INET."""
+    if value is None:
+        return None
+    stripped = value.strip()
+    if not stripped:
+        return None
+    return str(ipaddress.ip_address(stripped))
+
+
+def validate_optional_cidr(value: Optional[str]) -> Optional[str]:
+    """Allows 'auto' or valid IPv4/IPv6 CIDR notation."""
+    if value is None:
+        return None
+    stripped = value.strip()
+    if not stripped or stripped.lower() == "auto":
+        return stripped or None
+    return str(ipaddress.ip_network(stripped, strict=False))
+
+
+def validate_community_list(value: Optional[str]) -> Optional[str]:
+    """Validates single or comma/space-separated SNMP community candidates against CLI flag smuggling."""
+    if value is None:
+        return None
+    stripped = value.strip()
+    if not stripped:
+        return None
+    for token in re.split(r"[,;\s]+", stripped):
+        if token:
+            sanitize_snmp_community(token)
+    return stripped
 
 
 def normalize_services_list(values: list[str]) -> list[str]:
@@ -44,6 +80,11 @@ class DeviceBase(BaseModel):
     def _validate_services(cls, v: list[str]) -> list[str]:
         return normalize_services_list(v)
 
+    @field_validator('ip')
+    @classmethod
+    def _validate_ip(cls, v: Optional[str]) -> Optional[str]:
+        return validate_optional_ip(v)
+
 class DeviceCreate(DeviceBase):
     snmp_port: int = 161
     snmp_version: Literal['v1', 'v2c', 'v3'] = 'v2c'
@@ -51,6 +92,14 @@ class DeviceCreate(DeviceBase):
     poll_interval_s: int = 60
     location: Optional[str] = None
     enabled: bool = True
+    floor_rooms: Optional[dict[int, list["RoomModel"]]] = None
+
+    @field_validator('credential_ref')
+    @classmethod
+    def _validate_credential_ref(cls, v: Optional[str]) -> Optional[str]:
+        if v is None or not v.strip():
+            return None
+        return sanitize_snmp_community(v)
 
 class DeviceUpdate(BaseModel):
     name: Optional[str] = None
@@ -68,6 +117,12 @@ class DeviceUpdate(BaseModel):
     altitude: Optional[float] = None
     target_room: Optional[str] = None
     services: Optional[list[str]] = None
+    floor_rooms: Optional[dict[int, list["RoomModel"]]] = None
+
+    @field_validator('ip')
+    @classmethod
+    def _validate_ip(cls, v: Optional[str]) -> Optional[str]:
+        return validate_optional_ip(v)
 
     @field_validator('services')
     @classmethod
@@ -185,6 +240,16 @@ class ScanRequest(BaseModel):
     auto_assign_gps: Optional[bool] = True
     floor_rooms: Optional[dict[int, list[RoomModel]]] = None
 
+    @field_validator('cidr')
+    @classmethod
+    def _validate_cidr(cls, v: Optional[str]) -> Optional[str]:
+        return validate_optional_cidr(v)
+
+    @field_validator('community')
+    @classmethod
+    def _validate_community(cls, v: Optional[str]) -> Optional[str]:
+        return validate_community_list(v)
+
 class LocalNetworkInfo(BaseModel):
     local_ip: str
     detected_subnet: str
@@ -229,8 +294,31 @@ class ImportItem(BaseModel):
     altitude: Optional[float] = None
     target_room: Optional[str] = None
 
+    @field_validator('ip')
+    @classmethod
+    def _validate_ip(cls, v: str) -> str:
+        parsed = validate_optional_ip(v)
+        if not parsed:
+            raise ValueError("Device IP address is required")
+        return parsed
+
+    @field_validator('community')
+    @classmethod
+    def _validate_community(cls, v: Optional[str]) -> Optional[str]:
+        if v is None or not v.strip():
+            return None
+        return sanitize_snmp_community(v)
+
 class ImportRequest(BaseModel):
     devices: list[ImportItem]
+    floor_rooms: Optional[dict[int, list[RoomModel]]] = None
+
+class FloorLayoutUpdate(BaseModel):
+    rooms: list[RoomModel]
+
+class FloorLayoutOut(BaseModel):
+    floor: Literal[1, 2]
+    rooms: list[RoomModel]
 
 class ConnectResult(BaseModel):
     device_id: str

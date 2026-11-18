@@ -600,112 +600,112 @@
    Light Mode Theme Adaptation for 2D Canvas
    ───────────────────────────────────────────── */
 :global([data-theme="light"]) .floorPlan {
-  border: 1.5px dashed rgba(98, 77, 57, 0.55);
-  box-shadow: 0 4px 18px -2px rgba(36, 22, 10, 0.12);
+  border: 1.5px dashed rgba(92, 102, 117, 0.6);
+  box-shadow: 0 4px 18px -2px rgba(15, 23, 42, 0.10);
 }
 
 :global([data-theme="light"]) .gridInner {
-  background: #ede1cf;
+  background: var(--bg-surface);
   background-image:
-    linear-gradient(rgba(181, 156, 125, 0.38) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(181, 156, 125, 0.38) 1px, transparent 1px);
+    linear-gradient(rgba(116, 126, 138, 0.26) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(116, 126, 138, 0.26) 1px, transparent 1px);
 }
 
 :global([data-theme="light"]) .room {
   border-width: 1.5px;
-  border-color: rgba(30, 64, 175, 0.42);
-  background: rgba(30, 64, 175, 0.055);
-  box-shadow: 0 1px 3px rgba(36, 22, 10, 0.07);
+  border-color: rgba(43, 76, 126, 0.48);
+  background: rgba(43, 76, 126, 0.055);
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.06);
 }
 
 :global([data-theme="light"]) .roomLabel {
   color: var(--text-primary);
-  background: rgba(237, 225, 207, 0.96);
+  background: rgba(228, 231, 234, 0.95);
   border: 1px solid var(--border-default);
-  box-shadow: 0 1px 2px rgba(36, 22, 10, 0.08);
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.07);
 }
 
 :global([data-theme="light"]) .roomStairs {
-  border-color: #b45309 !important;
+  border-color: #9a5813 !important;
   background: repeating-linear-gradient(
     45deg,
-    rgba(180, 83, 9, 0.075),
-    rgba(180, 83, 9, 0.075) 8px,
-    rgba(180, 83, 9, 0.15) 8px,
-    rgba(180, 83, 9, 0.15) 12px
+    rgba(154, 88, 19, 0.07),
+    rgba(154, 88, 19, 0.07) 8px,
+    rgba(154, 88, 19, 0.14) 8px,
+    rgba(154, 88, 19, 0.14) 12px
   ) !important;
 }
 
 :global([data-theme="light"]) .roomStairs .roomLabel {
-  color: #78350f;
-  background: #fae6c3;
-  border-color: rgba(180, 83, 9, 0.48);
+  color: #7c450d;
+  background: rgba(226, 214, 198, 0.95);
+  border-color: rgba(154, 88, 19, 0.45);
 }
 
 :global([data-theme="light"]) .roomServer {
-  border-color: #4f46e5 !important;
-  background: rgba(79, 70, 229, 0.065) !important;
-  box-shadow: 0 1px 3px rgba(36, 22, 10, 0.07);
+  border-color: #3f4b8c !important;
+  background: rgba(63, 75, 140, 0.065) !important;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.06);
 }
 
 :global([data-theme="light"]) .roomServer .roomLabel {
-  color: #312e81;
-  background: #e5e8fa;
-  border-color: rgba(79, 70, 229, 0.45);
+  color: #252f63;
+  background: rgba(214, 219, 232, 0.95);
+  border-color: rgba(63, 75, 140, 0.45);
 }
 
 :global([data-theme="light"]) .roomRestroom {
-  border-color: #0e7490 !important;
-  background: rgba(14, 116, 144, 0.065) !important;
-  box-shadow: 0 1px 3px rgba(36, 22, 10, 0.07);
+  border-color: #266a78 !important;
+  background: rgba(38, 106, 120, 0.065) !important;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.06);
 }
 
 :global([data-theme="light"]) .roomRestroom .roomLabel {
-  color: #164e63;
-  background: #dcf2f5;
-  border-color: rgba(14, 116, 144, 0.45);
+  color: #184b56;
+  background: rgba(208, 224, 227, 0.95);
+  border-color: rgba(38, 106, 120, 0.45);
 }
 
 :global([data-theme="light"]) .room.roomOutage {
   border-color: #ef4444 !important;
-  background: rgba(185, 28, 28, 0.10) !important;
-  box-shadow: 0 2px 8px rgba(185, 28, 28, 0.11), 0 1px 3px rgba(36, 22, 10, 0.07);
+  background: rgba(155, 44, 44, 0.09) !important;
+  box-shadow: 0 2px 8px rgba(155, 44, 44, 0.10), 0 1px 3px rgba(15, 23, 42, 0.06);
 }
 
 :global([data-theme="light"]) .room.roomOutage .roomLabel {
-  color: #7f1d1d;
-  background: #f8dada;
-  border-color: rgba(185, 28, 28, 0.45);
+  color: #742a2a;
+  background: rgba(235, 212, 212, 0.95);
+  border-color: rgba(155, 44, 44, 0.42);
 }
 
 :global([data-theme="light"]) .room.roomDegraded {
-  border-color: #b45309 !important;
-  background: rgba(180, 83, 9, 0.11) !important;
-  box-shadow: 0 2px 8px rgba(180, 83, 9, 0.11), 0 1px 3px rgba(36, 22, 10, 0.07);
+  border-color: #9a5813 !important;
+  background: rgba(154, 88, 19, 0.10) !important;
+  box-shadow: 0 2px 8px rgba(154, 88, 19, 0.10), 0 1px 3px rgba(15, 23, 42, 0.06);
 }
 
 :global([data-theme="light"]) .room.roomDegraded .roomLabel {
-  color: #78350f;
-  background: #fae6c3;
-  border-color: rgba(180, 83, 9, 0.45);
+  color: #7c450d;
+  background: rgba(232, 218, 200, 0.95);
+  border-color: rgba(154, 88, 19, 0.42);
 }
 
 :global([data-theme="light"]) .stairLink {
-  background: #fae6c3;
-  border: 1px solid rgba(180, 83, 9, 0.55);
-  color: #78350f;
-  box-shadow: 0 1px 4px rgba(36, 22, 10, 0.09);
+  background: rgba(226, 214, 198, 0.95);
+  border: 1px solid rgba(154, 88, 19, 0.5);
+  color: #7c450d;
+  box-shadow: 0 1px 4px rgba(15, 23, 42, 0.08);
 }
 
 :global([data-theme="light"]) .stairLink:hover {
-  background: #b45309;
-  color: #ffffff;
+  background: #9a5813;
+  color: #f4f6f8;
 }
 
 :global([data-theme="light"]) .statsBar {
-  background: rgba(237, 225, 207, 0.96);
+  background: rgba(217, 221, 224, 0.96);
   border: 1px solid var(--border-default);
-  box-shadow: 0 8px 24px rgba(36, 22, 10, 0.13);
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.11);
 }
 
 :global([data-theme="light"]) .statLbl {
@@ -718,35 +718,35 @@
 :global([data-theme="light"]) .blue   { color: var(--accent-primary); }
 
 :global([data-theme="light"]) .dimBadge {
-  background: rgba(237, 225, 207, 0.96);
+  background: rgba(217, 221, 224, 0.96);
   border: 1px solid var(--border-default);
   color: var(--accent-primary);
-  box-shadow: 0 4px 15px rgba(36, 22, 10, 0.11);
+  box-shadow: 0 4px 15px rgba(15, 23, 42, 0.09);
 }
 
 :global([data-theme="light"]) .editRoomsBtn {
-  background: var(--bg-surface);
+  background: var(--bg-elevated);
   border-color: var(--border-default);
   color: var(--text-primary);
-  box-shadow: 0 4px 12px rgba(15, 23, 42, 0.06);
+  box-shadow: var(--shadow-sm);
 }
 
 :global([data-theme="light"]) .secondaryBtn {
-  background: var(--bg-surface);
+  background: var(--bg-elevated);
   border-color: var(--border-default);
   color: var(--text-primary);
-  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.06);
+  box-shadow: var(--shadow-sm);
 }
 
 :global([data-theme="light"]) .zoomBtn {
-  background: var(--bg-surface);
+  background: var(--bg-elevated);
   border-color: var(--border-default);
   color: var(--text-primary);
-  box-shadow: 0 4px 10px rgba(15, 23, 42, 0.08);
+  box-shadow: var(--shadow-sm);
 }
 
 :global([data-theme="light"]) .zoomBtn:hover {
-  background: var(--bg-elevated);
+  background: var(--bg-subtle);
   border-color: var(--accent-primary);
   color: var(--accent-primary);
 }
@@ -758,23 +758,23 @@
 }
 
 :global([data-theme="light"]) .hint {
-  background: rgba(246, 248, 250, 0.92);
+  background: rgba(217, 221, 224, 0.95);
   border-color: var(--border-default);
   color: var(--text-secondary);
-  box-shadow: 0 4px 12px rgba(15, 23, 42, 0.08);
+  box-shadow: var(--shadow-sm);
 }
 
 :global([data-theme="light"]) .roomActionBtn {
-  background: var(--bg-surface);
+  background: var(--bg-elevated);
   border-color: var(--border-default);
   color: var(--text-primary);
 }
 
 :global([data-theme="light"]) .renameInput {
-  background: #ffffff;
+  background: var(--bg-elevated);
   border-color: var(--accent-primary);
   color: var(--text-primary);
-  box-shadow: 0 0 10px rgba(37, 99, 235, 0.2);
+  box-shadow: 0 0 8px rgba(43, 76, 126, 0.2);
 }
 
 :global([data-theme="light"]) .emptyBuildingTitle {

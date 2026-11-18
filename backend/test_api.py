@@ -6,12 +6,14 @@ import sys
 sys.path.insert(0, r"c:\work\snmp_font_end\backend")
 
 from httpx import AsyncClient, ASGITransport
+from app.config import settings
 from app.main import app
 
 async def run_tests():
     print("--- Starting FastAPI Endpoint Tests ---")
+    headers = {"X-API-Key": settings.API_KEY} if settings.API_KEY else {}
     transport = ASGITransport(app=app)
-    async with AsyncClient(transport=transport, base_url="http://test") as ac:
+    async with AsyncClient(transport=transport, base_url="http://test", headers=headers) as ac:
         # 1. Health check
         res = await ac.get("/health")
         print("[1] GET /health:", res.status_code, res.json())

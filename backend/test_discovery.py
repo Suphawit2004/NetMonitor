@@ -7,12 +7,14 @@ if hasattr(sys.stdout, "reconfigure"):
 sys.path.insert(0, r"c:\work\snmp_font_end\backend")
 
 from httpx import AsyncClient, ASGITransport
+from app.config import settings
 from app.main import app
 
 async def run_discovery_tests():
     print("--- Testing Offline Device Creation & Network Discovery ---")
+    headers = {"X-API-Key": settings.API_KEY} if settings.API_KEY else {}
     transport = ASGITransport(app=app)
-    async with AsyncClient(transport=transport, base_url="http://test") as ac:
+    async with AsyncClient(transport=transport, base_url="http://test", headers=headers) as ac:
         # Pre-cleanup in case of previous interrupted run
         devs_res = await ac.get("/api/v1/devices")
         for d in devs_res.json():

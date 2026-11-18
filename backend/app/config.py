@@ -17,11 +17,18 @@ class Settings(BaseModel):
     API_PORT: int = int(os.getenv("API_PORT", "8000"))
     API_KEY: str = os.getenv("API_KEY", "")
     MAP_API_KEY: str = os.getenv("MAP_API_KEY", "")
+    ALLOWED_ORIGINS: str = os.getenv("ALLOWED_ORIGINS", "http://localhost:5173,http://127.0.0.1:5173")
 
     # Telemetry & Polling Settings
     SNMP_POLL_INTERVAL_S: int = int(os.getenv("SNMP_POLL_INTERVAL_S", "30"))
     SNMP_MAX_CONCURRENT_POLLS: int = int(os.getenv("SNMP_MAX_CONCURRENT_POLLS", "5"))
     TELEMETRY_DEFAULT_POINTS: int = int(os.getenv("TELEMETRY_DEFAULT_POINTS", "60"))
+    METRICS_RETENTION_DAYS: int = int(os.getenv("METRICS_RETENTION_DAYS", "7"))
     ADVISORY_LOCK_SNMP_POLLER: int = 0x534E4D50  # Hex for 'SNMP'
+
+    @property
+    def allowed_origins_list(self) -> list[str]:
+        origins = [o.strip() for o in self.ALLOWED_ORIGINS.split(",") if o.strip()]
+        return origins or ["http://localhost:5173"]
 
 settings = Settings()

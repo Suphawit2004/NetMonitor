@@ -7,6 +7,7 @@ import pytest
 from httpx import ASGITransport, AsyncClient
 
 from app.topology import infer_topology_links, compute_blast_radius
+from app.config import settings
 from app.main import app
 
 
@@ -108,8 +109,9 @@ async def test_simulate_impact_endpoint_with_mocked_db():
         patch("app.repository.fetch_devices_with_telemetry", return_value=SAMPLE_DEVICES),
         patch("app.main._ensure_links_or_infer", return_value=SAMPLE_LINKS),
     ):
+        headers = {"X-API-Key": settings.API_KEY} if settings.API_KEY else {}
         transport = ASGITransport(app=app)
-        async with AsyncClient(transport=transport, base_url="http://test") as ac:
+        async with AsyncClient(transport=transport, base_url="http://test", headers=headers) as ac:
             res = await ac.post(
                 "/api/v1/simulate/impact",
                 json={"down_device_ids": ["2"], "down_link_ids": [], "include_spof": True},
@@ -147,8 +149,9 @@ async def test_duplicate_undirected_link_rejected_with_400():
         patch("app.main.get_db_pool", return_value=mock_pool),
         patch("app.repository.find_existing_topology_link", return_value={"id": 99}),
     ):
+        headers = {"X-API-Key": settings.API_KEY} if settings.API_KEY else {}
         transport = ASGITransport(app=app)
-        async with AsyncClient(transport=transport, base_url="http://test") as ac:
+        async with AsyncClient(transport=transport, base_url="http://test", headers=headers) as ac:
             res = await ac.post(
                 "/api/v1/topology/links",
                 json={
@@ -206,3 +209,43 @@ def test_zone_and_service_impact_inference_and_full_vs_partial_room():
     assert svcs["ERP"]["impact_state"] == "outage"
     assert svcs["PostgreSQL"]["impact_state"] == "outage"
     assert "Internet Gateway" not in svcs  # router stayed healthy
+
+
+@pytest.mark.asyncio
+async def test_apply_simulated_faults_marks_cascading_unreachable_as_warning():
+    from unittest.mock import AsyncMock, MagicMock
+    from app.repository import apply_simulated_faults, compute_device_status
+
+    recorded_alerts = []
+    recorded_polls = []
+
+    conn = AsyncMock()
+    conn.transaction = MagicMock(return_value=AsyncMock(__aenter__=AsyncMock(return_value=conn), __aexit__=AsyncMock(return_value=False)))
+    async def capture_many(sql, rows):
+        if "INSERT INTO alerts" in sql:
+            recorded_alerts.extend(rows)
+        elif "INSERT INTO poll_runs" in sql:
+            recorded_polls.extend(rows)
+    conn.executemany = AsyncMock(side_effect=capture_many)
+
+    pool = AsyncMock()
+    pool.acquire = MagicMock(return_value=AsyncMock(__aenter__=AsyncMock(return_value=conn), __aexit__=AsyncMock(return_value=False)))
+
+    counts = await apply_simulated_faults(
+        pool,
+        root_down_ids=[1],
+        unreachable_ids=[2, 3],
+        degraded_ids=[4],
+    )
+    assert counts == {"root_down": 1, "unreachable": 2, "degraded": 1}
+
+    alert_sev_by_id = {row[0]: row[1] for row in recorded_alerts}
+    poll_status_by_id = {row[0]: row[1] for row in recorded_polls}
+
+    assert alert_sev_by_id[1] == "crit" and poll_status_by_id[1] == "failed"
+    assert alert_sev_by_id[2] == "warn" and poll_status_by_id[2] == "warning"
+    assert alert_sev_by_id[3] == "warn" and poll_status_by_id[3] == "warning"
+    assert alert_sev_by_id[4] == "warn" and poll_status_by_id[4] == "warning"
+
+    assert compute_device_status({"enabled": True, "alert_severity": alert_sev_by_id[1], "latest_poll_status": poll_status_by_id[1]}) == "offline"
+    assert compute_device_status({"enabled": True, "alert_severity": alert_sev_by_id[2], "latest_poll_status": poll_status_by_id[2]}) == "warning"

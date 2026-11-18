@@ -1,5 +1,6 @@
 import asyncio
 import os
+import re
 import subprocess
 import logging
 from typing import Optional
@@ -10,6 +11,24 @@ logger = logging.getLogger("netmonitor.snmp")
 OID_SYS_DESCR  = ".1.3.6.1.2.1.1.1.0"
 OID_SYS_UPTIME = ".1.3.6.1.2.1.1.3.0"
 OID_SYS_NAME   = ".1.3.6.1.2.1.1.5.0"
+
+_INVALID_COMMUNITY_RE = re.compile(r"[\s\x00-\x1f\x7f]")
+
+
+def sanitize_snmp_community(community: Optional[str], fallback: str = "public") -> str:
+    """Validates an SNMP community string against CLI flag injection and control characters."""
+    if community is None:
+        return fallback
+    cleaned = community.strip()
+    if not cleaned:
+        return fallback
+    if cleaned.startswith("-"):
+        raise ValueError("SNMP community string cannot start with '-'")
+    if len(cleaned) > 64:
+        raise ValueError("SNMP community string must be at most 64 characters")
+    if _INVALID_COMMUNITY_RE.search(cleaned):
+        raise ValueError("SNMP community string contains invalid whitespace or control characters")
+    return cleaned
 
 def _run_snmpget_sync(cmd: list[str], timeout_s: float) -> tuple[int, bytes, bytes]:
     env = os.environ.copy()
@@ -44,10 +63,12 @@ async def snmp_get_oid(
     to ensure full compatibility with Windows event loop policies.
     Returns: (success: bool, value: Optional[str], error: Optional[str])
     """
+    safe_community = sanitize_snmp_community(community)
+    safe_version = "1" if str(version).lstrip("v") == "1" else "2c"
     cmd = [
         "snmpget",
-        f"-v{version}",
-        f"-c{community}",
+        f"-v{safe_version}",
+        f"-c{safe_community}",
         f"-t{timeout_s}",
         f"-r{retries}",
         "-Oqv",  # Quick format: only print the value

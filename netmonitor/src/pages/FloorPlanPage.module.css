@@ -236,6 +236,19 @@
   box-shadow: 0 0 12px rgba(59, 130, 246, 0.5);
 }
 
+:global([data-theme="light"]) .addBtn {
+  background: var(--accent-primary);
+  border-color: var(--accent-primary);
+  color: #f4f6f8;
+  box-shadow: var(--shadow-sm);
+}
+
+:global([data-theme="light"]) .addBtn:hover {
+  background: var(--accent-hover);
+  border-color: var(--accent-hover);
+  box-shadow: var(--shadow-md);
+}
+
 .clearDevicesBtn {
   height: 32px;
   padding: 0 10px;
@@ -346,6 +359,12 @@
   color: #ffffff !important;
   box-shadow: 0 0 12px rgba(37, 99, 235, 0.4);
   font-weight: 700;
+}
+
+:global([data-theme="light"]) .viewBtnActive,
+:global([data-theme="light"]) .floorTabActive {
+  color: #f4f6f8 !important;
+  box-shadow: var(--shadow-sm);
 }
 
 /* Floor badge */
@@ -477,7 +496,7 @@
 }
 
 :global([data-theme="light"]) .emptyCard {
-  background: rgba(237, 225, 207, 0.97);
+  background: rgba(217, 221, 224, 0.97);
   border-color: var(--border-default);
   box-shadow: var(--shadow-lg);
 }

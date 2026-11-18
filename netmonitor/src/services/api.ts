@@ -12,11 +12,16 @@ import type {
   PollTrafficResponse,
   TopologyLink,
   LinkType,
+  BlastRadiusReport,
+  Room,
 } from '../types'
 import { ALL_DEVICES } from '../data/mockData'
 import { getStoredBuildingBounds, canvasToGps } from './mapGeo'
 import { getStoredRooms } from './roomStore'
-import { inferTopologyLinks as inferLinksClient } from './topologyEngine'
+import {
+  computeBlastRadius as computeBlastRadiusClient,
+  inferTopologyLinks as inferLinksClient,
+} from './topologyEngine'
 
 // ─────────────────────────────────────────────
 // Mock API layer — เลียนแบบ backend จริง
@@ -72,6 +77,51 @@ function normalizeDevices(list: RawDevice[]): Device[] {
 
 const STORAGE_KEY = 'netmonitor:devices_db'
 const API_BASE = '/api/v1'
+const API_KEY = (import.meta.env?.VITE_API_KEY as string | undefined)?.trim() || ''
+
+function authHeaders(extra?: Record<string, string>): Record<string, string> {
+  const headers: Record<string, string> = { ...(extra || {}) }
+  if (API_KEY) {
+    headers['X-API-Key'] = API_KEY
+  }
+  return headers
+}
+
+class BackendUnavailableError extends Error {}
+
+function isOfflineTransportError(err: unknown): boolean {
+  return (
+    err instanceof BackendUnavailableError ||
+    err instanceof TypeError ||
+    (typeof DOMException !== 'undefined' && err instanceof DOMException)
+  )
+}
+
+async function throwIfBackendError(res: Response, fallbackMsg: string): Promise<never> {
+  const ct = res.headers.get('content-type') || ''
+  if (res.status >= 502 && res.status <= 504) {
+    throw new BackendUnavailableError(`${fallbackMsg} (${res.status})`)
+  }
+  if (res.status >= 500 && !ct.includes('application/json')) {
+    throw new BackendUnavailableError(`${fallbackMsg} (${res.status})`)
+  }
+  let detail = `${fallbackMsg} (${res.status})`
+  if (ct.includes('application/json')) {
+    try {
+      const body = (await res.json()) as { detail?: unknown }
+      if (typeof body?.detail === 'string' && body.detail.trim()) {
+        detail = body.detail
+      } else if (Array.isArray(body?.detail) && body.detail.length > 0) {
+        detail = body.detail
+          .map((item: { msg?: string }) => item?.msg || JSON.stringify(item))
+          .join('; ')
+      }
+    } catch {
+      // ignore JSON parse failure
+    }
+  }
+  throw new Error(detail)
+}
 
 function loadStoredDevices(): Device[] {
   try {
@@ -103,17 +153,17 @@ let idSeq = 0
 export async function fetchDevices(): Promise<Device[]> {
   try {
     const res = await fetch(`${API_BASE}/devices`)
-    if (res.ok) {
-      const rawData = (await res.json()) as Device[]
-      const data = rawData.map(d => ({
-        ...d,
-        services: Array.isArray(d.services) ? d.services : [],
-      }))
-      db = data
-      saveStoredDevices(db)
-      return data
-    }
+    if (!res.ok) await throwIfBackendError(res, 'Failed to load devices')
+    const rawData = (await res.json()) as Device[]
+    const data = rawData.map(d => ({
+      ...d,
+      services: Array.isArray(d.services) ? d.services : [],
+    }))
+    db = data
+    saveStoredDevices(db)
+    return data
   } catch (err) {
+    if (!isOfflineTransportError(err)) throw err
     console.warn('Backend API unavailable, falling back to LocalStorage', err)
   }
 
@@ -126,16 +176,19 @@ export async function createDevice(input: Omit<RawDevice, 'id'>): Promise<Device
   try {
     const res = await fetch(`${API_BASE}/devices`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(offlineInput),
+      headers: authHeaders({ 'Content-Type': 'application/json' }),
+      body: JSON.stringify({
+        ...offlineInput,
+        floor_rooms: { 1: getStoredRooms(1), 2: getStoredRooms(2) },
+      }),
     })
-    if (res.ok) {
-      const created = (await res.json()) as Device
-      db = [...db, created]
-      saveStoredDevices(db)
-      return created
-    }
+    if (!res.ok) await throwIfBackendError(res, 'Failed to create device')
+    const created = (await res.json()) as Device
+    db = [...db, created]
+    saveStoredDevices(db)
+    return created
   } catch (err) {
+    if (!isOfflineTransportError(err)) throw err
     console.warn('Backend API unavailable, falling back to local creation', err)
   }
 
@@ -163,16 +216,16 @@ export async function updateDevice(
   try {
     const res = await fetch(`${API_BASE}/devices/${id}`, {
       method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
+      headers: authHeaders({ 'Content-Type': 'application/json' }),
       body: JSON.stringify(patch),
     })
-    if (res.ok) {
-      const updated = (await res.json()) as Device
-      db = db.map(d => (d.id === id ? updated : d))
-      saveStoredDevices(db)
-      return updated
-    }
+    if (!res.ok) await throwIfBackendError(res, 'Failed to update device')
+    const updated = (await res.json()) as Device
+    db = db.map(d => (d.id === id ? updated : d))
+    saveStoredDevices(db)
+    return updated
   } catch (err) {
+    if (!isOfflineTransportError(err)) throw err
     console.warn('Backend API unavailable, falling back to local update', err)
   }
 
@@ -200,13 +253,14 @@ export async function deleteDevice(id: string): Promise<boolean> {
   try {
     const res = await fetch(`${API_BASE}/devices/${id}`, {
       method: 'DELETE',
+      headers: authHeaders(),
     })
-    if (res.ok) {
-      db = db.filter(d => d.id !== id)
-      saveStoredDevices(db)
-      return true
-    }
+    if (!res.ok) await throwIfBackendError(res, 'Failed to delete device')
+    db = db.filter(d => d.id !== id)
+    saveStoredDevices(db)
+    return true
   } catch (err) {
+    if (!isOfflineTransportError(err)) throw err
     console.warn('Backend API unavailable, falling back to local delete', err)
   }
 
@@ -221,13 +275,13 @@ export async function simulateSampleStatuses(): Promise<Device[]> {
   try {
     const res = await fetch(`${API_BASE}/simulate/sample-statuses`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: authHeaders({ 'Content-Type': 'application/json' }),
       body: '{}',
     })
-    if (res.ok) {
-      return await fetchDevices()
-    }
+    if (!res.ok) await throwIfBackendError(res, 'Failed to apply sample statuses')
+    return await fetchDevices()
   } catch (err) {
+    if (!isOfflineTransportError(err)) throw err
     console.warn('Backend simulate API unavailable', err)
   }
   return await fetchDevices()
@@ -237,11 +291,12 @@ export async function resetDevices(): Promise<Device[]> {
   try {
     const res = await fetch(`${API_BASE}/reset`, {
       method: 'POST',
+      headers: authHeaders(),
     })
-    if (res.ok) {
-      return await fetchDevices()
-    }
+    if (!res.ok) await throwIfBackendError(res, 'Failed to reset devices')
+    return await fetchDevices()
   } catch (err) {
+    if (!isOfflineTransportError(err)) throw err
     console.warn('Backend API unavailable, falling back to local reset', err)
   }
 
@@ -263,13 +318,14 @@ export async function clearDevices(): Promise<Device[]> {
   try {
     const res = await fetch(`${API_BASE}/clear`, {
       method: 'POST',
+      headers: authHeaders(),
     })
-    if (res.ok) {
-      db = []
-      saveStoredDevices(db)
-      return []
-    }
+    if (!res.ok) await throwIfBackendError(res, 'Failed to clear devices')
+    db = []
+    saveStoredDevices(db)
+    return []
   } catch (err) {
+    if (!isOfflineTransportError(err)) throw err
     console.warn('Backend API unavailable, falling back to local clear', err)
   }
 
@@ -283,6 +339,7 @@ export async function connectDevice(id: string): Promise<ConnectResult> {
   try {
     const res = await fetch(`${API_BASE}/devices/${id}/connect`, {
       method: 'POST',
+      headers: authHeaders(),
     })
     if (res.ok) {
       const result = (await res.json()) as ConnectResult
@@ -356,7 +413,7 @@ export async function scanNetwork(
   try {
     const res = await fetch(`${API_BASE}/discovery/scan`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: authHeaders({ 'Content-Type': 'application/json' }),
       body: JSON.stringify({
         cidr,
         community: community.trim() || undefined,
@@ -481,16 +538,19 @@ export async function importDiscoveredDevices(
   try {
     const res = await fetch(`${API_BASE}/discovery/import`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ devices: deduplicated }),
+      headers: authHeaders({ 'Content-Type': 'application/json' }),
+      body: JSON.stringify({
+        devices: deduplicated,
+        floor_rooms: { 1: getStoredRooms(1), 2: getStoredRooms(2) },
+      }),
     })
-    if (res.ok) {
-      const imported = (await res.json()) as Device[]
-      db = [...db, ...imported]
-      saveStoredDevices(db)
-      return imported
-    }
+    if (!res.ok) await throwIfBackendError(res, 'Failed to import discovered devices')
+    const imported = (await res.json()) as Device[]
+    db = [...db, ...imported]
+    saveStoredDevices(db)
+    return imported
   } catch (err) {
+    if (!isOfflineTransportError(err)) throw err
     console.warn('Backend API unavailable for import', err)
   }
 
@@ -540,7 +600,10 @@ export async function fetchAlerts(deviceId?: string): Promise<Alert[]> {
 
 export async function acknowledgeAlert(alertId: number | string): Promise<boolean> {
   try {
-    const res = await fetch(`${API_BASE}/alerts/${alertId}/ack`, { method: 'POST' })
+    const res = await fetch(`${API_BASE}/alerts/${alertId}/ack`, {
+      method: 'POST',
+      headers: authHeaders(),
+    })
     return res.ok
   } catch (err) {
     console.warn('Backend API unavailable for acknowledgeAlert', err)
@@ -586,7 +649,10 @@ export async function fetchDeviceInterfaces(deviceId: string): Promise<Interface
 
 export async function pollDeviceTraffic(deviceId: string): Promise<PollTrafficResponse | null> {
   try {
-    const res = await fetch(`${API_BASE}/devices/${deviceId}/poll-traffic`, { method: 'POST' })
+    const res = await fetch(`${API_BASE}/devices/${deviceId}/poll-traffic`, {
+      method: 'POST',
+      headers: authHeaders(),
+    })
     if (res.ok) {
       return (await res.json()) as PollTrafficResponse
     }
@@ -653,12 +719,12 @@ function saveStoredLinks(links: TopologyLink[]): void {
 export async function fetchTopologyLinks(fallbackDevices: Device[] = []): Promise<TopologyLink[]> {
   try {
     const res = await fetch(`${API_BASE}/topology/links`)
-    if (res.ok) {
-      const data = (await res.json()) as TopologyLink[]
-      saveStoredLinks(data)
-      return data
-    }
+    if (!res.ok) await throwIfBackendError(res, 'Failed to fetch topology links')
+    const data = (await res.json()) as TopologyLink[]
+    saveStoredLinks(data)
+    return data
   } catch (err) {
+    if (!isOfflineTransportError(err)) throw err
     console.warn('Backend API unavailable for topology links, using local fallback', err)
   }
   return loadStoredLinks(fallbackDevices.length > 0 ? fallbackDevices : db)
@@ -676,29 +742,16 @@ export async function createTopologyLink(input: {
   try {
     const res = await fetch(`${API_BASE}/topology/links`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: authHeaders({ 'Content-Type': 'application/json' }),
       body: JSON.stringify(input),
     })
-    if (res.ok) {
-      const created = (await res.json()) as TopologyLink
-      const existing = loadStoredLinks(db)
-      saveStoredLinks([...existing, created])
-      return created
-    }
-    if (res.status >= 400 && res.status < 500) {
-      let detail = `Failed to create topology link (${res.status})`
-      try {
-        const errBody = (await res.json()) as { detail?: string }
-        if (errBody?.detail) detail = errBody.detail
-      } catch {
-        // ignore JSON parse error
-      }
-      throw new Error(detail)
-    }
+    if (!res.ok) await throwIfBackendError(res, 'Failed to create topology link')
+    const created = (await res.json()) as TopologyLink
+    const existing = loadStoredLinks(db)
+    saveStoredLinks([...existing, created])
+    return created
   } catch (err) {
-    if (err instanceof Error && !(err instanceof TypeError)) {
-      throw err
-    }
+    if (!isOfflineTransportError(err)) throw err
     console.warn('Backend API unavailable for createTopologyLink, using local fallback', err)
   }
   const existing = loadStoredLinks(db)
@@ -715,13 +768,14 @@ export async function deleteTopologyLink(linkId: string): Promise<boolean> {
   try {
     const res = await fetch(`${API_BASE}/topology/links/${encodeURIComponent(linkId)}`, {
       method: 'DELETE',
+      headers: authHeaders(),
     })
-    if (res.ok) {
-      const existing = loadStoredLinks(db).filter(l => l.id !== linkId)
-      saveStoredLinks(existing)
-      return true
-    }
+    if (!res.ok) await throwIfBackendError(res, 'Failed to delete topology link')
+    const existing = loadStoredLinks(db).filter(l => l.id !== linkId)
+    saveStoredLinks(existing)
+    return true
   } catch (err) {
+    if (!isOfflineTransportError(err)) throw err
     console.warn('Backend API unavailable for deleteTopologyLink, using local fallback', err)
   }
   const existing = loadStoredLinks(db).filter(l => l.id !== linkId)
@@ -731,13 +785,16 @@ export async function deleteTopologyLink(linkId: string): Promise<boolean> {
 
 export async function inferTopologyLinks(fallbackDevices: Device[] = []): Promise<TopologyLink[]> {
   try {
-    const res = await fetch(`${API_BASE}/topology/infer`, { method: 'POST' })
-    if (res.ok) {
-      const data = (await res.json()) as TopologyLink[]
-      saveStoredLinks(data)
-      return data
-    }
+    const res = await fetch(`${API_BASE}/topology/infer`, {
+      method: 'POST',
+      headers: authHeaders(),
+    })
+    if (!res.ok) await throwIfBackendError(res, 'Failed to infer topology links')
+    const data = (await res.json()) as TopologyLink[]
+    saveStoredLinks(data)
+    return data
   } catch (err) {
+    if (!isOfflineTransportError(err)) throw err
     console.warn('Backend API unavailable for inferTopologyLinks, using local fallback', err)
   }
   const current = loadStoredLinks(fallbackDevices.length > 0 ? fallbackDevices : db)
@@ -764,6 +821,66 @@ export async function inferTopologyLinks(fallbackDevices: Device[] = []): Promis
   return merged
 }
 
+export async function simulateImpact(
+  downDeviceIds: string[],
+  downLinkIds: string[],
+  includeSpof = true,
+  fallbackDevices: Device[] = [],
+  fallbackLinks: TopologyLink[] = [],
+): Promise<BlastRadiusReport> {
+  try {
+    const res = await fetch(`${API_BASE}/simulate/impact`, {
+      method: 'POST',
+      headers: authHeaders({ 'Content-Type': 'application/json' }),
+      body: JSON.stringify({
+        down_device_ids: downDeviceIds,
+        down_link_ids: downLinkIds,
+        include_spof: includeSpof,
+      }),
+    })
+    if (!res.ok) await throwIfBackendError(res, 'Failed to compute topology impact')
+    return (await res.json()) as BlastRadiusReport
+  } catch (err) {
+    if (!isOfflineTransportError(err)) throw err
+    console.warn('Backend API unavailable for simulateImpact, using local fallback', err)
+  }
+  const devs = fallbackDevices.length > 0 ? fallbackDevices : db
+  const lks = fallbackLinks.length > 0 ? fallbackLinks : loadStoredLinks(devs)
+  return computeBlastRadiusClient(devs, lks, new Set(downDeviceIds), new Set(downLinkIds), includeSpof)
+}
+
+export async function fetchFloorLayouts(): Promise<Record<1 | 2, Room[]> | null> {
+  try {
+    const res = await fetch(`${API_BASE}/layout`)
+    if (!res.ok) await throwIfBackendError(res, 'Failed to load floor layouts')
+    const data = (await res.json()) as Record<string, Room[]>
+    return {
+      1: Array.isArray(data['1']) ? data['1'] : [],
+      2: Array.isArray(data['2']) ? data['2'] : [],
+    }
+  } catch (err) {
+    if (!isOfflineTransportError(err)) throw err
+    console.warn('Backend API unavailable for floor layouts', err)
+  }
+  return null
+}
+
+export async function saveFloorLayout(floor: 1 | 2, rooms: Room[]): Promise<boolean> {
+  try {
+    const res = await fetch(`${API_BASE}/layout/${floor}`, {
+      method: 'PUT',
+      headers: authHeaders({ 'Content-Type': 'application/json' }),
+      body: JSON.stringify({ rooms }),
+    })
+    if (!res.ok) await throwIfBackendError(res, 'Failed to save floor layout')
+    return true
+  } catch (err) {
+    if (!isOfflineTransportError(err)) throw err
+    console.warn('Backend API unavailable for saveFloorLayout', err)
+  }
+  return false
+}
+
 export async function applySimulatedFaults(
   downDeviceIds: string[],
   downLinkIds: string[],
@@ -771,7 +888,7 @@ export async function applySimulatedFaults(
   try {
     const res = await fetch(`${API_BASE}/simulate/apply-faults`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: authHeaders({ 'Content-Type': 'application/json' }),
       body: JSON.stringify({
         down_device_ids: downDeviceIds,
         down_link_ids: downLinkIds,

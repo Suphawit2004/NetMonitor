@@ -1091,7 +1091,10 @@ export default function FloorMapOverlay({
       )}
 
       {/* Leaflet Map DOM Element */}
-      <div ref={mapContainerRef} className={styles.leafletWrap} />
+      <div
+        ref={mapContainerRef}
+        className={`${styles.leafletWrap} ${tileType === 'carto' ? styles.leafletCartoToned : ''}`}
+      />
     </div>
   )
 }

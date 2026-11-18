@@ -2,6 +2,7 @@ import { useMemo, useState, useEffect, useCallback, lazy, Suspense } from 'react
 import { useTranslation } from 'react-i18next'
 import type { Device, DeviceType, LinkType, Room } from '../types'
 import { getStoredRooms, saveStoredRooms } from '../services/roomStore'
+import * as api from '../services/api'
 import { useNetwork } from '../context/networkContext'
 import { useFaultSim } from '../context/faultSimContext'
 import { useToast } from '../components/ui/toast-context'
@@ -55,6 +56,7 @@ export default function FloorPlanPage({
   } = useNetwork()
   const {
     links,
+    effectiveDevices,
     isSimMode,
     isLinkEditMode,
     showLinks,
@@ -163,8 +165,8 @@ export default function FloorPlanPage({
   const [moveModeActive, setMoveModeActive] = useState(false)
 
   const floorDevices = useMemo(
-    () => devices.filter(d => d.floor === currentFloor),
-    [devices, currentFloor],
+    () => effectiveDevices.filter(d => d.floor === currentFloor),
+    [effectiveDevices, currentFloor],
   )
 
   const floorCounts = useMemo(() => ({
@@ -179,14 +181,30 @@ export default function FloorPlanPage({
     if (isMoveMode) {
       setFloorLockAll(currentFloor, true)
       setMoveModeActive(false)
-      showToast(t('floor.lockedAllToast') || 'ล็อคตำแหน่งอุปกรณ์ทั้งหมดแล้ว', 'info')
+      showToast(t('floor.lockedAllToast'), 'info')
     } else {
       setFloorLockAll(currentFloor, false)
       setMoveModeActive(true)
-      showToast(t('floor.unlockedAllToast') || 'ปลดล็อคอุปกรณ์: สามารถคลิกลากย้ายตำแหน่งได้ทันที', 'success')
+      showToast(t('floor.unlockedAllToast'), 'success')
     }
   }, [isMoveMode, currentFloor, setFloorLockAll, showToast, t])
   const [floorRooms, setFloorRooms] = useState<Room[]>(() => getStoredRooms(currentFloor))
+
+  // Load canonical floor layouts from PostgreSQL on mount / floor switch (falling back to localStorage cache)
+  useEffect(() => {
+    let cancelled = false
+    api.fetchFloorLayouts().then(layouts => {
+      if (cancelled || !layouts) return
+      saveStoredRooms(1, layouts[1])
+      saveStoredRooms(2, layouts[2])
+      setFloorRooms(getStoredRooms(currentFloor))
+    }).catch(() => {
+      // ignore layout sync failures; localStorage cache remains active
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [currentFloor])
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -196,6 +214,7 @@ export default function FloorPlanPage({
   const handleRoomsChange = useCallback((updated: Room[]) => {
     setFloorRooms(updated)
     saveStoredRooms(currentFloor, updated)
+    void api.saveFloorLayout(currentFloor, updated)
   }, [currentFloor])
 
   const visibleDevices = floorDevices.filter(d =>
@@ -227,7 +246,7 @@ export default function FloorPlanPage({
   return (
     <div className={styles.layout}>
       <FloorSidebar
-        devices={devices}
+        devices={effectiveDevices}
         floorDevices={floorDevices}
         filterStatus={filterStatus}
         onFilter={setFilterStatus}
@@ -252,7 +271,7 @@ export default function FloorPlanPage({
               type="button"
             >
               <SlidersHorizontal size={14} className={styles.filterIconImg} />
-              <span>{t('floor.devicesSidebar') || 'อุปกรณ์'}</span>
+              <span>{t('floor.devicesSidebar')}</span>
               <span className={styles.toggleArrow}>
                 {sidebarOpen ? <ChevronLeft size={13} /> : <ChevronRight size={13} />}
               </span>
@@ -307,7 +326,7 @@ export default function FloorPlanPage({
                   type="button"
                   className={`${styles.floorStatusPill} ${filterStatus === 'online' ? styles.pillActiveOnline : ''}`}
                   onClick={() => setFilterStatus(filterStatus === 'online' ? 'all' : 'online')}
-                  title="กรองเฉพาะอุปกรณ์ออนไลน์"
+                  title={t('floor.filterOnlineTitle')}
                 >
                   <CheckCircle2 size={12} style={{ color: 'var(--status-online)' }} />
                   <span>{floorCounts.online} {t('status.online')}</span>
@@ -317,7 +336,7 @@ export default function FloorPlanPage({
                     type="button"
                     className={`${styles.floorStatusPill} ${filterStatus === 'warning' ? styles.pillActiveWarning : ''}`}
                     onClick={() => setFilterStatus(filterStatus === 'warning' ? 'all' : 'warning')}
-                    title="กรองเฉพาะอุปกรณ์เตือน"
+                    title={t('floor.filterWarningTitle')}
                   >
                     <AlertTriangle size={12} style={{ color: 'var(--status-warning)' }} />
                     <span>{floorCounts.warning} {t('status.warning')}</span>
@@ -328,7 +347,7 @@ export default function FloorPlanPage({
                     type="button"
                     className={`${styles.floorStatusPill} ${filterStatus === 'offline' ? styles.pillActiveOffline : ''}`}
                     onClick={() => setFilterStatus(filterStatus === 'offline' ? 'all' : 'offline')}
-                    title="กรองเฉพาะอุปกรณ์ออฟไลน์"
+                    title={t('floor.filterOfflineTitle')}
                   >
                     <XCircle size={12} style={{ color: 'var(--status-critical)' }} />
                     <span>{floorCounts.offline} {t('status.offline')}</span>

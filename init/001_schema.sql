@@ -19,6 +19,7 @@ CREATE TABLE devices (
     longitude       DOUBLE PRECISION,
     altitude        DOUBLE PRECISION,
     services        JSONB NOT NULL DEFAULT '[]'::jsonb,
+    is_simulated    BOOLEAN NOT NULL DEFAULT FALSE,
     created_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
     updated_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
     UNIQUE (management_ip, snmp_port)
@@ -95,6 +96,12 @@ CREATE TABLE topology_links (
     created_at          TIMESTAMPTZ NOT NULL DEFAULT now(),
     CHECK (source_device_id <> target_device_id),
     UNIQUE (source_device_id, target_device_id, source_port)
+);
+
+CREATE TABLE floor_layouts (
+    floor           INTEGER PRIMARY KEY CHECK (floor IN (1, 2)),
+    rooms           JSONB NOT NULL DEFAULT '[]'::jsonb,
+    updated_at      TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
 CREATE INDEX poll_runs_device_started_idx ON poll_runs (device_id, started_at DESC);

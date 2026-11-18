@@ -18,8 +18,11 @@ async def init_db():
         max_size=10,
     )
     # Ensure base schema and migrations are automatically applied on startup
+    # Serialize DDL across workers via session-level advisory lock ('SCHM')
     async with pool.acquire() as conn:
-        await conn.execute("""
+        await conn.execute("SELECT pg_advisory_lock(1396918349)")
+        try:
+            await conn.execute("""
             CREATE TABLE IF NOT EXISTS devices (
                 id              BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
                 name            TEXT NOT NULL,
@@ -41,6 +44,7 @@ async def init_db():
                 longitude       DOUBLE PRECISION,
                 altitude        DOUBLE PRECISION,
                 services        JSONB NOT NULL DEFAULT '[]'::jsonb,
+                is_simulated    BOOLEAN NOT NULL DEFAULT FALSE,
                 created_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
                 updated_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
                 UNIQUE (management_ip, snmp_port)
@@ -102,7 +106,14 @@ async def init_db():
             ADD COLUMN IF NOT EXISTS latitude DOUBLE PRECISION,
             ADD COLUMN IF NOT EXISTS longitude DOUBLE PRECISION,
             ADD COLUMN IF NOT EXISTS altitude DOUBLE PRECISION,
-            ADD COLUMN IF NOT EXISTS services JSONB NOT NULL DEFAULT '[]'::jsonb;
+            ADD COLUMN IF NOT EXISTS services JSONB NOT NULL DEFAULT '[]'::jsonb,
+            ADD COLUMN IF NOT EXISTS is_simulated BOOLEAN NOT NULL DEFAULT FALSE;
+
+            -- Migrate legacy sentinel credential_ref values to dedicated is_simulated flag
+            UPDATE devices
+            SET is_simulated = TRUE,
+                credential_ref = CASE WHEN credential_ref IN ('simulated', 'mock', 'demo') THEN NULL ELSE credential_ref END
+            WHERE credential_ref IN ('simulated', 'mock', 'demo');
 
             CREATE TABLE IF NOT EXISTS alerts (
                 id SERIAL PRIMARY KEY,
@@ -129,6 +140,11 @@ async def init_db():
                 CHECK (source_device_id <> target_device_id),
                 UNIQUE (source_device_id, target_device_id, source_port)
             );
+            CREATE TABLE IF NOT EXISTS floor_layouts (
+                floor       INTEGER PRIMARY KEY CHECK (floor IN (1, 2)),
+                rooms       JSONB NOT NULL DEFAULT '[]'::jsonb,
+                updated_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+            );
             CREATE INDEX IF NOT EXISTS idx_alerts_device_id ON alerts(device_id);
             CREATE INDEX IF NOT EXISTS idx_alerts_created_at ON alerts(created_at DESC);
             CREATE INDEX IF NOT EXISTS idx_poll_runs_device_started ON poll_runs(device_id, started_at DESC);
@@ -139,7 +155,9 @@ async def init_db():
 
             ALTER TABLE poll_runs DROP CONSTRAINT IF EXISTS poll_runs_status_check;
             ALTER TABLE poll_runs ADD CONSTRAINT poll_runs_status_check CHECK (status = ANY (ARRAY['running'::text, 'succeeded'::text, 'warning'::text, 'failed'::text]));
-        """)
+            """)
+        finally:
+            await conn.execute("SELECT pg_advisory_unlock(1396918349)")
 
 async def close_db():
     global pool

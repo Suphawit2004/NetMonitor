@@ -155,6 +155,9 @@ const th = {
     moveModeHint: 'โหมดย้ายตำแหน่ง: ลากอุปกรณ์เพื่อจัดวาง แล้วกด "ล็อคตำแหน่ง" เมื่อเสร็จสิ้น',
     lockedAllToast: 'ล็อคตำแหน่งอุปกรณ์ทั้งหมดแล้ว',
     unlockedAllToast: 'ปลดล็อคอุปกรณ์ทั้งหมด: สามารถคลิกลากย้ายตำแหน่งได้ทันที',
+    filterOnlineTitle: 'กรองเฉพาะอุปกรณ์ออนไลน์',
+    filterWarningTitle: 'กรองเฉพาะอุปกรณ์เตือน',
+    filterOfflineTitle: 'กรองเฉพาะอุปกรณ์ออฟไลน์',
   },
   pin: {
     type: 'ชนิด',
@@ -180,6 +183,13 @@ const th = {
     copiedIp: 'คัดลอก IP แล้ว',
     copyMac: 'คัดลอก MAC',
     copiedMac: 'คัดลอก MAC แล้ว',
+    clearSearchTitle: 'ล้างคำค้นหา',
+    filterFloorTitle: 'กรองตามชั้น',
+    loadSampleBtn: 'นำเข้าตัวอย่างสถานะ',
+    loadingSampleBtn: 'กำลังนำเข้า...',
+    loadSampleTitle: 'นำเข้าตัวอย่างสถานะอุปกรณ์ทุกประเภท (Online, Warning, Offline)',
+    loadSampleSuccess: 'นำเข้าตัวอย่างสถานะสำเร็จ (Online, Warning, Offline)',
+    loadSampleFail: 'ไม่สามารถนำเข้าตัวอย่างสถานะได้',
   },
   actions: {
     ping: 'ทดสอบ Ping',
@@ -311,6 +321,7 @@ const th = {
     impactMatrixTitle: 'ตารางวิเคราะห์: หากอุปกรณ์หลัก Down จะกระทบตัวใดบ้าง',
     impactMatrixSub: 'กดปุ่ม "ลองให้ล่ม" เพื่อดูผลกระทบลูกโซ่ในรายงานและแผนผังทันที',
     affectsLabel: 'กระทบ',
+    ackFailed: 'ไม่สามารถรับทราบการแจ้งเตือนได้',
   },
   settings: {
     title: 'ตั้งค่า',

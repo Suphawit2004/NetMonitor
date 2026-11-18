@@ -39,43 +39,43 @@
 }
 
 [data-theme="light"] {
-  /* ── Balanced Warm Tan / Almond-Beige Light Theme (สีเนื้ออมน้ำตาลนวลกำลังดี) ── */
-  --bg-canvas: #ddd0be;
-  --bg-surface: #ede1cf;
-  --bg-elevated: #e4d4be;
-  --bg-subtle: #d7c3a9;
-  --border-subtle: #cdbaa0;
-  --border-default: #b59c7d;
-  --border-hover: #907556;
-  --border-focus: #1e40af;
+  /* ── Natural Overcast Mineral Daylight Theme (soft matte stone, low glare, calm contrast) ── */
+  --bg-canvas: #cdd1d5;
+  --bg-surface: #d9dde0;
+  --bg-elevated: #e4e7ea;
+  --bg-subtle: #c5cad0;
+  --border-subtle: #bcc2c9;
+  --border-default: #9ea6b0;
+  --border-hover: #747e8a;
+  --border-focus: #2b4c7e;
 
-  --text-primary: #1d140c;
-  --text-secondary: #3a2b1d;
-  --text-muted: #513e2c;
-  --text-subtle: #624d39;
+  --text-primary: #1a202c;
+  --text-secondary: #2d3748;
+  --text-muted: #4a5568;
+  --text-subtle: #5c6675;
 
-  --accent-primary: #1e40af;
-  --accent-subtle: rgba(30, 64, 175, 0.11);
-  --accent-hover: #1e3a8a;
+  --accent-primary: #2b4c7e;
+  --accent-subtle: rgba(43, 76, 126, 0.11);
+  --accent-hover: #213b63;
 
-  --status-online: #065f46;
-  --status-online-bg: #d9efe1;
-  --status-warning: #92400e;
-  --status-warning-bg: #fae6c3;
-  --status-critical: #b91c1c;
-  --status-critical-bg: #f8dada;
-  --status-unmanaged: #624d39;
+  --status-online: #166534;
+  --status-online-bg: rgba(22, 101, 52, 0.11);
+  --status-warning: #9a5813;
+  --status-warning-bg: rgba(154, 88, 19, 0.12);
+  --status-critical: #9b2c2c;
+  --status-critical-bg: rgba(155, 44, 44, 0.11);
+  --status-unmanaged: #5c6675;
 
-  --chart-inbound: #047857;
-  --chart-outbound: #1e40af;
+  --chart-inbound: #1f7a53;
+  --chart-outbound: #2b548a;
 
-  --shadow-sm: 0 1px 2px 0 rgba(36, 22, 10, 0.08);
-  --shadow-md: 0 4px 12px -2px rgba(36, 22, 10, 0.12);
-  --shadow-lg: 0 10px 24px -4px rgba(36, 22, 10, 0.16);
+  --shadow-sm: 0 1px 2px 0 rgba(15, 23, 42, 0.06);
+  --shadow-md: 0 4px 12px -2px rgba(15, 23, 42, 0.10);
+  --shadow-lg: 0 10px 24px -4px rgba(15, 23, 42, 0.14);
 
-  --scrollbar-track: #ddd0be;
-  --scrollbar-thumb: #b59c7d;
-  --scrollbar-thumb-hover: #907556;
+  --scrollbar-track: #cdd1d5;
+  --scrollbar-thumb: #9ea6b0;
+  --scrollbar-thumb-hover: #747e8a;
 }
 
 /* ─── Reset & Base ─── */

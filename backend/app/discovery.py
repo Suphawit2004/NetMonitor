@@ -1,6 +1,8 @@
 import asyncio
 import ipaddress
 import logging
+import math
+import os
 import re
 import socket
 import subprocess
@@ -8,7 +10,7 @@ import time
 from typing import List, Dict, Any, Optional, Tuple, Set
 import asyncpg
 
-from .snmp import snmp_get_oid, OID_SYS_DESCR, OID_SYS_NAME
+from .snmp import snmp_get_oid, sanitize_snmp_community, OID_SYS_DESCR, OID_SYS_NAME
 from .config import settings
 from .database import get_db_pool
 from .placement import (
@@ -36,47 +38,79 @@ OID_IP_FORWARDING = ".1.3.6.1.2.1.4.1.0"
 
 def detect_local_network_info() -> Dict[str, Any]:
     """
-    Robustly detects the active physical LAN interface, its /24 subnet, dynamic ARP neighbors with MAC,
-    and Wi-Fi signal/BSSID context.
+    Detects the active physical LAN interface, its /24 subnet, dynamic ARP neighbors with MAC,
+    active default gateway, and Wi-Fi context on both Windows and POSIX/Linux hosts.
     """
     interfaces_arp: Dict[str, List[str]] = {}
     ip_to_mac: Dict[str, str] = {}
-    current_iface = None
 
-    try:
-        out = subprocess.check_output(["arp", "-a"], text=True, stderr=subprocess.DEVNULL)
-        for line in out.splitlines():
-            iface_match = re.search(r"Interface:\s*(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})", line)
-            if iface_match:
-                current_iface = iface_match.group(1)
-                interfaces_arp[current_iface] = []
-                continue
-            
-            if current_iface:
-                m = re.search(r"(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})\s+([0-9a-fA-F-]+)\s+dynamic", line)
+    if os.name == "nt":
+        current_iface = None
+        try:
+            out = subprocess.check_output(["arp", "-a"], text=True, stderr=subprocess.DEVNULL)
+            for line in out.splitlines():
+                iface_match = re.search(r"Interface:\s*(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})", line)
+                if iface_match:
+                    current_iface = iface_match.group(1)
+                    interfaces_arp[current_iface] = []
+                    continue
+
+                if current_iface:
+                    m = re.search(r"(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})\s+([0-9a-fA-F-]+)\s+dynamic", line)
+                    if m:
+                        ip = m.group(1)
+                        mac = m.group(2).lower()
+                        if not ip.startswith(("224.", "239.", "255.", "127.")):
+                            interfaces_arp[current_iface].append(ip)
+                            ip_to_mac[ip] = mac
+        except Exception as e:
+            logger.warning(f"Failed to read arp table: {e}")
+    else:
+        try:
+            out = subprocess.check_output(["ip", "neigh", "show"], text=True, stderr=subprocess.DEVNULL)
+            for line in out.splitlines():
+                m = re.search(
+                    r"^(\d{1,3}(?:\.\d{1,3}){3})\s+dev\s+\S+.*?\blladdr\s+([0-9a-fA-F:]+)",
+                    line.strip(),
+                )
                 if m:
                     ip = m.group(1)
                     mac = m.group(2).lower()
                     if not ip.startswith(("224.", "239.", "255.", "127.")):
-                        interfaces_arp[current_iface].append(ip)
                         ip_to_mac[ip] = mac
-    except Exception as e:
-        logger.warning(f"Failed to read arp table: {e}")
+                        interfaces_arp.setdefault("default", []).append(ip)
+        except Exception:
+            try:
+                out = subprocess.check_output(["arp", "-n"], text=True, stderr=subprocess.DEVNULL)
+                for line in out.splitlines():
+                    m = re.search(
+                        r"(\d{1,3}(?:\.\d{1,3}){3})\s+\S+\s+([0-9a-fA-F:]{17})",
+                        line,
+                    )
+                    if m:
+                        ip = m.group(1)
+                        mac = m.group(2).lower()
+                        if not ip.startswith(("224.", "239.", "255.", "127.")):
+                            ip_to_mac[ip] = mac
+                            interfaces_arp.setdefault("default", []).append(ip)
+            except Exception as e:
+                logger.warning(f"Failed to read neighbor table: {e}")
 
-    # Detect Wi-Fi Signal context (SSID, AP BSSID, Signal %, RSSI)
+    # Detect Wi-Fi Signal context on Windows (skipped gracefully on Linux containers)
     wifi_ssid = None
     wifi_bssid = None
     wifi_signal = None
-    try:
-        wlan_out = subprocess.check_output(["netsh", "wlan", "show", "interfaces"], text=True, stderr=subprocess.DEVNULL)
-        m_ssid = re.search(r"SSID\s*:\s*(.+)", wlan_out)
-        m_bssid = re.search(r"AP BSSID\s*:\s*(.+)", wlan_out)
-        m_sig = re.search(r"Signal\s*:\s*(.+)", wlan_out)
-        if m_ssid: wifi_ssid = m_ssid.group(1).strip()
-        if m_bssid: wifi_bssid = m_bssid.group(1).strip()
-        if m_sig: wifi_signal = m_sig.group(1).strip()
-    except Exception:
-        pass
+    if os.name == "nt":
+        try:
+            wlan_out = subprocess.check_output(["netsh", "wlan", "show", "interfaces"], text=True, stderr=subprocess.DEVNULL)
+            m_ssid = re.search(r"SSID\s*:\s*(.+)", wlan_out)
+            m_bssid = re.search(r"AP BSSID\s*:\s*(.+)", wlan_out)
+            m_sig = re.search(r"Signal\s*:\s*(.+)", wlan_out)
+            if m_ssid: wifi_ssid = m_ssid.group(1).strip()
+            if m_bssid: wifi_bssid = m_bssid.group(1).strip()
+            if m_sig: wifi_signal = m_sig.group(1).strip()
+        except Exception:
+            pass
 
     # Fallback probe via UDP socket
     socket_ip = None
@@ -94,24 +128,30 @@ def detect_local_network_info() -> Dict[str, Any]:
     best_iface = socket_ip or "127.0.0.1"
     max_entries = -1
     for iface, ips in interfaces_arp.items():
-        if not iface.startswith(("127.", "169.254.", "172.21.")) and len(ips) > max_entries:
+        if iface != "default" and not iface.startswith(("127.", "169.254.", "172.21.")) and len(ips) > max_entries:
             max_entries = len(ips)
             best_iface = iface
 
     if socket_ip and socket_ip in interfaces_arp and len(interfaces_arp[socket_ip]) > 0:
         best_iface = socket_ip
 
-    # Dynamic active default gateway route lookup (Windows route print 0.0.0.0)
+    # Dynamic active default gateway route lookup (cross-platform)
     detected_gw = None
     try:
-        route_out = subprocess.check_output(["route", "print", "0.0.0.0"], text=True, stderr=subprocess.DEVNULL)
-        for r_line in route_out.splitlines():
-            m_gw = re.search(r"0\.0\.0\.0\s+0\.0\.0\.0\s+(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})", r_line.strip())
-            if m_gw:
-                cand_gw = m_gw.group(1)
-                if not cand_gw.startswith(("127.", "0.")):
-                    detected_gw = cand_gw
-                    break
+        if os.name == "nt":
+            route_out = subprocess.check_output(["route", "print", "0.0.0.0"], text=True, stderr=subprocess.DEVNULL)
+            for r_line in route_out.splitlines():
+                m_gw = re.search(r"0\.0\.0\.0\s+0\.0\.0\.0\s+(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})", r_line.strip())
+                if m_gw:
+                    cand_gw = m_gw.group(1)
+                    if not cand_gw.startswith(("127.", "0.")):
+                        detected_gw = cand_gw
+                        break
+        else:
+            route_out = subprocess.check_output(["ip", "route", "show", "default"], text=True, stderr=subprocess.DEVNULL)
+            m_gw = re.search(r"default\s+via\s+(\d{1,3}(?:\.\d{1,3}){3})", route_out)
+            if m_gw and not m_gw.group(1).startswith(("127.", "0.")):
+                detected_gw = m_gw.group(1)
     except Exception:
         pass
 
@@ -124,7 +164,7 @@ def detect_local_network_info() -> Dict[str, Any]:
         subnet = "192.168.22.0/24"
         gateway = detected_gw or "192.168.22.254"
 
-    arp_ips = interfaces_arp.get(best_iface, [])
+    arp_ips = interfaces_arp.get(best_iface, interfaces_arp.get("default", []))
 
     return {
         "local_ip": best_iface,
@@ -151,23 +191,92 @@ def _run_ping_sync(cmd: list[str], timeout_s: float) -> tuple[int, str]:
 
 async def ping_ip(ip: str, timeout_ms: int = 250) -> tuple[bool, float, Optional[int]]:
     """
-    Executes a fast ICMP ping on Windows with 250ms timeout.
+    Executes a fast cross-platform ICMP ping.
     Returns: (is_alive: bool, rtt_ms: float, ttl: Optional[int])
     """
-    cmd = ["ping", "-n", "1", "-w", str(timeout_ms), ip]
+    if os.name == "nt":
+        cmd = ["ping", "-n", "1", "-w", str(timeout_ms), ip]
+        proc_timeout_s = (timeout_ms / 1000.0) + 0.5
+    else:
+        timeout_sec = max(1, math.ceil(timeout_ms / 1000.0))
+        cmd = ["ping", "-c", "1", "-W", str(timeout_sec), ip]
+        proc_timeout_s = timeout_sec + 0.5
+
     t0 = time.perf_counter()
     try:
         returncode, output = await asyncio.to_thread(
-            _run_ping_sync, cmd, (timeout_ms / 1000.0) + 0.5
+            _run_ping_sync, cmd, proc_timeout_s
         )
         rtt_ms = (time.perf_counter() - t0) * 1000.0
-        if returncode == 0 and ("reply from" in output or "bytes=" in output or "ไบต์=" in output or "ttl=" in output):
+        if returncode == 0 and ("reply from" in output or "bytes=" in output or "ไบต์=" in output or "bytes from" in output or "ttl=" in output):
             ttl_match = re.search(r"ttl=(\d+)", output)
             ttl = int(ttl_match.group(1)) if ttl_match else None
             return True, round(rtt_ms, 1), ttl
     except Exception:
         pass
     return False, 0.0, None
+
+COMMON_TCP_PROBE_PORTS: Tuple[int, ...] = (22, 80, 443, 445, 135, 3389, 8080, 62078)
+
+async def tcp_probe_ip(
+    ip: str,
+    ports: Tuple[int, ...] = COMMON_TCP_PROBE_PORTS,
+    timeout_s: float = 0.35,
+) -> Tuple[bool, Optional[float]]:
+    """
+    Lightweight non-blocking TCP liveness probe for hosts that block ICMP Ping.
+    A TCP SYN-ACK (open) or TCP RST (ConnectionRefusedError) proves the target IP stack is alive.
+    """
+    async def _probe_port(port: int) -> Tuple[bool, float]:
+        t0 = time.perf_counter()
+        try:
+            _, writer = await asyncio.wait_for(asyncio.open_connection(ip, port), timeout=timeout_s)
+            writer.close()
+            try:
+                await writer.wait_closed()
+            except Exception:
+                pass
+            return True, round((time.perf_counter() - t0) * 1000.0, 1)
+        except ConnectionRefusedError:
+            return True, round((time.perf_counter() - t0) * 1000.0, 1)
+        except Exception:
+            return False, 0.0
+
+    tasks = [asyncio.create_task(_probe_port(p)) for p in ports]
+    try:
+        for fut in asyncio.as_completed(tasks):
+            alive, rtt_ms = await fut
+            if alive:
+                return True, max(rtt_ms, 0.5)
+    finally:
+        for t in tasks:
+            if not t.done():
+                t.cancel()
+        await asyncio.gather(*tasks, return_exceptions=True)
+    return False, None
+
+async def probe_device_reachability(
+    ip: str,
+    ping_timeout_ms: int = 600,
+    retry_timeout_ms: Optional[int] = 1000,
+    tcp_timeout_s: float = 0.35,
+) -> Tuple[bool, float, Optional[int], str]:
+    """
+    Probes host reachability using ICMP Ping (with optional single retry for wireless jitter)
+    followed by a fast TCP liveness check for ICMP-blocking hosts.
+    Returns: (is_alive, rtt_ms, ttl, protocol) where protocol in {"icmp", "tcp", "none"}.
+    """
+    alive, rtt_ms, ttl = await ping_ip(ip, timeout_ms=ping_timeout_ms)
+    if alive:
+        return True, rtt_ms, ttl, "icmp"
+    if retry_timeout_ms and retry_timeout_ms > 0:
+        alive, rtt_ms, ttl = await ping_ip(ip, timeout_ms=retry_timeout_ms)
+        if alive:
+            return True, rtt_ms, ttl, "icmp"
+    tcp_alive, tcp_rtt = await tcp_probe_ip(ip, timeout_s=tcp_timeout_s)
+    if tcp_alive:
+        return True, tcp_rtt or 4.0, None, "tcp"
+    return False, 0.0, None, "none"
 
 async def async_get_rdns(ip: str, timeout_s: float = 0.25) -> Optional[str]:
     """
@@ -190,7 +299,7 @@ def parse_candidate_communities(community: Optional[str]) -> List[str]:
     or automatic multi-probe fallback when empty.
     """
     if community and community.strip():
-        parts = [c.strip() for c in re.split(r"[,;\s]+", community) if c.strip()]
+        parts = [sanitize_snmp_community(c) for c in re.split(r"[,;\s]+", community) if c.strip()]
         candidates = []
         for c in parts:
             if c not in candidates:
@@ -225,8 +334,10 @@ async def probe_single_ip(
         is_in_arp = ip in mac_dict
         is_core = ip.endswith(".254") or ip.endswith(".1")
 
-        # Step 1: Fast ICMP Ping check (200ms timeout)
-        ping_alive, rtt_ms, ttl = await ping_ip(ip, timeout_ms=200)
+        # Step 1: Fast ICMP Ping check (retry once for known ARP/core hosts to survive Wi-Fi jitter)
+        ping_alive, rtt_ms, ttl = await ping_ip(ip, timeout_ms=300)
+        if not ping_alive and (is_in_arp or is_core):
+            ping_alive, rtt_ms, ttl = await ping_ip(ip, timeout_ms=800)
 
         # If not responding to ping and not in ARP and not core gateway, drop immediately
         if not ping_alive and not is_in_arp and not is_core:
@@ -249,7 +360,15 @@ async def probe_single_ip(
                     matched_community = candidate_comm
                     break
 
-        if not snmp_success and not ping_alive and not is_in_arp:
+        # Step 3: For ICMP-silent ARP/core hosts, verify TCP liveness before admitting as reachable
+        tcp_alive = False
+        if not snmp_success and not ping_alive and (is_in_arp or is_core):
+            tcp_alive, tcp_rtt = await tcp_probe_ip(ip, timeout_s=0.35)
+            if tcp_alive and tcp_rtt is not None:
+                rtt_ms = tcp_rtt
+
+        # Do not import unreachable stale ARP cache ghosts as active online devices
+        if not snmp_success and not ping_alive and not tcp_alive:
             return None
 
         sys_name = None

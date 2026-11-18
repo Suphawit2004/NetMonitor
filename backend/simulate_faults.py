@@ -88,8 +88,8 @@ async def apply_sample_statuses(pool: asyncpg.Pool) -> dict:
     rtr1 = await pool.fetchrow("SELECT id FROM devices WHERE name = 'RTR-CORE-01' OR management_ip = '192.168.22.1'")
     if not rtr1:
         rtr1_id = await pool.fetchval("""
-            INSERT INTO devices (name, hostname, dtype, floor, x, y, locked, management_ip, snmp_version, credential_ref, model, location, enabled)
-            VALUES ('RTR-CORE-01', 'rtr-core-01.netmon.lan', 'router', 1, 164.0, 124.0, true, '192.168.22.1'::inet, 'v2c', 'simulated', 'Cisco ISR 4451-X/K9 Gateway', 'Floor 1 – Server Room', true)
+            INSERT INTO devices (name, hostname, dtype, floor, x, y, locked, management_ip, snmp_version, credential_ref, model, location, enabled, is_simulated)
+            VALUES ('RTR-CORE-01', 'rtr-core-01.netmon.lan', 'router', 1, 164.0, 124.0, true, '192.168.22.1'::inet, 'v2c', 'public', 'Cisco ISR 4451-X/K9 Gateway', 'Floor 1 – Server Room', true, true)
             RETURNING id
         """)
         print(f"[+] Created RTR-CORE-01 (ID: {rtr1_id}) on Floor 1")
@@ -98,7 +98,7 @@ async def apply_sample_statuses(pool: asyncpg.Pool) -> dict:
         await pool.execute("""
             UPDATE devices 
             SET name = 'RTR-CORE-01', hostname = 'rtr-core-01.netmon.lan', dtype = 'router', floor = 1, x = 164.0, y = 124.0, 
-                snmp_version = 'v2c', credential_ref = 'simulated', model = 'Cisco ISR 4451-X/K9 Gateway', location = 'Floor 1 – Server Room', enabled = true
+                snmp_version = 'v2c', model = 'Cisco ISR 4451-X/K9 Gateway', location = 'Floor 1 – Server Room', enabled = true, is_simulated = true
             WHERE id = $1
         """, rtr1_id)
         print(f"[*] Updated RTR-CORE-01 (ID: {rtr1_id})")
@@ -107,8 +107,8 @@ async def apply_sample_statuses(pool: asyncpg.Pool) -> dict:
     rtr2 = await pool.fetchrow("SELECT id FROM devices WHERE name = 'RTR-BRANCH-02' OR management_ip = '192.168.22.2'")
     if not rtr2:
         rtr2_id = await pool.fetchval("""
-            INSERT INTO devices (name, hostname, dtype, floor, x, y, locked, management_ip, snmp_version, credential_ref, model, location, enabled)
-            VALUES ('RTR-BRANCH-02', 'rtr-branch-02.netmon.lan', 'router', 2, 44.0, 44.0, true, '192.168.22.2'::inet, 'v2c', 'simulated', 'MikroTik CCR2004-16G-2S+ Cloud Router', 'Floor 2 – Zone E – Office', true)
+            INSERT INTO devices (name, hostname, dtype, floor, x, y, locked, management_ip, snmp_version, credential_ref, model, location, enabled, is_simulated)
+            VALUES ('RTR-BRANCH-02', 'rtr-branch-02.netmon.lan', 'router', 2, 44.0, 44.0, true, '192.168.22.2'::inet, 'v2c', 'public', 'MikroTik CCR2004-16G-2S+ Cloud Router', 'Floor 2 – Zone E – Office', true, true)
             RETURNING id
         """)
         print(f"[+] Created RTR-BRANCH-02 (ID: {rtr2_id}) on Floor 2")
@@ -117,7 +117,7 @@ async def apply_sample_statuses(pool: asyncpg.Pool) -> dict:
         await pool.execute("""
             UPDATE devices 
             SET name = 'RTR-BRANCH-02', hostname = 'rtr-branch-02.netmon.lan', dtype = 'router', floor = 2, x = 44.0, y = 44.0,
-                snmp_version = 'v2c', credential_ref = 'simulated', model = 'MikroTik CCR2004-16G-2S+ Cloud Router', location = 'Floor 2 – Zone E – Office', enabled = true
+                snmp_version = 'v2c', model = 'MikroTik CCR2004-16G-2S+ Cloud Router', location = 'Floor 2 – Zone E – Office', enabled = true, is_simulated = true
             WHERE id = $1
         """, rtr2_id)
         print(f"[*] Updated RTR-BRANCH-02 (ID: {rtr2_id})")
@@ -151,11 +151,11 @@ async def apply_sample_statuses(pool: asyncpg.Pool) -> dict:
 
     # Ensure Floor positions for key devices
     if sw_off:
-        await pool.execute("UPDATE devices SET floor = 2, x = 460.0, y = 90.0, credential_ref = 'simulated', location = 'Floor 2 – Zone F – Lab' WHERE id = $1", sw_off["id"])
+        await pool.execute("UPDATE devices SET floor = 2, x = 460.0, y = 90.0, is_simulated = true, location = 'Floor 2 – Zone F – Lab' WHERE id = $1", sw_off["id"])
     if ap_warn:
-        await pool.execute("UPDATE devices SET floor = 2, x = 240.0, y = 260.0, credential_ref = 'simulated', location = 'Floor 2 – Zone G – Meeting' WHERE id = $1", ap_warn["id"])
+        await pool.execute("UPDATE devices SET floor = 2, x = 240.0, y = 260.0, is_simulated = true, location = 'Floor 2 – Zone G – Meeting' WHERE id = $1", ap_warn["id"])
     if ap_on2:
-        await pool.execute("UPDATE devices SET floor = 2, x = 620.0, y = 260.0, credential_ref = 'simulated', location = 'Floor 2 – Zone H – Hall' WHERE id = $1", ap_on2["id"])
+        await pool.execute("UPDATE devices SET floor = 2, x = 620.0, y = 260.0, is_simulated = true, location = 'Floor 2 – Zone H – Hall' WHERE id = $1", ap_on2["id"])
 
     # Define all status scenarios:
     # Status Scenarios: (Online, Warning, Offline)
@@ -268,9 +268,9 @@ async def apply_sample_statuses(pool: asyncpg.Pool) -> dict:
         if not dev_id:
             continue
 
-        # Tag device as simulated so background poller won't overwrite it
+        # Tag device as simulated so background poller won't overwrite it while preserving credential_ref
         if dev_id != (sw_core["id"] if sw_core else None):
-            await pool.execute("UPDATE devices SET credential_ref = 'simulated', enabled = true WHERE id = $1", dev_id)
+            await pool.execute("UPDATE devices SET is_simulated = true, enabled = true WHERE id = $1", dev_id)
 
         # Ensure realistic interfaces and metrics for simulated device
         dtype_val = await pool.fetchval("SELECT dtype FROM devices WHERE id = $1", dev_id)

@@ -10,6 +10,65 @@ import logging
 
 logger = logging.getLogger("netmonitor.repository")
 
+
+def compute_device_status(row: Any) -> str:
+    """Derives 'online', 'warning', or 'offline' from enabled flag, unack alerts, and latest poll status."""
+    getter = row.get if hasattr(row, "get") else lambda k, default=None: row[k] if k in row else default
+    if not row["enabled"]:
+        return "offline"
+    alert_sev = getter("alert_severity")
+    if alert_sev == "crit":
+        return "offline"
+    poll_status = getter("latest_poll_status")
+    if not poll_status or poll_status == "failed":
+        return "offline"
+    if alert_sev == "warn" or poll_status == "warning":
+        return "warning"
+    if poll_status == "succeeded":
+        return "online"
+    return "offline"
+
+
+async def check_db_health(pool: asyncpg.Pool) -> bool:
+    """Verifies PostgreSQL connectivity."""
+    val = await pool.fetchval("SELECT 1")
+    return val == 1
+
+
+async def purge_expired_telemetry(pool: asyncpg.Pool, retention_days: int = 7) -> Dict[str, int]:
+    """Deletes time-series rows older than retention_days, keeping the latest poll_run per device."""
+    days = max(1, int(retention_days))
+    async with pool.acquire() as conn:
+        iface_res = await conn.execute(
+            "DELETE FROM interface_samples WHERE sampled_at < now() - ($1 * interval '1 day')",
+            days,
+        )
+        metric_res = await conn.execute(
+            "DELETE FROM device_metric_samples WHERE sampled_at < now() - ($1 * interval '1 day')",
+            days,
+        )
+        poll_res = await conn.execute(
+            """
+            DELETE FROM poll_runs pr
+            WHERE pr.started_at < now() - ($1 * interval '1 day')
+              AND pr.id NOT IN (
+                  SELECT DISTINCT ON (device_id) id
+                  FROM poll_runs
+                  ORDER BY device_id, started_at DESC
+              )
+            """,
+            days,
+        )
+    def _deleted_count(status_str: str) -> int:
+        parts = status_str.split()
+        return int(parts[-1]) if parts and parts[-1].isdigit() else 0
+
+    return {
+        "interface_samples": _deleted_count(iface_res),
+        "device_metric_samples": _deleted_count(metric_res),
+        "poll_runs": _deleted_count(poll_res),
+    }
+
 async def record_poll_run(
     pool: asyncpg.Pool,
     device_id: int,
@@ -30,14 +89,21 @@ async def record_poll_run(
         logger.error(f"Failed to record poll_run for device {device_id}: {e}")
 
 async def fetch_pollable_devices(conn: asyncpg.Connection) -> List[asyncpg.Record]:
-    """Retrieves all enabled devices configured with a management IP, excluding simulated ones."""
+    """Retrieves all enabled live devices with management IP and latest poll status, excluding simulated ones."""
     return await conn.fetch(
         """
-        SELECT id, host(management_ip) as ip, credential_ref, snmp_port, snmp_version 
-        FROM devices 
-        WHERE enabled = true 
-          AND management_ip IS NOT NULL
-          AND (credential_ref IS NULL OR credential_ref NOT IN ('simulated', 'mock', 'demo'))
+        SELECT d.id, host(d.management_ip) as ip, d.credential_ref, d.snmp_port, d.snmp_version,
+               p.status as latest_poll_status
+        FROM devices d
+        LEFT JOIN LATERAL (
+            SELECT status FROM poll_runs pr
+            WHERE pr.device_id = d.id
+            ORDER BY started_at DESC
+            LIMIT 1
+        ) p ON TRUE
+        WHERE d.enabled = true
+          AND d.management_ip IS NOT NULL
+          AND d.is_simulated = FALSE
         """
     )
 
@@ -181,7 +247,7 @@ async def fetch_device_detail_by_id(pool: asyncpg.Pool, device_id: int) -> Optio
         SELECT 
             d.id, d.name, d.hostname, host(d.management_ip) AS ip, 
             d.snmp_port, d.snmp_version, d.credential_ref, d.poll_interval_s, 
-            d.location, d.enabled, d.dtype, d.floor, d.x, d.y, 
+            d.location, d.enabled, d.is_simulated, d.dtype, d.floor, d.x, d.y, 
             d.locked, d.model, d.latitude, d.longitude, d.altitude, d.services,
             p.status AS latest_poll_status,
             a.highest_severity AS alert_severity
@@ -202,6 +268,147 @@ async def fetch_device_detail_by_id(pool: asyncpg.Pool, device_id: int) -> Optio
         """,
         device_id,
     )
+
+
+async def fetch_device_by_id(pool: asyncpg.Pool, device_id: int) -> Optional[asyncpg.Record]:
+    """Retrieves basic device row including host(management_ip) and simulation status."""
+    return await pool.fetchrow(
+        """
+        SELECT id, name, hostname, host(management_ip) AS ip, snmp_port, snmp_version,
+               credential_ref, poll_interval_s, location, enabled, is_simulated,
+               dtype, floor, x, y, locked, model, latitude, longitude, altitude, services
+        FROM devices
+        WHERE id = $1
+        """,
+        device_id,
+    )
+
+
+async def update_device(pool: asyncpg.Pool, device_id: int, field_values: Dict[str, Any]) -> Optional[asyncpg.Record]:
+    """Applies partial field updates to devices and returns refreshed row with telemetry."""
+    if field_values:
+        updates = []
+        params: List[Any] = []
+        idx = 1
+        for col, val in field_values.items():
+            if col == "management_ip":
+                updates.append(f"management_ip = ${idx}::inet")
+                params.append(val)
+            elif col == "services":
+                updates.append(f"services = ${idx}::jsonb")
+                params.append(json.dumps(val))
+            else:
+                updates.append(f"{col} = ${idx}")
+                params.append(val)
+            idx += 1
+        updates.append("updated_at = now()")
+        params.append(device_id)
+        sql = f"UPDATE devices SET {', '.join(updates)} WHERE id = ${idx} RETURNING id;"
+        await pool.execute(sql, *params)
+
+    return await fetch_device_detail_by_id(pool, device_id)
+
+
+async def update_device_model(pool: asyncpg.Pool, device_id: int, model: str) -> None:
+    """Updates device hardware/firmware model label."""
+    await pool.execute("UPDATE devices SET model = $1, updated_at = now() WHERE id = $2", model, device_id)
+
+
+async def fetch_device_interface_traffic(pool: asyncpg.Pool, device_id: int) -> List[asyncpg.Record]:
+    """Retrieves cached interfaces for a device with zeroed default rate placeholders."""
+    return await pool.fetch(
+        """
+        SELECT id, if_index, name, description, speed_bps, oper_status,
+               0.0 AS in_mbps, 0.0 AS out_mbps
+        FROM interfaces
+        WHERE device_id = $1
+        ORDER BY if_index ASC
+        """,
+        device_id,
+    )
+
+
+async def fetch_unacknowledged_critical_alert(pool: asyncpg.Pool, device_id: int) -> Optional[str]:
+    """Returns the title of an active unacknowledged critical alert for a device if present."""
+    return await pool.fetchval(
+        "SELECT title FROM alerts WHERE device_id = $1 AND severity = 'crit' AND acknowledged = false LIMIT 1",
+        device_id,
+    )
+
+
+async def fetch_latest_sys_uptime(pool: asyncpg.Pool, device_id: int) -> Optional[str]:
+    """Returns the most recent stored sys_uptime string for a device without network I/O."""
+    return await pool.fetchval(
+        """
+        SELECT text_value
+        FROM device_metric_samples
+        WHERE device_id = $1 AND metric_name = 'sys_uptime' AND text_value IS NOT NULL
+        ORDER BY sampled_at DESC
+        LIMIT 1
+        """,
+        device_id,
+    )
+
+
+async def check_device_exists_by_ip_or_name(pool: asyncpg.Pool, ip: str, name: str) -> Optional[int]:
+    """Checks whether any existing device matches IP or case-insensitive name."""
+    return await pool.fetchval(
+        "SELECT id FROM devices WHERE host(management_ip) = $1 OR LOWER(name) = LOWER($2)",
+        ip, name,
+    )
+
+
+async def create_alert(
+    pool: asyncpg.Pool,
+    device_id: int,
+    severity: str,
+    icon: str,
+    title: str,
+    description: Optional[str],
+) -> asyncpg.Record:
+    """Inserts a new alert record and returns serialized columns."""
+    return await pool.fetchrow(
+        """
+        INSERT INTO alerts (device_id, severity, icon, title, description)
+        VALUES ($1, $2, $3, $4, $5)
+        RETURNING id, device_id, severity, icon, title, description,
+                  to_char(created_at, 'YYYY-MM-DD"T"HH24:MI:SSZ') AS created_at,
+                  acknowledged, acknowledged_by
+        """,
+        device_id, severity, icon, title, description,
+    )
+
+
+async def fetch_floor_layouts(pool: asyncpg.Pool) -> Dict[int, List[Dict[str, Any]]]:
+    """Fetches persisted room layouts per floor."""
+    rows = await pool.fetch("SELECT floor, rooms FROM floor_layouts ORDER BY floor ASC")
+    layouts: Dict[int, List[Dict[str, Any]]] = {}
+    for r in rows:
+        raw = r["rooms"]
+        if isinstance(raw, str):
+            try:
+                raw = json.loads(raw)
+            except Exception:
+                raw = []
+        if isinstance(raw, list):
+            layouts[int(r["floor"])] = raw
+    return layouts
+
+
+async def upsert_floor_layout(pool: asyncpg.Pool, floor: int, rooms: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """Persists canonical room rectangles for a floor."""
+    rooms_json = json.dumps(rooms)
+    await pool.execute(
+        """
+        INSERT INTO floor_layouts (floor, rooms, updated_at)
+        VALUES ($1, $2::jsonb, now())
+        ON CONFLICT (floor) DO UPDATE
+        SET rooms = EXCLUDED.rooms,
+            updated_at = now()
+        """,
+        floor, rooms_json,
+    )
+    return rooms
 
 async def fetch_device_interfaces(pool: asyncpg.Pool, device_id: int) -> List[asyncpg.Record]:
     """Retrieves all interfaces belonging to a device."""
@@ -405,7 +612,8 @@ async def apply_simulated_faults(
 ) -> Dict[str, int]:
     """
     Persists simulated outage & cascading impact into poll_runs and alerts.
-    Tags impacted devices as credential_ref = 'simulated' so background SNMP poller does not overwrite.
+    Marks impacted devices via is_simulated = true so background SNMP poller does not overwrite,
+    without modifying devices.credential_ref.
     """
     async with pool.acquire() as conn:
         async with conn.transaction():
@@ -413,87 +621,64 @@ async def apply_simulated_faults(
                 await conn.execute(
                     """
                     DELETE FROM alerts
-                    WHERE device_id IN (SELECT id FROM devices WHERE credential_ref = 'simulated')
+                    WHERE device_id IN (SELECT id FROM devices WHERE is_simulated = true)
                       AND severity IN ('warn', 'crit')
                     """
                 )
+                await conn.execute(
+                    "UPDATE devices SET is_simulated = false WHERE is_simulated = true"
+                )
 
-            for dev_id in root_down_ids:
-                await conn.execute(
-                    "UPDATE devices SET credential_ref = 'simulated', enabled = true WHERE id = $1",
-                    dev_id,
-                )
-                await conn.execute(
-                    "DELETE FROM alerts WHERE device_id = $1 AND severity IN ('warn', 'crit')",
-                    dev_id,
-                )
-                await conn.execute(
-                    """
-                    INSERT INTO alerts (device_id, severity, icon, title, description, created_at, acknowledged)
-                    VALUES ($1, 'crit', '', $2, $3, now(), false)
-                    """,
-                    dev_id,
+            specs = [
+                (
+                    root_down_ids,
                     "Simulated Device Outage (Root Cause)",
                     "Device simulated as DOWN in Topology Blast-Radius Simulator.",
-                )
-                await conn.execute(
-                    """
-                    INSERT INTO poll_runs (device_id, status, error_message, started_at, finished_at)
-                    VALUES ($1, 'failed', 'Simulated fault injection: device down', now(), now())
-                    """,
-                    dev_id,
-                )
-
-            for dev_id in unreachable_ids:
-                await conn.execute(
-                    "UPDATE devices SET credential_ref = 'simulated', enabled = true WHERE id = $1",
-                    dev_id,
-                )
-                await conn.execute(
-                    "DELETE FROM alerts WHERE device_id = $1 AND severity IN ('warn', 'crit')",
-                    dev_id,
-                )
-                await conn.execute(
-                    """
-                    INSERT INTO alerts (device_id, severity, icon, title, description, created_at, acknowledged)
-                    VALUES ($1, 'crit', '', $2, $3, now(), false)
-                    """,
-                    dev_id,
+                    "crit",
+                    "failed",
+                    "Simulated fault injection: device down",
+                ),
+                (
+                    unreachable_ids,
                     "Cascading Outage: Unreachable from Gateway",
-                    "Upstream device or link down caused total loss of connectivity.",
-                )
-                await conn.execute(
-                    """
-                    INSERT INTO poll_runs (device_id, status, error_message, started_at, finished_at)
-                    VALUES ($1, 'failed', 'Cascading unreachable from simulated upstream outage', now(), now())
-                    """,
-                    dev_id,
-                )
-
-            for dev_id in degraded_ids:
-                await conn.execute(
-                    "UPDATE devices SET credential_ref = 'simulated', enabled = true WHERE id = $1",
-                    dev_id,
-                )
-                await conn.execute(
-                    "DELETE FROM alerts WHERE device_id = $1 AND severity IN ('warn', 'crit')",
-                    dev_id,
-                )
-                await conn.execute(
-                    """
-                    INSERT INTO alerts (device_id, severity, icon, title, description, created_at, acknowledged)
-                    VALUES ($1, 'warn', '', $2, $3, now(), false)
-                    """,
-                    dev_id,
+                    "Upstream device or link down caused connectivity interruption.",
+                    "warn",
+                    "warning",
+                    "Cascading unreachable from simulated upstream outage",
+                ),
+                (
+                    degraded_ids,
                     "Redundancy Lost (Degraded Path)",
                     "Primary path disrupted; operating on backup uplink with reduced redundancy.",
+                    "warn",
+                    "warning",
+                    "Simulated failover to redundant path",
+                ),
+            ]
+            for ids, title, desc, sev, poll_status, poll_err in specs:
+                if not ids:
+                    continue
+                await conn.execute(
+                    "UPDATE devices SET is_simulated = true, enabled = true WHERE id = ANY($1::bigint[])",
+                    ids,
                 )
                 await conn.execute(
+                    "DELETE FROM alerts WHERE device_id = ANY($1::bigint[]) AND severity IN ('warn', 'crit')",
+                    ids,
+                )
+                await conn.executemany(
+                    """
+                    INSERT INTO alerts (device_id, severity, icon, title, description, created_at, acknowledged)
+                    VALUES ($1, $2, '', $3, $4, now(), false)
+                    """,
+                    [(dev_id, sev, title, desc) for dev_id in ids],
+                )
+                await conn.executemany(
                     """
                     INSERT INTO poll_runs (device_id, status, error_message, started_at, finished_at)
-                    VALUES ($1, 'warning', 'Simulated failover to redundant path', now(), now())
+                    VALUES ($1, $2, $3, now(), now())
                     """,
-                    dev_id,
+                    [(dev_id, poll_status, poll_err) for dev_id in ids],
                 )
 
     return {

@@ -756,9 +756,9 @@
 }
 
 :global([data-theme="light"]) .statsOverlay {
-  background: rgba(237, 225, 207, 0.96);
+  background: rgba(217, 221, 224, 0.96);
   border-color: var(--border-default);
-  box-shadow: 0 8px 20px rgba(36, 22, 10, 0.14);
+  box-shadow: 0 8px 20px rgba(15, 23, 42, 0.11);
 }
 
 :global([data-theme="light"]) .statItem {
@@ -782,52 +782,80 @@
 }
 
 :global([data-theme="light"]) .editGuideBanner {
-  background: rgba(237, 225, 207, 0.97);
-  border-color: #b45309;
-  color: #78350f;
-  box-shadow: 0 4px 15px rgba(36, 22, 10, 0.16);
+  background: rgba(228, 231, 234, 0.97);
+  border-color: var(--status-warning);
+  color: #7c450d;
+  box-shadow: 0 4px 15px rgba(15, 23, 42, 0.13);
 }
 
 :global([data-theme="light"]) .rotateBtn {
-  background: var(--bg-surface);
-  border-color: var(--border-default);
-  color: var(--text-primary);
-}
-
-:global([data-theme="light"]) .resetOrthoBtn {
   background: var(--bg-elevated);
   border-color: var(--border-default);
   color: var(--text-primary);
 }
 
+:global([data-theme="light"]) .resetOrthoBtn {
+  background: var(--bg-surface);
+  border-color: var(--border-default);
+  color: var(--text-primary);
+}
+
 :global([data-theme="light"]) .coordPill {
-  background: rgba(237, 225, 207, 0.96);
+  background: rgba(217, 221, 224, 0.96);
   border-color: var(--border-default);
   color: var(--accent-primary);
 }
 
+:global([data-theme="light"]) :global(.leaflet-container) {
+  background: var(--bg-canvas);
+}
+
+:global([data-theme="light"]) .leafletCartoToned :global(.leaflet-tile-pane) {
+  filter: brightness(0.90) saturate(0.88) contrast(1.03);
+}
+
+:global([data-theme="light"]) :global(.leaflet-control-zoom a) {
+  background: var(--bg-elevated) !important;
+  color: var(--text-primary) !important;
+  border-color: var(--border-default) !important;
+}
+
+:global([data-theme="light"]) :global(.leaflet-control-zoom a:hover) {
+  background: var(--bg-subtle) !important;
+}
+
+:global([data-theme="light"]) :global(.leaflet-control-attribution) {
+  background: rgba(217, 221, 224, 0.85) !important;
+  color: var(--text-muted) !important;
+}
+
 :global([data-theme="light"]) :global(.leaflet-popup-content-wrapper) {
-  background: rgba(237, 225, 207, 0.98) !important;
+  background: rgba(228, 231, 234, 0.98) !important;
   border: 1px solid var(--border-default) !important;
   color: var(--text-primary) !important;
-  box-shadow: 0 12px 30px rgba(15, 23, 42, 0.15) !important;
+  box-shadow: 0 12px 28px rgba(15, 23, 42, 0.15) !important;
 }
 
 :global([data-theme="light"]) :global(.leaflet-popup-tip) {
-  background: rgba(255, 255, 255, 0.98) !important;
+  background: rgba(228, 231, 234, 0.98) !important;
   border: 1px solid var(--border-default) !important;
 }
 
 :global([data-theme="light"]) :global(.popupTitle) {
-  color: #0f172a !important;
+  color: var(--text-primary) !important;
 }
 
 :global([data-theme="light"]) :global(.popupRow) {
-  color: #475569 !important;
+  color: var(--text-muted) !important;
 }
 
 :global([data-theme="light"]) :global(.popupVal) {
-  color: #0f172a !important;
+  color: var(--text-primary) !important;
+}
+
+:global([data-theme="light"]) :global(.popupBtn) {
+  background: var(--accent-primary);
+  color: #f4f6f8;
 }
 
 :global([data-theme="light"]) :global(.popupLockBtn) {
@@ -837,29 +865,29 @@
 }
 
 :global([data-theme="light"]) :global(.leaflet-tooltip.mapDeviceTooltip) {
-  background: rgba(255, 255, 255, 0.98) !important;
+  background: rgba(228, 231, 234, 0.98) !important;
   border-color: var(--border-default) !important;
   color: var(--text-primary) !important;
-  box-shadow: 0 10px 25px rgba(15, 23, 42, 0.15) !important;
+  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.15) !important;
 }
 
 :global([data-theme="light"]) :global(.leaflet-tooltip-top.mapDeviceTooltip:before) {
-  border-top-color: rgba(255, 255, 255, 0.98) !important;
+  border-top-color: rgba(228, 231, 234, 0.98) !important;
 }
 :global([data-theme="light"]) :global(.leaflet-tooltip-bottom.mapDeviceTooltip:before) {
-  border-bottom-color: rgba(255, 255, 255, 0.98) !important;
+  border-bottom-color: rgba(228, 231, 234, 0.98) !important;
 }
 :global([data-theme="light"]) :global(.leaflet-tooltip-left.mapDeviceTooltip:before) {
-  border-left-color: rgba(255, 255, 255, 0.98) !important;
+  border-left-color: rgba(228, 231, 234, 0.98) !important;
 }
 :global([data-theme="light"]) :global(.leaflet-tooltip-right.mapDeviceTooltip:before) {
-  border-right-color: rgba(255, 255, 255, 0.98) !important;
+  border-right-color: rgba(228, 231, 234, 0.98) !important;
 }
 :global([data-theme="light"]) :global(.mapTipHeader) {
   border-bottom-color: var(--border-default) !important;
 }
 :global([data-theme="light"]) :global(.mapTipRow span) {
-  color: var(--text-secondary) !important;
+  color: var(--text-muted) !important;
 }
 :global([data-theme="light"]) :global(.mapTipRow strong) {
   color: var(--text-primary) !important;
@@ -867,68 +895,68 @@
 
 /* ── Room labels on map (Light mode) ── */
 :global([data-theme="light"]) :global(.roomMapLabel) {
-  background: rgba(255, 255, 255, 0.92);
+  background: rgba(228, 231, 234, 0.95);
   border: 1px solid var(--border-default);
   color: var(--text-primary);
-  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.12);
+  box-shadow: 0 2px 6px rgba(15, 23, 42, 0.11);
 }
 
 :global([data-theme="light"]) :global(.roomMapLabelStairs) {
-  border-color: rgba(217, 119, 6, 0.6) !important;
-  color: #92400e !important;
-  background: rgba(254, 243, 199, 0.95) !important;
-  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.12) !important;
+  border-color: rgba(154, 88, 19, 0.5) !important;
+  color: #7c450d !important;
+  background: rgba(226, 214, 198, 0.95) !important;
+  box-shadow: 0 2px 6px rgba(15, 23, 42, 0.11) !important;
 }
 
 :global([data-theme="light"]) :global(.roomMapLabelServer) {
-  border-color: rgba(99, 102, 241, 0.6) !important;
-  color: #3730a3 !important;
-  background: rgba(238, 242, 255, 0.95) !important;
-  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.12) !important;
+  border-color: rgba(63, 75, 140, 0.48) !important;
+  color: #252f63 !important;
+  background: rgba(214, 219, 232, 0.95) !important;
+  box-shadow: 0 2px 6px rgba(15, 23, 42, 0.11) !important;
 }
 
 :global([data-theme="light"]) :global(.roomMapLabelRestroom) {
-  border-color: rgba(6, 182, 212, 0.6) !important;
-  color: #155e75 !important;
-  background: rgba(236, 254, 255, 0.95) !important;
-  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.12) !important;
+  border-color: rgba(38, 106, 120, 0.48) !important;
+  color: #184b56 !important;
+  background: rgba(208, 224, 227, 0.95) !important;
+  box-shadow: 0 2px 6px rgba(15, 23, 42, 0.11) !important;
 }
 
 /* ── Device pins & name tags on map (Light mode) ── */
 :global([data-theme="light"]) :global(.pinNameTag) {
-  background: rgba(255, 255, 255, 0.94);
+  background: rgba(228, 231, 234, 0.96);
   border: 1px solid var(--border-default);
   color: var(--text-primary);
-  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.15);
+  box-shadow: 0 2px 6px rgba(15, 23, 42, 0.11);
 }
 
 :global([data-theme="light"]) :global(.pinIconBox) {
-  background: #ffffff;
-  box-shadow: 0 4px 10px rgba(15, 23, 42, 0.15);
+  background: var(--bg-elevated);
+  box-shadow: 0 3px 8px rgba(15, 23, 42, 0.12);
 }
 
 :global([data-theme="light"]) :global(.pinStatusOnline) {
   border-color: var(--status-online);
   color: var(--status-online);
-  box-shadow: 0 0 10px rgba(4, 120, 87, 0.25);
+  box-shadow: 0 2px 6px rgba(22, 101, 52, 0.16);
 }
 
 :global([data-theme="light"]) :global(.pinStatusWarning) {
   border-color: var(--status-warning);
   color: var(--status-warning);
-  box-shadow: 0 0 10px rgba(180, 83, 9, 0.25);
+  box-shadow: 0 2px 6px rgba(154, 88, 19, 0.16);
 }
 
 :global([data-theme="light"]) :global(.pinStatusOffline) {
   border-color: var(--status-critical);
   color: var(--status-critical);
-  box-shadow: 0 0 10px rgba(220, 38, 38, 0.25);
+  box-shadow: 0 2px 6px rgba(155, 44, 44, 0.18);
 }
 
 :global([data-theme="light"]) :global(.mapPinLockBadge) {
-  background: #ffffff;
+  background: var(--bg-elevated);
   border-color: var(--border-default);
-  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.2);
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.14);
 }
 
 :global([data-theme="light"]) :global(.pinStatusOnline .mapPinLockBadge) {
@@ -951,10 +979,10 @@
 }
 
 :global([data-theme="light"]) :global(.buildingCenterHandle) {
-  background: rgba(255, 255, 255, 0.95);
+  background: rgba(228, 231, 234, 0.96);
   border-color: var(--accent-primary);
   color: var(--accent-primary);
-  box-shadow: 0 0 15px rgba(37, 99, 235, 0.4), 0 4px 10px rgba(15, 23, 42, 0.15);
+  box-shadow: 0 0 12px rgba(43, 76, 126, 0.3), 0 4px 10px rgba(15, 23, 42, 0.12);
 }
 
 :global(.mapSim_root_down) {
@@ -964,9 +992,9 @@
 }
 
 :global(.mapSim_unreachable) {
-  border-color: #ef4444 !important;
+  border-color: #f59e0b !important;
   border-style: dashed !important;
-  opacity: 0.7;
+  box-shadow: 0 0 12px rgba(245, 158, 11, 0.65) !important;
 }
 
 :global(.mapSim_degraded) {
@@ -984,7 +1012,7 @@
   position: absolute;
   top: -7px;
   right: -9px;
-  font-size: 8px;
+  font-size: 10px;
   font-weight: 800;
   line-height: 1;
   padding: 2px 4px;
@@ -995,7 +1023,7 @@
 }
 
 :global(.mapSimBadgeDown) { background: #dc2626; }
-:global(.mapSimBadgeCut)  { background: #7f1d1d; border: 1px solid #ef4444; }
+:global(.mapSimBadgeCut)  { background: #92400e; color: #fef3c7; border: 1px solid #f59e0b; }
 :global(.mapSimBadgeAlt)  { background: #d97706; }
 
 @keyframes mapTopoDashFlow {

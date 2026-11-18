@@ -1,5 +1,5 @@
 import { createContext, useContext } from 'react'
-import type { BlastRadiusReport, ImpactState, LinkType, TopologyLink } from '../types'
+import type { BlastRadiusReport, Device, DeviceStatus, ImpactState, LinkType, TopologyLink } from '../types'
 
 export type SimulationPreset = 'core-router' | 'core-switch' | 'floor1-power' | 'top-spof'
 
@@ -15,6 +15,8 @@ export interface FaultSimContextValue {
   liveImpactReport: BlastRadiusReport
   effectiveReport: BlastRadiusReport
   impactMap: Map<string, ImpactState>
+  effectiveDevices: Device[]
+  getEffectiveStatus: (device: Pick<Device, 'id' | 'status'>) => DeviceStatus
   setSimMode: (active: boolean) => void
   toggleSimMode: () => void
   setLinkEditMode: (active: boolean) => void
@@ -41,6 +43,20 @@ export interface FaultSimContextValue {
 }
 
 export const FaultSimContext = createContext<FaultSimContextValue | null>(null)
+
+export function resolveEffectiveDeviceStatus(
+  baseStatus: DeviceStatus,
+  impactState: ImpactState | undefined,
+  isSimulationOverride: boolean,
+): DeviceStatus {
+  if (isSimulationOverride && impactState === 'root_down') {
+    return 'offline'
+  }
+  if ((impactState === 'unreachable' || impactState === 'degraded') && baseStatus === 'online') {
+    return 'warning'
+  }
+  return baseStatus
+}
 
 export function useFaultSim(): FaultSimContextValue {
   const ctx = useContext(FaultSimContext)

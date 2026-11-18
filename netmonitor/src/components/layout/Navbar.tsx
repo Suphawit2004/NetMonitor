@@ -2,6 +2,7 @@ import { useState, useMemo } from 'react'
 import type { Device } from '../../types'
 import { useTranslation } from 'react-i18next'
 import { useSettings } from '../../context/settingsContext'
+import { useFaultSimOptional } from '../../context/faultSimContext'
 import { useToast } from '../ui/toast-context'
 import HelpGuideModal from './HelpGuideModal'
 import NavbarSearch from './NavbarSearch'
@@ -39,14 +40,20 @@ const NAV_ITEMS: { key: NavPage; labelKey: string }[] = [
 export default function Navbar({ activePage, devices, onNavigate, onSelectDevice }: Props) {
   const { t } = useTranslation()
   const { settings, updateSettings } = useSettings()
+  const faultSim = useFaultSimOptional()
   const { showToast } = useToast()
   const [helpOpen, setHelpOpen] = useState(false)
   const [isSearchActive, setIsSearchActive] = useState(false)
 
-  const totalDevices = devices?.length ?? 0
-  const onlineCount = useMemo(() => devices?.filter(d => d.status === 'online').length ?? 0, [devices])
-  const warningCount = useMemo(() => devices?.filter(d => d.status === 'warning').length ?? 0, [devices])
-  const offlineCount = useMemo(() => devices?.filter(d => d.status === 'offline').length ?? 0, [devices])
+  const simDevices = faultSim?.effectiveDevices
+  const displayDevices = useMemo(
+    () => (simDevices && simDevices.length > 0 ? simDevices : devices) ?? [],
+    [simDevices, devices],
+  )
+  const totalDevices = displayDevices.length
+  const onlineCount = useMemo(() => displayDevices.filter(d => d.status === 'online').length, [displayDevices])
+  const warningCount = useMemo(() => displayDevices.filter(d => d.status === 'warning').length, [displayDevices])
+  const offlineCount = useMemo(() => displayDevices.filter(d => d.status === 'offline').length, [displayDevices])
 
   // หน้า detail ถือเป็นส่วนหนึ่งของ "แผนผัง"
   const activeKey: NavPage = activePage === 'detail' ? 'floor' : activePage
@@ -73,7 +80,7 @@ export default function Navbar({ activePage, devices, onNavigate, onSelectDevice
           <div className={styles.logo}>
             Net<span>Monitor</span>
           </div>
-          <span className={styles.versionBadge}>v1.3</span>
+          <span className={styles.versionBadge}>v1.3.5</span>
         </div>
 
         <div className={styles.brandDivider} />

@@ -201,7 +201,7 @@ export default function ImpactDrawer({ onFocusDevice }: Props) {
               {`${t('sim.kpiRootDown')} ${summary.root_down_count}`}
             </span>
             <span className={styles.sumDot}>·</span>
-            <span className={styles.sumCrit}>
+            <span className={styles.sumWarn}>
               {`${t('sim.kpiUnreachable')} ${summary.unreachable_count}`}
             </span>
             {summary.degraded_count > 0 && (

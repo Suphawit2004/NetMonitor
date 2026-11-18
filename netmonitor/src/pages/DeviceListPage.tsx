@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { Device, DeviceStatus } from '../types'
 import { useNetwork } from '../context/networkContext'
+import { useFaultSimOptional } from '../context/faultSimContext'
 import { useToast } from '../components/ui/toast-context'
 import { DEVICE_ICON } from '../constants/deviceMeta'
 import {
@@ -35,6 +36,12 @@ interface Props {
 export default function DeviceListPage({ onDeviceClick }: Props) {
   const { t } = useTranslation()
   const { devices, loading, addDevice, removeDevice, clearDevices, simulateSampleStatuses } = useNetwork()
+  const faultSim = useFaultSimOptional()
+  const simDevices = faultSim?.effectiveDevices
+  const effectiveDevices = useMemo(
+    () => (simDevices && simDevices.length > 0 ? simDevices : devices),
+    [simDevices, devices],
+  )
   const { showToast } = useToast()
   const [simulating, setSimulating] = useState(false)
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all')
@@ -48,13 +55,13 @@ export default function DeviceListPage({ onDeviceClick }: Props) {
   const [deletingDevice, setDeletingDevice] = useState<Device | null>(null)
   const [confirmClearOpen, setConfirmClearOpen] = useState(false)
 
-  const onlineCount = useMemo(() => devices.filter(d => d.status === 'online').length, [devices])
-  const warningCount = useMemo(() => devices.filter(d => d.status === 'warning').length, [devices])
-  const offlineCount = useMemo(() => devices.filter(d => d.status === 'offline').length, [devices])
+  const onlineCount = useMemo(() => effectiveDevices.filter(d => d.status === 'online').length, [effectiveDevices])
+  const warningCount = useMemo(() => effectiveDevices.filter(d => d.status === 'warning').length, [effectiveDevices])
+  const offlineCount = useMemo(() => effectiveDevices.filter(d => d.status === 'offline').length, [effectiveDevices])
 
   const rows = useMemo(() => {
     const q = searchQuery.trim().toLowerCase()
-    const filtered = devices.filter(d => {
+    const filtered = effectiveDevices.filter(d => {
       if (statusFilter !== 'all' && d.status !== statusFilter) return false
       if (floorFilter !== 'all' && String(d.floor) !== floorFilter) return false
       if (q) {
@@ -77,7 +84,7 @@ export default function DeviceListPage({ onDeviceClick }: Props) {
       else cmp = a.floor - b.floor
       return cmp * dir || a.name.localeCompare(b.name)
     })
-  }, [devices, statusFilter, floorFilter, searchQuery, sortKey, sortDir])
+  }, [effectiveDevices, statusFilter, floorFilter, searchQuery, sortKey, sortDir])
 
   function toggleSort(key: SortKey) {
     if (sortKey === key) {
@@ -136,9 +143,9 @@ export default function DeviceListPage({ onDeviceClick }: Props) {
     try {
       setSimulating(true)
       await simulateSampleStatuses()
-      showToast('นำเข้าตัวอย่างสถานะสำเร็จ (Online, Warning, Offline)', 'success')
+      showToast(t('list.loadSampleSuccess'), 'success')
     } catch {
-      showToast('ไม่สามารถนำเข้าตัวอย่างสถานะได้', 'error')
+      showToast(t('list.loadSampleFail'), 'error')
     } finally {
       setSimulating(false)
     }
@@ -220,7 +227,7 @@ export default function DeviceListPage({ onDeviceClick }: Props) {
                 type="button"
                 className={styles.clearSearchBtn}
                 onClick={() => setSearchQuery('')}
-                title="ล้างคำค้นหา"
+                title={t('list.clearSearchTitle')}
               >
                 <X size={12} />
               </button>
@@ -232,7 +239,7 @@ export default function DeviceListPage({ onDeviceClick }: Props) {
             className={styles.floorSelect}
             value={floorFilter}
             onChange={e => setFloorFilter(e.target.value as 'all' | '1' | '2')}
-            title="กรองตามชั้น"
+            title={t('list.filterFloorTitle')}
           >
             <option value="all">{t('list.filterFloorAll')}</option>
             <option value="1">{t('floor.tab', { floor: 1 })}</option>
@@ -247,11 +254,11 @@ export default function DeviceListPage({ onDeviceClick }: Props) {
             className={styles.sampleStatusBtn}
             onClick={handleLoadSampleStatuses}
             disabled={simulating}
-            title="นำเข้าตัวอย่างสถานะอุปกรณ์ทุกประเภท (Online, Warning, Offline)"
+            title={t('list.loadSampleTitle')}
             type="button"
           >
             <Sparkles size={14} />
-            <span>{simulating ? 'กำลังนำเข้า...' : 'นำเข้าตัวอย่างสถานะ'}</span>
+            <span>{simulating ? t('list.loadingSampleBtn') : t('list.loadSampleBtn')}</span>
           </button>
 
           <button

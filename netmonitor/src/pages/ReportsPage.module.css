@@ -331,3 +331,42 @@
   background: var(--status-warning-bg);
   color: var(--status-warning);
 }
+
+.matrixCard {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.matrixHead {
+  padding-bottom: 12px;
+  margin-bottom: 12px;
+  border-bottom: 1px solid var(--border-subtle);
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  flex-shrink: 0;
+}
+
+.matrixBadgeCount {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-muted);
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-subtle);
+  border-radius: 999px;
+  padding: 2px 8px;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.matrixFullList {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.matrixRowCompact {
+  padding: 6px 10px;
+}

@@ -1,11 +1,26 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
-import type { ImpactState, LinkType, TopologyLink } from '../types'
+import type { BlastRadiusReport, Device, DeviceStatus, ImpactState, LinkType, TopologyLink } from '../types'
 import { useNetwork } from './networkContext'
 import * as api from '../services/api'
-import { computeBlastRadius, inferTopologyLinks } from '../services/topologyEngine'
-import { FaultSimContext, type FaultSimContextValue, type SimulationPreset } from './faultSimContext'
+import { FaultSimContext, resolveEffectiveDeviceStatus, type FaultSimContextValue, type SimulationPreset } from './faultSimContext'
 
-const EMPTY_LINK_IDS = new Set<string>()
+const EMPTY_REPORT: BlastRadiusReport = {
+  down_device_ids: [],
+  down_link_ids: [],
+  summary: {
+    total_devices: 0,
+    root_down_count: 0,
+    unreachable_count: 0,
+    degraded_count: 0,
+    healthy_count: 0,
+  },
+  device_impacts: [],
+  link_states: {},
+  affected_floors: [],
+  spof_ranking: [],
+  affected_zones: [],
+  affected_services: [],
+}
 
 export default function FaultSimProvider({ children }: { children: ReactNode }) {
   const { devices, retryDevices } = useNetwork()
@@ -17,6 +32,8 @@ export default function FaultSimProvider({ children }: { children: ReactNode }) 
   const [showLinks, setShowLinks] = useState(true)
   const [downDeviceIds, setDownDeviceIds] = useState<Set<string>>(() => new Set())
   const [downLinkIds, setDownLinkIds] = useState<Set<string>>(() => new Set())
+  const [impactReport, setImpactReport] = useState<BlastRadiusReport>(EMPTY_REPORT)
+  const [liveImpactReport, setLiveImpactReport] = useState<BlastRadiusReport>(EMPTY_REPORT)
 
   const devicesRef = useRef(devices)
   useEffect(() => {
@@ -28,7 +45,15 @@ export default function FaultSimProvider({ children }: { children: ReactNode }) 
     [devices],
   )
 
-  // Load topology links only when device inventory or floor assignments change
+  const deviceStatusKey = useMemo(
+    () =>
+      devices
+        .map(d => `${d.id}:${d.dtype}:${d.floor}:${d.status}:${d.target_room ?? ''}:${(d.services ?? []).join(',')}`)
+        .join('|'),
+    [devices],
+  )
+
+  // Load topology links from backend (backend auto-infers if DB has none)
   useEffect(() => {
     const snapshot = devicesRef.current
     if (snapshot.length === 0) return
@@ -38,11 +63,8 @@ export default function FaultSimProvider({ children }: { children: ReactNode }) 
     })
     api.fetchTopologyLinks(snapshot)
       .then(fetched => {
-        if (cancelled) return
-        if (fetched.length > 0) {
+        if (!cancelled) {
           setLinks(fetched)
-        } else {
-          setLinks(inferTopologyLinks(snapshot))
         }
       })
       .finally(() => {
@@ -58,22 +80,68 @@ export default function FaultSimProvider({ children }: { children: ReactNode }) 
     [devices.length, links],
   )
 
-  const impactReport = useMemo(
-    () => computeBlastRadius(devices, activeLinks, downDeviceIds, downLinkIds, true),
-    [devices, activeLinks, downDeviceIds, downLinkIds],
+  const activeLinksRef = useRef(activeLinks)
+  useEffect(() => {
+    activeLinksRef.current = activeLinks
+  }, [activeLinks])
+
+  const linksKey = useMemo(
+    () =>
+      activeLinks
+        .map(l => `${l.id}:${l.source_device_id}:${l.target_device_id}:${l.link_type}:${l.is_redundant ? 1 : 0}`)
+        .join('|'),
+    [activeLinks],
   )
 
-  const liveImpactReport = useMemo(() => {
-    const offlineIds = new Set(devices.filter(d => d.status === 'offline').map(d => d.id))
-    return computeBlastRadius(devices, activeLinks, offlineIds, EMPTY_LINK_IDS, true)
-  }, [devices, activeLinks])
+  // Compute live outage & baseline SPOF report from backend engine when statuses or links change
+  useEffect(() => {
+    const curDevices = devicesRef.current
+    const curLinks = activeLinksRef.current
+    if (curDevices.length === 0) {
+      setLiveImpactReport(EMPTY_REPORT)
+      return
+    }
+    let cancelled = false
+    const offlineIds = curDevices.filter(d => d.status === 'offline').map(d => d.id)
+    api.simulateImpact(offlineIds, [], true, curDevices, curLinks)
+      .then(report => {
+        if (!cancelled) setLiveImpactReport(report)
+      })
+      .catch(err => console.warn('Failed to compute live impact report', err))
+    return () => {
+      cancelled = true
+    }
+  }, [deviceStatusKey, linksKey])
+
+  const downDevicesKey = useMemo(() => [...downDeviceIds].sort().join(','), [downDeviceIds])
+  const downLinksKey = useMemo(() => [...downLinkIds].sort().join(','), [downLinkIds])
+
+  // Compute interactive sandbox impact report from backend engine when faults or links change
+  useEffect(() => {
+    const curDevices = devicesRef.current
+    const curLinks = activeLinksRef.current
+    if (curDevices.length === 0) {
+      setImpactReport(EMPTY_REPORT)
+      return
+    }
+    let cancelled = false
+    const dIds = downDevicesKey ? downDevicesKey.split(',') : []
+    const lIds = downLinksKey ? downLinksKey.split(',') : []
+    api.simulateImpact(dIds, lIds, true, curDevices, curLinks)
+      .then(report => {
+        if (!cancelled) setImpactReport(report)
+      })
+      .catch(err => console.warn('Failed to compute sandbox impact report', err))
+    return () => {
+      cancelled = true
+    }
+  }, [deviceStatusKey, linksKey, downDevicesKey, downLinksKey])
+
+  const hasActiveSimulation = isSimMode && (downDeviceIds.size > 0 || downLinkIds.size > 0)
 
   const effectiveReport = useMemo(
-    () =>
-      isSimMode && (downDeviceIds.size > 0 || downLinkIds.size > 0)
-        ? impactReport
-        : liveImpactReport,
-    [isSimMode, downDeviceIds.size, downLinkIds.size, impactReport, liveImpactReport],
+    () => (hasActiveSimulation ? impactReport : liveImpactReport),
+    [hasActiveSimulation, impactReport, liveImpactReport],
   )
 
   const impactMap = useMemo(() => {
@@ -83,6 +151,29 @@ export default function FaultSimProvider({ children }: { children: ReactNode }) 
     }
     return map
   }, [impactReport])
+
+  const effectiveImpactMap = useMemo(() => {
+    const map = new Map<string, ImpactState>()
+    for (const item of effectiveReport.device_impacts) {
+      map.set(item.device_id, item.impact_state)
+    }
+    return map
+  }, [effectiveReport])
+
+  const getEffectiveStatus = useCallback(
+    (device: Pick<Device, 'id' | 'status'>): DeviceStatus =>
+      resolveEffectiveDeviceStatus(device.status, effectiveImpactMap.get(device.id), hasActiveSimulation),
+    [effectiveImpactMap, hasActiveSimulation],
+  )
+
+  const effectiveDevices = useMemo(
+    () =>
+      devices.map(d => {
+        const nextStatus = getEffectiveStatus(d)
+        return nextStatus === d.status ? d : { ...d, status: nextStatus }
+      }),
+    [devices, getEffectiveStatus],
+  )
 
   const setSimMode = useCallback((active: boolean) => {
     setIsSimMode(active)
@@ -240,6 +331,8 @@ export default function FaultSimProvider({ children }: { children: ReactNode }) 
       liveImpactReport,
       effectiveReport,
       impactMap,
+      effectiveDevices,
+      getEffectiveStatus,
       setSimMode,
       toggleSimMode,
       setLinkEditMode,
@@ -268,6 +361,8 @@ export default function FaultSimProvider({ children }: { children: ReactNode }) 
       liveImpactReport,
       effectiveReport,
       impactMap,
+      effectiveDevices,
+      getEffectiveStatus,
       setSimMode,
       toggleSimMode,
       setLinkEditMode,

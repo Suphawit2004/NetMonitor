@@ -1,60 +1,69 @@
 # NetMonitor Frontend Client
 
-Modern, responsive web interface for NetMonitor built with **React 19**, **TypeScript**, **Vite**, and **Lucide React**.
+Web interface for NetMonitor built with **React 19**, **TypeScript**, **Vite**, **Leaflet**, **i18next**, and **Lucide React**.
 
-## 🚀 Getting Started
+## Getting Started
 
 ### Prerequisites
 - Node.js 18+
-- npm or pnpm
+- npm
+- `.env` configured from [`.env.example`](./.env.example) (`VITE_API_KEY` matching backend `API_KEY`, optional `VITE_MAP_API_KEY`)
 
 ### Installation & Run
 ```bash
 # Install dependencies
 npm install
 
-# Start development server (Port 5173)
+# Start development server (Port 5173, proxies /api -> http://127.0.0.1:8000)
 npm run dev
 ```
 Open `http://localhost:5173` in your browser.
 
-### Build for Production
+### Build & Lint
 ```bash
+npm run lint
 npm run build
 ```
+`npm run build` outputs static assets to `dist/`, which should be served behind a reverse proxy (e.g., Nginx or Caddy) that forwards `/api/*` requests to the FastAPI backend on port `8000`.
 
 ---
 
-## 🧪 Testing
+## Testing
 
 ### Playwright End-to-End (E2E) Test Suite
-The frontend includes 10 comprehensive E2E test scenarios verifying critical flows across all pages:
+First-time browser setup:
+```bash
+npx playwright install chromium
+```
+The frontend includes **18 E2E scenarios** across two specs (requires PostgreSQL, FastAPI backend `:8000`, and Vite dev server `:5173` — or Playwright's configured dev server):
+- `e2e/netmonitor.spec.ts` (10 scenarios: navigation tabs, `Ctrl+K` search, TH/EN & theme switching, floor switching, 2D/Map toggle, Move mode, device list KPI/search filters, detail metrics/charts, reports severity counters)
+- `e2e/fault-simulation.spec.ts` (8 scenarios: blast-radius drawer, Link Edit SVG rendering, downstream chip flow, manual link CRUD + duplicate rejection, animated outage path on 2D/Map, persistent custom service tags, light theme room outage highlights, live background outage sync)
+
 ```bash
 # Run headless E2E tests
 npm run test:e2e
 
-# Run with interactive UI Dashboard
+# Run with Playwright interactive UI
 npm run test:e2e:ui
 ```
 
 ---
 
-## 📂 Key Directory Layout
+## Key Directory Layout
 
 ```text
 src/
 ├── components/
-│   ├── detail/          # DeviceInfoModal, TrafficChart, MetricCard
-│   ├── discovery/       # NetworkScanModal (Scan & inline name editing)
-│   ├── floor/           # FloorCanvas (2D), FloorMapOverlay (Satellite Map), DevicePin
-│   ├── layout/          # Navbar, NavbarSearch (Ctrl+K Command Palette)
+│   ├── detail/          # AddDeviceModal, AlertList, DeviceInfoModal, MetricCard, ServiceTagsEditor, TrafficChart
+│   ├── discovery/       # NetworkScanModal (ARP/SNMP scan & inline editing)
+│   ├── floor/           # FloorCanvas, FloorMapOverlay, FloorSidebar, DevicePin, TopologyLinksLayer
+│   ├── layout/          # Navbar, NavbarSearch (Ctrl+K Command Palette), HelpGuideModal
+│   ├── simulation/      # ImpactDrawer, BusinessImpactSummary
 │   └── ui/              # Modal, ConfirmDialog, Toast
-├── context/             # NetworkContext, SimulationContext, SettingsContext
-├── pages/
-│   ├── FloorPlanPage.tsx   # 2D Floor Plan & Satellite Map with floor selector
-│   ├── DeviceListPage.tsx  # Device table with search, filter, and quick actions
-│   ├── DeviceDetailPage.tsx# Full device spec, interfaces, VLANs, and telemetry
-│   └── ReportsPage.tsx     # Network health overview, alerts, and acknowledge flow
-├── services/            # api.ts, mapGeo.ts, detailFactory.ts, traffic.ts, roomStore.ts
+├── context/             # NetworkProvider, FaultSimProvider, SettingsProvider, SimulationProvider
+├── hooks/               # useDeviceDetail
+├── i18n/                # th.ts / en.ts (543 lines / 510 entries each) & format.ts
+├── pages/               # FloorPlanPage, DeviceListPage, DeviceDetailPage, ReportsPage
+├── services/            # api.ts (X-API-Key, HTTP error propagation, layout/impact APIs, offline fallback), detailFactory.ts, mapGeo.ts, roomStore.ts, topologyEngine.ts (offline fallback), traffic.ts
 └── types/               # TypeScript models and interfaces
 ```

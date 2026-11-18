@@ -7,6 +7,7 @@ import logging
 from typing import Optional, Dict, Any, Tuple, List
 from datetime import datetime, timezone, timedelta
 from .config import settings
+from .snmp import sanitize_snmp_community
 
 logger = logging.getLogger("netmonitor.collector")
 
@@ -143,10 +144,12 @@ async def execute_snmpwalk(
     Executes Net-SNMP CLI snmpwalk asynchronously using a worker thread
     to ensure full compatibility with Windows event loop policies (avoiding NotImplementedError).
     """
+    safe_community = sanitize_snmp_community(community)
+    safe_version = "1" if str(version).lstrip("v") == "1" else "2c"
     cmd = [
         "snmpwalk",
-        f"-v{version}",
-        f"-c{community}",
+        f"-v{safe_version}",
+        f"-c{safe_community}",
         f"-t{timeout_s}",
         "-r1",
     ]
@@ -180,25 +183,35 @@ async def collect_device_interfaces(
 ) -> List[Dict[str, Any]]:
     """
     Collects interfaces and their latest octet counters from a network device via SNMP.
+    Runs independent OID walks concurrently to avoid sequential waterfall latency.
     """
-    # 1. Query Descr and OperStatus
+    # 1. Query Descr first; bail early if SNMP does not respond
     descr_map = await execute_snmpwalk(ip, ".1.3.6.1.2.1.2.2.1.2", community, port, version)
     if not descr_map:
         return []
 
-    oper_map = await execute_snmpwalk(ip, ".1.3.6.1.2.1.2.2.1.8", community, port, version)
-    speed_map = await execute_snmpwalk(ip, ".1.3.6.1.2.1.31.1.1.1.15", community, port, version)  # HighSpeed in Mbps
-    mac_map = await execute_snmpwalk(ip, ".1.3.6.1.2.1.2.2.1.6", community, port, version, extra_flags=["-Ox"])
+    # 2. Query status, speed, MAC, and 64-bit HC counters concurrently
+    oper_map, speed_map, mac_map, hc_in, hc_out = await asyncio.gather(
+        execute_snmpwalk(ip, ".1.3.6.1.2.1.2.2.1.8", community, port, version),
+        execute_snmpwalk(ip, ".1.3.6.1.2.1.31.1.1.1.15", community, port, version),
+        execute_snmpwalk(ip, ".1.3.6.1.2.1.2.2.1.6", community, port, version, extra_flags=["-Ox"]),
+        execute_snmpwalk(ip, ".1.3.6.1.2.1.31.1.1.1.6", community, port, version),
+        execute_snmpwalk(ip, ".1.3.6.1.2.1.31.1.1.1.10", community, port, version),
+    )
 
-    # 2. Query 64-bit HC counters
-    hc_in = await execute_snmpwalk(ip, ".1.3.6.1.2.1.31.1.1.1.6", community, port, version)
-    hc_out = await execute_snmpwalk(ip, ".1.3.6.1.2.1.31.1.1.1.10", community, port, version)
-
-    # Fallback to 32-bit if HC counters empty
+    # 3. Fallback concurrently to 32-bit counters when HC counters are unavailable
+    fallback_tasks = []
     if not hc_in:
-        hc_in = await execute_snmpwalk(ip, ".1.3.6.1.2.1.2.2.1.10", community, port, version)
+        fallback_tasks.append(("in", execute_snmpwalk(ip, ".1.3.6.1.2.1.2.2.1.10", community, port, version)))
     if not hc_out:
-        hc_out = await execute_snmpwalk(ip, ".1.3.6.1.2.1.2.2.1.16", community, port, version)
+        fallback_tasks.append(("out", execute_snmpwalk(ip, ".1.3.6.1.2.1.2.2.1.16", community, port, version)))
+    if fallback_tasks:
+        results_32 = await asyncio.gather(*(t for _, t in fallback_tasks))
+        for (direction, _), res_map in zip(fallback_tasks, results_32):
+            if direction == "in":
+                hc_in = res_map
+            else:
+                hc_out = res_map
 
     interfaces = []
     for idx, name in descr_map.items():
@@ -209,7 +222,7 @@ async def collect_device_interfaces(
             oper = "down"
 
         high_speed = int(speed_map.get(idx, 0)) if speed_map.get(idx, "").isdigit() else 0
-        speed_bps = high_speed * 1_000_000 if high_speed > 0 else 1_000_000_000
+        speed_bps = high_speed * 1_000_000 if high_speed > 0 else None
 
         in_oct_str = hc_in.get(idx, "")
         out_oct_str = hc_out.get(idx, "")
@@ -234,25 +247,35 @@ async def collect_device_interfaces(
 
 async def sync_device_interfaces(pool, device_id: int, interfaces: List[Dict[str, Any]]) -> Dict[int, int]:
     """
-    Upserts interfaces into PostgreSQL and returns mapping {if_index: db_interface_id}.
+    Batch-upserts interfaces into PostgreSQL and returns mapping {if_index: db_interface_id}.
     """
-    mapping: Dict[int, int] = {}
+    if not interfaces:
+        return {}
+    if_indices = [iface["if_index"] for iface in interfaces]
+    names = [iface["name"] for iface in interfaces]
+    descriptions = [iface.get("description") for iface in interfaces]
+    macs = [iface.get("mac_address") for iface in interfaces]
+    speeds = [iface.get("speed_bps") for iface in interfaces]
+    opers = [iface.get("oper_status") for iface in interfaces]
+
     async with pool.acquire() as conn:
-        for iface in interfaces:
-            row = await conn.fetchrow("""
-                INSERT INTO interfaces (device_id, if_index, name, description, mac_address, speed_bps, oper_status)
-                VALUES ($1, $2, $3, $4, $5, $6, $7)
-                ON CONFLICT (device_id, if_index) DO UPDATE
-                SET name = EXCLUDED.name,
-                    description = EXCLUDED.description,
-                    mac_address = COALESCE(EXCLUDED.mac_address, interfaces.mac_address),
-                    speed_bps = EXCLUDED.speed_bps,
-                    oper_status = EXCLUDED.oper_status
-                RETURNING id, if_index;
-            """, device_id, iface["if_index"], iface["name"], iface["description"], iface.get("mac_address"), iface["speed_bps"], iface["oper_status"])
-            if row:
-                mapping[row["if_index"]] = row["id"]
-    return mapping
+        rows = await conn.fetch(
+            """
+            INSERT INTO interfaces (device_id, if_index, name, description, mac_address, speed_bps, oper_status)
+            SELECT $1, u.if_index, u.name, u.description, u.mac_address, u.speed_bps, u.oper_status
+            FROM unnest($2::int[], $3::text[], $4::text[], $5::text[], $6::bigint[], $7::text[])
+                 AS u(if_index, name, description, mac_address, speed_bps, oper_status)
+            ON CONFLICT (device_id, if_index) DO UPDATE
+            SET name = EXCLUDED.name,
+                description = EXCLUDED.description,
+                mac_address = COALESCE(EXCLUDED.mac_address, interfaces.mac_address),
+                speed_bps = EXCLUDED.speed_bps,
+                oper_status = EXCLUDED.oper_status
+            RETURNING id, if_index;
+            """,
+            device_id, if_indices, names, descriptions, macs, speeds, opers,
+        )
+    return {row["if_index"]: row["id"] for row in rows}
 
 async def collect_device_real_telemetry(
     ip: str,
@@ -260,60 +283,63 @@ async def collect_device_real_telemetry(
     port: int = 161,
     version: str = "2c",
 ) -> Dict[str, Any]:
-    from .discovery import ping_ip
+    from .discovery import probe_device_reachability
     from .snmp import snmp_get_oid, OID_SYS_UPTIME
 
-    # 1. Real ICMP Ping test
-    is_alive, ping_ms, _ = await ping_ip(ip, timeout_ms=500)
+    # 1. Reachability test (ICMP Ping with single retry + TCP liveness fallback for ICMP-blocking hosts)
+    is_alive, ping_ms, _, _ = await probe_device_reachability(
+        ip,
+        ping_timeout_ms=600,
+        retry_timeout_ms=1000,
+        tcp_timeout_s=0.35,
+    )
     packet_loss = 0.0 if is_alive else 100.0
 
-    # 2. Real Uptime via SNMP
+    # 2. Query uptime + vendor CPU OIDs concurrently when reachable
     uptime_raw = None
     formatted_uptime = None
-    if is_alive:
-        ok, val, _ = await snmp_get_oid(ip, OID_SYS_UPTIME, community=community, version=version, port=port)
-        if ok and val:
-            uptime_raw = val
-            formatted_uptime = format_uptime(val)
-
-    # 3. Real CPU, Memory, and Temp via SNMP
     cpu_pct = None
     mem_pct = None
     temp_c = None
 
     if is_alive:
-        # A. Try HP/Aruba OIDs
-        ok_cpu, val_cpu, _ = await snmp_get_oid(ip, ".1.3.6.1.4.1.11.2.14.11.5.1.9.6.1.0", community, version, port)
-        if ok_cpu and val_cpu and val_cpu.isdigit():
-            cpu_pct = float(val_cpu)
-            # HP/Aruba Memory
-            _, tot_mem, _ = await snmp_get_oid(ip, ".1.3.6.1.4.1.11.2.14.11.5.1.1.2.1.1.1.5.1", community, version, port)
-            _, used_mem, _ = await snmp_get_oid(ip, ".1.3.6.1.4.1.11.2.14.11.5.1.1.2.1.1.1.7.1", community, version, port)
+        (
+            (ok_up, val_up, _),
+            (ok_hp_cpu, val_hp_cpu, _),
+            (ok_cisco_cpu, val_cisco_cpu, _),
+            (ok_hr_cpu, val_hr_cpu, _),
+        ) = await asyncio.gather(
+            snmp_get_oid(ip, OID_SYS_UPTIME, community=community, version=version, port=port),
+            snmp_get_oid(ip, ".1.3.6.1.4.1.11.2.14.11.5.1.9.6.1.0", community, version, port),
+            snmp_get_oid(ip, ".1.3.6.1.4.1.9.9.109.1.1.1.1.5.1", community, version, port),
+            snmp_get_oid(ip, ".1.3.6.1.2.1.25.3.3.1.2.1", community, version, port),
+        )
+        if ok_up and val_up:
+            uptime_raw = val_up
+            formatted_uptime = format_uptime(val_up)
+
+        if ok_hp_cpu and val_hp_cpu and val_hp_cpu.isdigit():
+            cpu_pct = float(val_hp_cpu)
+            (_, tot_mem, _), (_, used_mem, _) = await asyncio.gather(
+                snmp_get_oid(ip, ".1.3.6.1.4.1.11.2.14.11.5.1.1.2.1.1.1.5.1", community, version, port),
+                snmp_get_oid(ip, ".1.3.6.1.4.1.11.2.14.11.5.1.1.2.1.1.1.7.1", community, version, port),
+            )
             if tot_mem and used_mem and tot_mem.isdigit() and used_mem.isdigit() and int(tot_mem) > 0:
                 mem_pct = round((int(used_mem) / int(tot_mem)) * 100, 1)
-
-        # B. Try Cisco OIDs if CPU not found
-        if cpu_pct is None:
-            ok_cisco_cpu, val_cisco_cpu, _ = await snmp_get_oid(ip, ".1.3.6.1.4.1.9.9.109.1.1.1.1.5.1", community, version, port)
-            if ok_cisco_cpu and val_cisco_cpu and val_cisco_cpu.isdigit():
-                cpu_pct = float(val_cisco_cpu)
-                # Cisco Memory
-                _, used_m, _ = await snmp_get_oid(ip, ".1.3.6.1.4.1.9.9.48.1.1.1.5.1", community, version, port)
-                _, free_m, _ = await snmp_get_oid(ip, ".1.3.6.1.4.1.9.9.48.1.1.1.6.1", community, version, port)
-                if used_m and free_m and used_m.isdigit() and free_m.isdigit():
-                    u, f = int(used_m), int(free_m)
-                    if u + f > 0:
-                        mem_pct = round((u / (u + f)) * 100, 1)
-                # Cisco Temp
-                _, temp_val, _ = await snmp_get_oid(ip, ".1.3.6.1.4.1.9.9.13.1.3.1.3.1", community, version, port)
-                if temp_val and temp_val.isdigit():
-                    temp_c = float(temp_val)
-
-        # C. Try Host-Resources (generic server / router)
-        if cpu_pct is None:
-            ok_hr_cpu, val_hr_cpu, _ = await snmp_get_oid(ip, ".1.3.6.1.2.1.25.3.3.1.2.1", community, version, port)
-            if ok_hr_cpu and val_hr_cpu and val_hr_cpu.isdigit():
-                cpu_pct = float(val_hr_cpu)
+        elif ok_cisco_cpu and val_cisco_cpu and val_cisco_cpu.isdigit():
+            cpu_pct = float(val_cisco_cpu)
+            (_, used_m, _), (_, free_m, _), (_, temp_val, _) = await asyncio.gather(
+                snmp_get_oid(ip, ".1.3.6.1.4.1.9.9.48.1.1.1.5.1", community, version, port),
+                snmp_get_oid(ip, ".1.3.6.1.4.1.9.9.48.1.1.1.6.1", community, version, port),
+                snmp_get_oid(ip, ".1.3.6.1.4.1.9.9.13.1.3.1.3.1", community, version, port),
+            )
+            if used_m and free_m and used_m.isdigit() and free_m.isdigit() and (int(used_m) + int(free_m)) > 0:
+                u, f = int(used_m), int(free_m)
+                mem_pct = round((u / (u + f)) * 100, 1)
+            if temp_val and temp_val.isdigit():
+                temp_c = float(temp_val)
+        elif ok_hr_cpu and val_hr_cpu and val_hr_cpu.isdigit():
+            cpu_pct = float(val_hr_cpu)
 
     return {
         "is_alive": is_alive,
@@ -337,36 +363,35 @@ async def poll_and_calculate_device_traffic(
     """
     Polls device interfaces via SNMP, stores sample, and calculates latest delta Mbps per interface and total.
     """
-    interfaces = await collect_device_interfaces(ip, community, port, version)
+    interfaces, telemetry = await asyncio.gather(
+        collect_device_interfaces(ip, community, port, version),
+        collect_device_real_telemetry(ip, community, port, version),
+    )
     now = datetime.now(timezone.utc)
-    telemetry = await collect_device_real_telemetry(ip, community, port, version)
 
-    # Store real telemetry metrics into database
-    async with pool.acquire() as conn:
-        if telemetry.get("cpu_percent") is not None:
-            await conn.execute("""
-                INSERT INTO device_metric_samples (device_id, sampled_at, oid, metric_name, numeric_value)
-                VALUES ($1, $2, 'cpu', 'cpu_usage_percent', $3)
+    # Batch-insert real telemetry metrics (including sys_uptime) into database
+    metric_rows = []
+    if telemetry.get("cpu_percent") is not None:
+        metric_rows.append((device_id, now, "cpu", "cpu_usage_percent", telemetry["cpu_percent"], None))
+    if telemetry.get("memory_percent") is not None:
+        metric_rows.append((device_id, now, "memory", "memory_usage_percent", telemetry["memory_percent"], None))
+    if telemetry.get("temperature_c") is not None:
+        metric_rows.append((device_id, now, "temperature", "chassis_temperature_c", telemetry["temperature_c"], None))
+    if telemetry.get("is_alive") and telemetry.get("ping_ms") is not None:
+        metric_rows.append((device_id, now, "ping", "ping_rtt_ms", telemetry["ping_ms"], None))
+    if telemetry.get("uptime"):
+        metric_rows.append((device_id, now, "uptime", "sys_uptime", None, telemetry["uptime"]))
+
+    if metric_rows:
+        async with pool.acquire() as conn:
+            await conn.executemany(
+                """
+                INSERT INTO device_metric_samples (device_id, sampled_at, oid, metric_name, numeric_value, text_value)
+                VALUES ($1, $2, $3, $4, $5, $6)
                 ON CONFLICT (device_id, sampled_at, oid, labels) DO NOTHING
-            """, device_id, now, telemetry["cpu_percent"])
-        if telemetry.get("memory_percent") is not None:
-            await conn.execute("""
-                INSERT INTO device_metric_samples (device_id, sampled_at, oid, metric_name, numeric_value)
-                VALUES ($1, $2, 'memory', 'memory_usage_percent', $3)
-                ON CONFLICT (device_id, sampled_at, oid, labels) DO NOTHING
-            """, device_id, now, telemetry["memory_percent"])
-        if telemetry.get("temperature_c") is not None:
-            await conn.execute("""
-                INSERT INTO device_metric_samples (device_id, sampled_at, oid, metric_name, numeric_value)
-                VALUES ($1, $2, 'temperature', 'chassis_temperature_c', $3)
-                ON CONFLICT (device_id, sampled_at, oid, labels) DO NOTHING
-            """, device_id, now, telemetry["temperature_c"])
-        if telemetry.get("is_alive") and telemetry.get("ping_ms") is not None:
-            await conn.execute("""
-                INSERT INTO device_metric_samples (device_id, sampled_at, oid, metric_name, numeric_value)
-                VALUES ($1, $2, 'ping', 'ping_rtt_ms', $3)
-                ON CONFLICT (device_id, sampled_at, oid, labels) DO NOTHING
-            """, device_id, now, telemetry["ping_ms"])
+                """,
+                metric_rows,
+            )
 
     if not interfaces:
         return {
@@ -393,7 +418,24 @@ async def poll_and_calculate_device_traffic(
     interface_results = []
     primary_mac = next((iface["mac_address"] for iface in interfaces if iface.get("mac_address")), None)
 
+    # Batch-fetch previous latest sample and batch-insert current samples
+    db_if_ids = [if_id_map[iface["if_index"]] for iface in interfaces if iface["if_index"] in if_id_map]
+    prev_by_if: Dict[int, Any] = {}
+    samples_to_insert: List[Tuple[int, datetime, int, int]] = []
+
     async with pool.acquire() as conn:
+        if db_if_ids:
+            prev_rows = await conn.fetch(
+                """
+                SELECT DISTINCT ON (interface_id) interface_id, sampled_at, in_octets, out_octets
+                FROM interface_samples
+                WHERE interface_id = ANY($1::bigint[])
+                ORDER BY interface_id, sampled_at DESC
+                """,
+                db_if_ids,
+            )
+            prev_by_if = {r["interface_id"]: r for r in prev_rows}
+
         for iface in interfaces:
             if_idx = iface["if_index"]
             db_if_id = if_id_map.get(if_idx)
@@ -402,24 +444,14 @@ async def poll_and_calculate_device_traffic(
 
             in_oct = iface.get("in_octets")
             out_oct = iface.get("out_octets")
-
             in_mbps = 0.0
             out_mbps = 0.0
 
             if in_oct is not None and out_oct is not None:
-                # Query most recent previous sample
-                prev_row = await conn.fetchrow("""
-                    SELECT sampled_at, in_octets, out_octets
-                    FROM interface_samples
-                    WHERE interface_id = $1
-                    ORDER BY sampled_at DESC
-                    LIMIT 1
-                """, db_if_id)
-
+                prev_row = prev_by_if.get(db_if_id)
                 if prev_row:
-                    prev_time = prev_row["sampled_at"]
-                    dt = (now - prev_time).total_seconds()
-                    if 0.5 <= dt <= 300:  # Reasonable delta time window
+                    dt = (now - prev_row["sampled_at"]).total_seconds()
+                    if 0.5 <= dt <= 300:
                         in_mbps = calculate_bandwidth_mbps(
                             curr_octets=in_oct,
                             prev_octets=int(prev_row["in_octets"]),
@@ -434,13 +466,7 @@ async def poll_and_calculate_device_traffic(
                             is_64bit=True,
                             max_speed_bps=iface["speed_bps"],
                         )
-
-                # Store current sample
-                await conn.execute("""
-                    INSERT INTO interface_samples (interface_id, sampled_at, in_octets, out_octets)
-                    VALUES ($1, $2, $3, $4)
-                    ON CONFLICT (interface_id, sampled_at) DO NOTHING
-                """, db_if_id, now, in_oct, out_oct)
+                samples_to_insert.append((db_if_id, now, in_oct, out_oct))
 
             total_in_mbps += in_mbps
             total_out_mbps += out_mbps
@@ -456,6 +482,16 @@ async def poll_and_calculate_device_traffic(
                 "in_mbps": in_mbps,
                 "out_mbps": out_mbps,
             })
+
+        if samples_to_insert:
+            await conn.executemany(
+                """
+                INSERT INTO interface_samples (interface_id, sampled_at, in_octets, out_octets)
+                VALUES ($1, $2, $3, $4)
+                ON CONFLICT (interface_id, sampled_at) DO NOTHING
+                """,
+                samples_to_insert,
+            )
 
     return {
         "success": True,
@@ -597,12 +633,13 @@ async def get_device_traffic_series(
         measured_buckets = set()
         for b in range(point_count):
             if interface_id == "all":
-                rates_in = [r for if_rates in bucket_in[b].values() for r in if_rates]
-                rates_out = [r for if_rates in bucket_out[b].values() for r in if_rates]
-                if rates_in or rates_out:
+                # Average multiple samples within each interface bucket, then sum across interfaces
+                in_per_if = [sum(if_rates) / len(if_rates) for if_rates in bucket_in[b].values() if if_rates]
+                out_per_if = [sum(if_rates) / len(if_rates) for if_rates in bucket_out[b].values() if if_rates]
+                if in_per_if or out_per_if:
                     measured_buckets.add(b)
-                inbound[b] = (sum(rates_in) / len(rates_in)) if rates_in else 0.0
-                outbound[b] = (sum(rates_out) / len(rates_out)) if rates_out else 0.0
+                inbound[b] = round(sum(in_per_if), 2) if in_per_if else 0.0
+                outbound[b] = round(sum(out_per_if), 2) if out_per_if else 0.0
             else:
                 in_rates = bucket_in[b].get(target_if_id, [])
                 out_rates = bucket_out[b].get(target_if_id, [])
@@ -653,4 +690,98 @@ async def get_device_traffic_series(
         "peak": peak,
         "avg": avg,
         "timestamp": now.isoformat(),
+    }
+
+
+async def get_latest_interface_traffic_snapshot(pool, device_id: int) -> Dict[str, Any]:
+    """Computes latest per-interface Mbps snapshot from stored interface_samples for simulated devices."""
+    now = datetime.now(timezone.utc)
+    async with pool.acquire() as conn:
+        if_rows = await conn.fetch(
+            """
+            SELECT id, if_index, name, description, mac_address, speed_bps, oper_status
+            FROM interfaces
+            WHERE device_id = $1
+            ORDER BY if_index ASC
+            """,
+            device_id,
+        )
+        if not if_rows:
+            return {
+                "success": True,
+                "has_snmp": False,
+                "interfaces_polled": 0,
+                "total_in_mbps": 0.0,
+                "total_out_mbps": 0.0,
+                "timestamp": now.isoformat(),
+                "interfaces": [],
+            }
+
+        if_ids = [r["id"] for r in if_rows]
+        sample_rows = await conn.fetch(
+            """
+            SELECT interface_id, sampled_at, in_octets, out_octets
+            FROM (
+                SELECT interface_id, sampled_at, in_octets, out_octets,
+                       ROW_NUMBER() OVER (PARTITION BY interface_id ORDER BY sampled_at DESC) AS rn
+                FROM interface_samples
+                WHERE interface_id = ANY($1::bigint[])
+            ) ranked
+            WHERE rn <= 2
+            ORDER BY interface_id, sampled_at ASC
+            """,
+            if_ids,
+        )
+
+    samples_by_if: Dict[int, List[Any]] = {}
+    for row in sample_rows:
+        samples_by_if.setdefault(row["interface_id"], []).append(row)
+
+    interfaces_out = []
+    total_in = 0.0
+    total_out = 0.0
+    for r in if_rows:
+        pair = samples_by_if.get(r["id"], [])
+        in_mbps = 0.0
+        out_mbps = 0.0
+        if len(pair) >= 2:
+            prev_row, curr_row = pair[-2], pair[-1]
+            dt = (curr_row["sampled_at"] - prev_row["sampled_at"]).total_seconds()
+            if dt >= 0.5:
+                in_mbps = calculate_bandwidth_mbps(
+                    int(curr_row["in_octets"]),
+                    int(prev_row["in_octets"]),
+                    dt,
+                    is_64bit=True,
+                    max_speed_bps=r["speed_bps"],
+                )
+                out_mbps = calculate_bandwidth_mbps(
+                    int(curr_row["out_octets"]),
+                    int(prev_row["out_octets"]),
+                    dt,
+                    is_64bit=True,
+                    max_speed_bps=r["speed_bps"],
+                )
+        total_in += in_mbps
+        total_out += out_mbps
+        interfaces_out.append({
+            "id": str(r["id"]),
+            "if_index": r["if_index"],
+            "name": r["name"],
+            "description": r["description"],
+            "mac_address": r["mac_address"],
+            "speed_bps": r["speed_bps"],
+            "oper_status": r["oper_status"],
+            "in_mbps": in_mbps,
+            "out_mbps": out_mbps,
+        })
+
+    return {
+        "success": True,
+        "has_snmp": bool(sample_rows),
+        "interfaces_polled": len(interfaces_out),
+        "total_in_mbps": round(total_in, 2),
+        "total_out_mbps": round(total_out, 2),
+        "timestamp": now.isoformat(),
+        "interfaces": interfaces_out,
     }

@@ -1,654 +1,466 @@
 # เอกสารส่งต่องานระบบ NetMonitor (Project Handover Documentation)
-> ระบบบริหารจัดการและติดตามสถานะอุปกรณ์เครือข่ายอัจฉริยะ (Web-based Network Topology & Monitoring)
-
----
 
 **ข้อมูลทั่วไปของโครงการ (Project Information)**
-* **ชื่อโครงการ:** NetMonitor (Web-based Network Topology & SNMP Monitoring System)
-* **เวอร์ชันเอกสาร:** Version 1.3.5 (Clean Architecture, Alert-Aware Telemetry & Playwright E2E Verified)
-* **วันที่ปรับปรุงล่าสุด:** 11 พฤศจิกายน 2026
-* **ทีมพัฒนา:** แผนกพัฒนาระบบเครือข่ายและโครงสร้างพื้นฐานดิจิทัล
-* **สถานะความพร้อม:** ผ่านการทดสอบระดับระบบ (End-to-End Playwright 10/10 ผ่าน 100%), โหลดทดสอบระดับ 500 VUs (k6), Pytest Unit & Integration Tests ผ่าน 100% (24/24), Vite Build ผ่าน 100%, ประเมินมาตรฐาน Clean Architecture & Decoupled Repository Pattern, รองรับ Lucide Icons และมีชุดจำลองเหตุการณ์แจ้งเตือน/สถานะเสมือนจริงพร้อมปุ่มควบคุมบน UI ครบถ้วน 100%
+
+- **ชื่อระบบ:** NetMonitor — Web-based Network Topology & SNMP Monitoring System
+- **เวอร์ชัน:** 1.3.5 (ปรับปรุงล่าสุด: 17 พฤศจิกายน 2026)
+- **ที่เก็บโค้ด (Repository):** [NetMonitor](https://github.com/Suphawit2004/NetMonitor)
+- **เทคโนโลยีหลัก:** React 19, TypeScript, Vite, FastAPI, asyncpg, PostgreSQL 17, Net-SNMP CLI
+- **สถานะการตรวจสอบล่าสุดในระบบ:**
+  - Backend Pytest (`test_classifier.py` + `tests/`): `41 passed` (`9.88s`, รวม `test_real_port_traffic.py` กับ Switch `192.168.22.254` ซึ่งจะเรียก `pytest.skip()` หาก Switch ไม่ตอบสนอง)
+  - Frontend ESLint (`npm run lint`): `0 errors` (`4 warnings` จาก React Hook dependencies เดิม)
+  - Frontend Build (`npm run build`): ผ่าน (`tsc -b && vite build`, `1.08s`)
+  - Playwright E2E (`npm run test:e2e`): `18 passed` (`38.6s` ครอบคลุม `netmonitor.spec.ts` 10 กรณี และ `fault-simulation.spec.ts` 8 กรณี)
 
 ---
 
 ## สารบัญ (Table of Contents)
-1. บทสรุปและภาพรวมของระบบ (Executive Summary & System Overview)
-2. สถาปัตยกรรมและเทคโนโลยีที่ใช้ (Architecture & Technology Stack)
-3. โครงสร้างโฟลเดอร์และไฟล์สำคัญ (Project Directory Structure)
-4. ฟังก์ชันหลักและความสามารถของระบบ (Core Features & Capabilities)
-5. ผลการทดสอบประสิทธิภาพและสมรรถนะ (Load & Quality Benchmarks)
-6. คู่มือการติดตั้งและการเริ่มต้นใช้งาน (Installation & Quick Start Guide)
-7. ชุดคำสั่งทดสอบระบบ (Automated Test Suites)
-8. บันทึกการปรับปรุงระบบล่าสุด (Recent Updates & Changelog — 11 พ.ย. 2026)
-9. แนวทางการบำรุงรักษาและการขยายระบบในอนาคต (Maintenance & Scaling Guidelines)
+
+- [1. บทสรุปและภาพรวมของระบบ (Executive Summary & System Overview)](#1-บทสรุปและภาพรวมของระบบ-executive-summary--system-overview)
+  - [1.1 ปัญหาที่ระบบแก้ไข (Problem Statement)](#11-ปัญหาที่ระบบแก้ไข-problem-statement)
+  - [1.2 เป้าหมายและขอบเขตที่ไม่ครอบคลุม (Goals & Non-Goals)](#12-เป้าหมายและขอบเขตที่ไม่ครอบคลุม-goals--non-goals)
+- [2. สถาปัตยกรรมและทางเลือกการออกแบบ (Architecture & Design Trade-offs)](#2-สถาปัตยกรรมและทางเลือกการออกแบบ-architecture--design-trade-offs)
+  - [2.1 แผนภาพและขอบเขตการทำงานของระบบ (System Architecture & Boundaries)](#21-แผนภาพและขอบเขตการทำงานของระบบ-system-architecture--boundaries)
+  - [2.2 ตารางสรุปเทคโนโลยีที่เลือกใช้ (Technology Stack)](#22-ตารางสรุปเทคโนโลยีที่เลือกใช้-technology-stack)
+  - [2.3 ทางเลือกสถาปัตยกรรมที่ถูกพิจารณา (Alternatives Considered)](#23-ทางเลือกสถาปัตยกรรมที่ถูกพิจารณา-alternatives-considered)
+  - [2.4 ความเสี่ยง ขีดจำกัด และแนวทางความปลอดภัย (Risks, Limits & Security Mitigations)](#24-ความเสี่ยง-ขีดจำกัด-และแนวทางความปลอดภัย-risks-limits--security-mitigations)
+- [3. โครงสร้างโปรเจกต์ (Project Directory Structure)](#3-โครงสร้างโปรเจกต์-project-directory-structure)
+- [4. ฟังก์ชันหลักและความสามารถของระบบ (Core Features & Capabilities)](#4-ฟังก์ชันหลักและความสามารถของระบบ-core-features--capabilities)
+  - [4.1 ระบบผังห้องและการซิงค์แผนที่ดาวเทียม (Floor Plan, Room Layouts & Map Synchronization)](#41-ระบบผังห้องและการซิงค์แผนที่ดาวเทียม-floor-plan-room-layouts--map-synchronization)
+  - [4.2 ระบบสแกน ค้นพบ และจำแนกอุปกรณ์ (Network Discovery & Classification)](#42-ระบบสแกน-ค้นพบ-และจำแนกอุปกรณ์-network-discovery--classification)
+  - [4.3 ระบบเก็บทราฟฟิกและสถานะอุปกรณ์ (SNMP Telemetry & Alert-Aware Device Status)](#43-ระบบเก็บทราฟฟิกและสถานะอุปกรณ์-snmp-telemetry--alert-aware-device-status)
+  - [4.4 ระบบโทโพโลยีและการจำลองผลกระทบลูกโซ่ (Topology Inference & Blast-Radius Simulation)](#44-ระบบโทโพโลยีและการจำลองผลกระทบลูกโซ่-topology-inference--blast-radius-simulation)
+  - [4.5 การค้นหา ธีม และการรองรับสองภาษา (Search, Theme & Localization)](#45-การค้นหา-ธีม-และการรองรับสองภาษา-search-theme--localization)
+- [5. ผลการทดสอบสมรรถนะและข้อสังเกต (Performance Benchmarks & Test Scope)](#5-ผลการทดสอบสมรรถนะและข้อสังเกต-performance-benchmarks--test-scope)
+  - [5.1 การทดสอบโหลดด้วย Grafana k6 (Load & Stress Benchmarks)](#51-การทดสอบโหลดด้วย-grafana-k6-load--stress-benchmarks)
+  - [5.2 การตรวจสอบคุณภาพหน้าเว็บด้วย Google Lighthouse (Lighthouse Web Quality Audit)](#52-การตรวจสอบคุณภาพหน้าเว็บด้วย-google-lighthouse-lighthouse-web-quality-audit)
+- [6. คู่มือการติดตั้งและตั้งค่า (Installation & Configuration Guide)](#6-คู่มือการติดตั้งและตั้งค่า-installation--configuration-guide)
+  - [6.1 ความต้องการขั้นต่ำของระบบ (System Requirements)](#61-ความต้องการขั้นต่ำของระบบ-system-requirements)
+  - [6.2 การเปิดระบบและการรันบน Production (One-Click Dev & Production Hosting)](#62-การเปิดระบบและการรันบน-production-one-click-dev--production-hosting)
+  - [6.3 การตั้งค่าสภาพแวดล้อมและเปิดระบบแบบแยกส่วน (Environment Config & Manual Execution)](#63-การตั้งค่าสภาพแวดล้อมและเปิดระบบแบบแยกส่วน-environment-config--manual-execution)
+- [7. ชุดคำสั่งทดสอบระบบ (Automated Test Suites)](#7-ชุดคำสั่งทดสอบระบบ-automated-test-suites)
+  - [7.1 ทดสอบ Backend (Python & Pytest)](#71-ทดสอบ-backend-python--pytest)
+  - [7.2 ทดสอบ Frontend (ESLint, TypeScript & Vite)](#72-ทดสอบ-frontend-eslint-typescript--vite)
+  - [7.3 ทดสอบ End-to-End ด้วย Playwright (Playwright E2E Suite)](#73-ทดสอบ-end-to-end-ด้วย-playwright-playwright-e2e-suite)
+  - [7.4 ทดสอบโหลดด้วย Grafana k6 (Load & Stress Tests)](#74-ทดสอบโหลดด้วย-grafana-k6-load--stress-tests)
+- [8. สรุปพัฒนาการระบบตามเวอร์ชัน (Release History Summary)](#8-สรุปพัฒนาการระบบตามเวอร์ชัน-release-history-summary)
+- [9. แนวทางการบำรุงรักษาและขีดจำกัดการขยายระบบ (Maintenance & Operational Guidelines)](#9-แนวทางการบำรุงรักษาและขีดจำกัดการขยายระบบ-maintenance--operational-guidelines)
+  - [9.1 การสำรองและกู้คืนฐานข้อมูล (Database Backup & Restore)](#91-การสำรองและกู้คืนฐานข้อมูล-database-backup--restore)
+  - [9.2 การปรับตั้งค่า SNMP Polling และ Retention (SNMP Polling & Retention Tuning)](#92-การปรับตั้งค่า-snmp-polling-และ-retention-snmp-polling--retention-tuning)
+  - [9.3 แนวทางการรัน Single-Worker สำหรับระบบภายใน (Single-Worker Deployment Profile)](#93-แนวทางการรัน-single-worker-สำหรับระบบภายใน-single-worker-deployment-profile)
 
 ---
 
 ## 1. บทสรุปและภาพรวมของระบบ (Executive Summary & System Overview)
 
-**NetMonitor** เป็นระบบบริหารจัดการและติดตามสถานะอุปกรณ์เครือข่ายแบบรวมศูนย์ (Full-Stack Network Monitoring System) พัฒนาขึ้นเพื่อทดแทนการตรวจสอบอุปกรณ์ผ่าน CLI หรือตารางข้อมูลแบบเดิม โดยมุ่งเน้นการแสดงผลเชิงภาพ (Visual Topology) ที่ใช้งานง่าย ตอบสนองรวดเร็ว และให้ข้อมูลเชิงลึกแบบ Real-time
+### 1.1 ปัญหาที่ระบบแก้ไข (Problem Statement)
 
-### 1.1 เป้าหมายและขอบเขตที่ไม่ครอบคลุม (Goals & Non-Goals)
-* **เป้าหมายหลักของระบบ (Goals):**
-  1. การแสดงสถานะอุปกรณ์เครือข่าย (Router, Switch, Access Point, Server) บนแผนผังอาคาร 2 มิติ และภาพถ่ายดาวเทียมแบบเรียลไทม์
-  2. การค้นพบอุปกรณ์อัตโนมัติ (Zero-Config Network Discovery) ผ่าน ARP Caching, ICMP Ping และการจำแนกประเภทอุปกรณ์ด้วย SNMP
-  3. การตรวจสอบทราฟฟิกข้อมูลจริงระดับอินเทอร์เฟซ (Interface Telemetry) โดยคำนวณจากเคาน์เตอร์ 64-bit HC Octets ผ่าน SNMP IF-MIB
-  4. การบริหารจัดการวงจรชีวิตการแจ้งเตือน (Alert Lifecycle) แบบรวมศูนย์ รองรับการรับทราบ (Acknowledge) และการแก้ไข (Resolve)
-  5. ความทนทานระดับสูง รองรับการเข้าถึงพร้อมกัน 500 VUs โดยปราศจากข้อผิดพลาด (0.00% Error Rate)
-* **ขอบเขตที่ไม่ครอบคลุม (Non-Goals):**
-  1. ไม่ใช่ระบบ Config Management หรือ Network Automation (ไม่รองรับการส่งคำสั่งเขียนหรือแก้ไขการตั้งค่าอุปกรณ์ผ่าน SSH/CLI หรือ SNMP SET)
-  2. ไม่ใช่ระบบจัดเก็บ Syslog/NetFlow/sFlow ขนาดใหญ่ระดับ Enterprise Data Lake (ข้อมูลทราฟฟิกถูกจัดเก็บเป็นสถิติรายรอบการ Polling เท่านั้น)
-  3. ไม่ครอบคลุมการจัดการสิทธิ์ผู้ใช้งานระดับละเอียด (Multi-tenancy / RBAC) — ระบบมุ่งเน้นสำหรับทีมปฏิบัติการเครือข่าย (NOC) ในเครือข่ายภายใน
+การเฝ้าระวังเครือข่ายภายในอาคารด้วยตารางรายการ IP หรือคำสั่ง CLI ทำให้ผู้ดูแลระบบต้องเชื่อมโยงข้อมูลหลายส่วนด้วยตนเองเมื่อเกิดเหตุขัดข้อง ได้แก่ ตำแหน่งทางกายภาพของอุปกรณ์บนผังอาคาร พิกัดบนแผนที่ ปริมาณทราฟฟิกย้อนหลัง และผลกระทบลูกโซ่ต่ออุปกรณ์ปลายทางหรือบริการที่พึ่งพากัน
 
-### จุดเด่นสำคัญของระบบ:
-1. **การแสดงผลแผนผัง 2 รูปแบบคู่ขนาน (Dual-Mode Visualization):**
-   * **ผังอาคาร 2 มิติ (2D Floor Plan Canvas):** แสดงตำแหน่งห้อง (Server Room, Network Core, Zone ทำงาน) พร้อมระบบซูม เลื่อน (Pan/Zoom) และลากจัดวางตำแหน่งอุปกรณ์ได้อย่างอิสระ
-   * **แผนที่ภูมิศาสตร์ดาวเทียม (Satellite Map Overlay):** ทาบผังห้องลงบนภาพถ่ายดาวเทียมจริงตามพิกัดสากล WGS84 GPS มีระบบแปลงพิกัดสองทาง (Two-Way Affine Mapping) ทำให้พิกัดบนผัง 2 มิติและพิกัดบนแผนที่ดาวเทียมตรงกันเสมอ
-2. **ระบบค้นหาอุปกรณ์อัตโนมัติความเร็วสูง (Zero-Config Network Discovery):**
-   * ค้นหาอุปกรณ์ในวงเครือข่ายได้เร็วกว่า 3 วินาที (สำหรับ 90+ โฮสต์) ผ่าน Dynamic ARP Caching และ ICMP Ping-first
-   * ค้นหาและตั้งชื่ออุปกรณ์จริงอัตโนมัติ (Smart Naming) ผ่าน SNMP `sysName`, Local Reverse DNS (mDNS/DHCP), และฐานข้อมูลผู้ผลิต (MAC OUI)
-3. **การตรวจสอบเชิงลึกและการวิเคราะห์ (Deep Diagnostics & Metrics):**
-   * ตรวจวัดสถานะสุขภาพ (Uptime, CPU, Memory, อุณหภูมิ, Packet Loss)
-   * แสดงกราฟการใช้แบนด์วิธ (Bandwidth History) พร้อมเส้น Crosshair และ Interactive Tooltip แบบแม่นยำระดับมิลลิวินาที
-4. **ระบบจัดการการแจ้งเตือนข้อผิดพลาด (Full-Stack Alert Management):**
-   * จัดเก็บและจัดการวงจรชีวิตของ Alert (Critical, Warning, Info) ในฐานข้อมูล PostgreSQL
-   * รองรับการรับทราบปัญหา (Acknowledge) และการปิดประเด็น (Resolve) จากหน้าเว็บได้ทันที
-5. **สมรรถนะและความเสถียรระดับสูง:**
-   * รองรับผู้ใช้พร้อมกันได้ถึง 500 คนพร้อมกัน (~740 คำขอ/วินาที) โดยไม่มีข้อผิดพลาด (0.00% Error Rate)
+NetMonitor ถูกพัฒนาขึ้นเพื่อรวมงานเหล่านี้ไว้ในหน้าจอเดียวสำหรับทีมปฏิบัติการเครือข่าย (NOC) โดยแปลงข้อมูลอุปกรณ์และ SNMP Telemetry ให้แสดงผลบนผังอาคาร 2 มิติและแผนที่ดาวเทียม เชื่อมโยงสายสัญญาณระหว่างอุปกรณ์ และจำลองขอบเขตผลกระทบเมื่ออุปกรณ์หรือสายเชื่อมขัดข้อง
+
+### 1.2 เป้าหมายและขอบเขตที่ไม่ครอบคลุม (Goals & Non-Goals)
+
+- **เป้าหมายหลัก (Goals):**
+  - แสดงผลตำแหน่งอุปกรณ์บนผังอาคาร 2 มิติและแผนที่ดาวเทียม (WGS84 GPS) ที่ซิงค์ผังห้องจากฐานข้อมูลร่วมกัน
+  - ค้นพบและจำแนกประเภทอุปกรณ์ในเครือข่ายผ่าน ARP, ICMP Ping, Reverse DNS, MAC OUI และ SNMP (`v1`/`v2c`)
+  - เก็บสถิติทราฟฟิกรายพอร์ตและทราฟฟิกรวมของอุปกรณ์ (`ifHCInOctets`/`ifHCOutOctets`), ข้อมูลสุขภาพ (CPU, Memory, อุณหภูมิ, Ping RTT, `sys_uptime`) และคำนวณสถานะอุปกรณ์ที่เชื่อมโยงกับการแจ้งเตือน
+  - เชื่อมโยงโทโพโลยีและวิเคราะห์ผลกระทบลูกโซ่ (Blast-Radius), คะแนน Single Point of Failure (SPOF), ห้อง/โซน และแท็กบริการที่ได้รับผลกระทบ
+- **ขอบเขตที่ไม่ครอบคลุม (Non-Goals):**
+  - ไม่ใช่ระบบแก้ไข Configuration บนอุปกรณ์เครือข่ายโดยตรง (Read-Only Monitoring; ไม่ส่ง SNMP `SET` หรือเข้า SSH/Telnet)
+  - ไม่ได้ออกแบบสำหรับความสามารถ Multi-tenancy หรือระบบสิทธิ์ผู้ใช้แบบ RBAC / OIDC (เหมาะสำหรับทีม NOC ภายในที่ควบคุมการเข้าถึงในระดับเครือข่ายและ `X-API-Key`)
+  - ไม่รองรับระบบ Telemetry ระดับแสน Node แบบ Distributed Agent (มุ่งเป้าเครือข่ายระดับ 100–500 อุปกรณ์ภายในองค์กรหรือแคมปัส)
 
 ---
 
-## 2. สถาปัตยกรรมและเทคโนโลยีที่ใช้ (Architecture & Technology Stack)
+## 2. สถาปัตยกรรมและทางเลือกการออกแบบ (Architecture & Design Trade-offs)
 
-### 2.1 แผนภาพการทำงานของระบบ (System Architecture Layout)
+### 2.1 แผนภาพและขอบเขตการทำงานของระบบ (System Architecture & Boundaries)
 
 ```text
 +-------------------------------------------------------------------------------+
-|                       ชั้นส่วนติดต่อผู้ใช้ (Frontend Client)                   |
-|  - React 19 + TypeScript + Vite (Port 5173)                                   |
-|  - 2D Canvas Engine (Pan/Zoom/Drag) | Leaflet Map Overlay (Satellite/Carto)   |
-|  - NetworkContext & State Store     | i18next (รองรับ ไทย / อังกฤษ 100%)       |
-|  - ผังห้องและ Room Templates บริหารผ่าน Client-side LocalStorage Engine       |
+|                       Frontend Layer (React 19 + TypeScript)                  |
+|  - Pages: FloorPlanPage, DeviceListPage, DeviceDetailPage, ReportsPage        |
+|  - Visualization: FloorCanvas (2D), FloorMapOverlay (Leaflet), TrafficChart   |
+|  - Topology & Sim UI: TopologyLinksLayer, ImpactDrawer, ServiceTagsEditor     |
+|  - State Contexts: NetworkProvider (15s HTTP Poll), FaultSimProvider,         |
+|                    SettingsProvider, SimulationProvider                       |
 +---------------------------------------+---------------------------------------+
                                         |
-                 [HTTP / REST API Proxy: /api -> :8000]
-                 [Offline Fallback: LocalStorage Engine]
+              [HTTP REST Proxy: /api/v1/* + X-API-Key Header]
+              [Offline Fallback ONLY on unreachable transport: localStorage +   |
+               client topologyEngine / detailFactory]
                                         |
 +---------------------------------------v---------------------------------------+
-|                    ชั้นบริการเซิร์ฟเวอร์ (FastAPI Backend Engine)             |
-|  - FastAPI Framework + Uvicorn Asynchronous Server (Port 8000)                |
-|  - Smart Placement & Geofence Engine (Bilinear Affine Transformation)         |
-|  - Network Discovery Worker (ARP Cache + Reverse DNS + Semaphore Pool)        |
-|  - SNMP Poller Engine (PostgreSQL Advisory Lock ป้องกัน Worker แย่ง Poll)    |
+|                       Backend Layer (FastAPI + Uvicorn)                       |
+|  - Controllers (`app/main.py`): REST Routes, `require_api_key`, `ALLOWED_ORIGINS` |
+|  - Validation (`app/models.py`): `ipaddress` IP/CIDR & SNMP community checks  |
+|  - Data Access (`app/repository.py`): SQL, transactions, `compute_device_status`, |
+|                 `floor_layouts`, `is_simulated` isolation, `purge_expired_telemetry` |
+|  - Topology Engine (`app/topology.py`): `infer_topology_links`, `compute_blast_radius` |
+|  - Discovery & Placement (`app/discovery.py`, `classifier.py`, `placement.py`)|
+|  - Collector & Poller (`app/collector.py`, `app/snmp.py`): Concurrent OIDs,   |
+|    batched DB inserts, rate summation, `ADVISORY_LOCK_SNMP_POLLER` (30s cycle)|
 +---------------------------------------+---------------------------------------+
                                         |
-                     [asyncpg Connection Pool (Max Size: 10)]
+                    [asyncpg Connection Pool (min 2, max 10)]
                                         |
 +---------------------------------------v---------------------------------------+
-|                       ชั้นฐานข้อมูล (Database Layer)                          |
-|  - Docker Container: 'docker-db-1' (Image: postgres:17-alpine)                |
-|  - Connection: 127.0.0.1:5432 / Database: netmon                              |
-|  - ตารางข้อมูล: devices, alerts, device_metric_samples, interfaces,            |
-|               poll_runs, interface_samples                                    |
+|                       Database Layer (PostgreSQL 17 Alpine)                   |
+|  - Docker Container: `docker-db-1` (Port 5432, DB: `netmon`)                  |
+|  - Tables: devices, interfaces, poll_runs, interface_samples,                 |
+|            device_metric_samples, alerts, topology_links, floor_layouts       |
 +-------------------------------------------------------------------------------+
 ```
 
 ### 2.2 ตารางสรุปเทคโนโลยีที่เลือกใช้ (Technology Stack)
 
-| ส่วนประกอบ (Component) | เทคโนโลยีที่ใช้ | เหตุผลและหน้าที่หลัก |
+| ส่วนประกอบ (Layer) | เทคโนโลยีที่เลือกใช้ | หน้าที่และเหตุผลเชิงเทคนิค |
 |---|---|---|
-| **Frontend Framework** | React 19.3 + TypeScript 5.8 | ประสิทธิภาพสูง ความปลอดภัยของ Type System ครอบคลุมทั้งโปรเจกต์ |
-| **Build Tool & Bundler** | Vite 8.3 + Rolldown | Chunk Splitting โหลดหน้าเว็บเร็วเป็นพิเศษ ใช้เวลาบิลด์เพียง ~380ms |
-| **Styling** | Vanilla CSS Modules | ไม่พึ่งพา UI Library ภายนอก ควบคุมสไตล์ Dark Theme ได้สมบูรณ์แบบ |
-| **Map Engine** | Leaflet 1.9 + Carto / Esri | รองรับการวาดผังห้องโปร่งแสงและหมุดบนพิกัด WGS84 GPS ได้ลื่นไหล |
-| **Backend API** | FastAPI + Uvicorn | Asynchronous Python Framework ตอบสนองรวดเร็ว พร้อม Swagger UI |
-| **Database Driver** | `asyncpg` | ไดรเวอร์ PostgreSQL แบบ Asynchronous ที่เร็วที่สุดในระบบนิเวศ Python |
-| **Database** | PostgreSQL 17 (Docker) | จัดเก็บข้อมูลอุปกรณ์, พิกัด GPS, การล็อค, อินเทอร์เฟซ, ทราฟฟิก และการแจ้งเตือน (โครงสร้างห้องเก็บผ่าน LocalStorage) |
-| **Testing Stacks** | Pytest + Grafana k6 + Lighthouse | เครื่องมือทดสอบอัตโนมัติครบวงจร ทั้งระดับ Unit, Load และ Web Performance |
+| **Frontend UI** | **React 19 + TypeScript + Vite** | แยกส่วนแสดงผลเป็น Component ชัดเจน ตรวจ Type ล่วงหน้าก่อน Compile และรองรับ HMR ระหว่างพัฒนา |
+| **Maps & Icons** | **Leaflet + Lucide React** | แสดงแผนที่ดาวเทียม/Carto ที่รองรับ Offline Tile Cache และการวาด Vector Overlay ด้วย SVG |
+| **Localization** | **i18next / react-i18next** | จัดการข้อความ 2 ภาษา (`th` / `en`) จากศูนย์กลางผ่าน [th.ts](./netmonitor/src/i18n/th.ts) และ [en.ts](./netmonitor/src/i18n/en.ts) |
+| **Backend API** | **Python FastAPI + Uvicorn** | รองรับ Async I/O สร้าง OpenAPI/Swagger อัตโนมัติ และตรวจสอบ Payload ด้วย Pydantic v2 |
+| **Database Driver** | **asyncpg + PostgreSQL 17** | รองรับ `INET`, `JSONB`, Transaction, Batch Insert (`executemany` / `UNNEST`) และ Advisory Lock ในตัว |
+| **SNMP / Network** | **Net-SNMP CLI + OS Subprocess** | ใช้งานคำสั่งมาตรฐาน `snmpget`/`snmpwalk` บน `asyncio.to_thread` ร่วมกับการอ่าน ARP/Route ของ OS |
 
-### 2.3 การประเมินทางเลือกสถาปัตยกรรมที่ถูกคัดออก (Alternatives Considered)
-1. **การใช้ WebSockets เทียบกับ HTTP Polling สำหรับ Telemetry:**
-   * *ทางเลือกที่ถูกคัดออก:* Persistent WebSocket Connection ตลอดเวลา
-   * *เหตุผล:* สถาปัตยกรรมแบบ HTTP REST ร่วมกับ Client Polling รอบ 10–30 วินาที ตอบโจทย์การทำงานของเครือข่ายองค์กรขนาดกลาง (100–500 โหนด) ได้อย่างเสถียรกว่ามาก ไม่เกิดปัญหา Connection Drop เมื่อเดินข้าม Subnet และรองรับ Caching/Proxy ได้ดีกว่า
-2. **การจัดเก็บโครงสร้างห้องใน PostgreSQL เทียบกับ Client LocalStorage:**
-   * *ทางเลือกที่ถูกคัดออก:* การสร้างตาราง `rooms` และ API CRUD บน PostgreSQL
-   * *เหตุผล:* ขนาดข้อมูลโครงสร้างห้องเป็นแบบ Static Template ประจำแต่ละชั้น การจัดเก็บใน `localStorage` ช่วยให้หน้าเว็บแสดงผลทันทีโดยไม่ต้องรอ Round-trip API และผู้ใช้สามารถปรับแต่งผังห้องเฉพาะตัวได้แบบ Zero-latency
-3. **การใช้ TimeScaleDB เทียบกับ Vanilla PostgreSQL 17:**
-   * *ทางเลือกที่ถูกคัดออก:* TimeScaleDB Extension
-   * *เหตุผล:* ปริมาณข้อมูล Telemetry ของระบบมีอัตราเติบโตในระดับที่ควบคุมได้ การใช้ตาราง `interface_samples` และ `poll_runs` ร่วมกับการทำ Indexing บน PostgreSQL 17 Alpine มาตรฐาน ให้ความเบา (Lightweight), Portable และลดความซับซ้อนในการติดตั้ง Container
+### 2.3 ทางเลือกสถาปัตยกรรมที่ถูกพิจารณา (Alternatives Considered)
 
-### 2.4 ความเสี่ยง ขีดจำกัด และแนวทางแก้ไข (Risks, Constraints & Mitigations)
-1. **ความเสี่ยงการเกิด Multiple Background Polling เมื่อรันหลาย Uvicorn Workers:**
-   * *ความเสี่ยง:* หากรัน Uvicorn มากกว่า 1 Worker ใน Production แต่ละ Worker จะเริ่ม Task SNMP Poller แยกกัน ทำให้เกิดการยิง SNMP รบกวนอุปกรณ์สวิตช์ซ้ำซ้อน
-   * *แนวทางแก้ไข:* ใช้ **PostgreSQL Advisory Lock (`0x534E4D50`)** ใน `main.py` เพื่อให้มีเพียง 1 Worker ที่ได้สิทธิ์รัน Background Poller ในขณะใดขณะหนึ่ง หาก Worker ล้ม ระบบจะปลด Lock ให้อัตโนมัติ
-2. **ข้อจำกัดของ Windows TCP Backlog ต่อการทดสอบโหลด (> 500 VUs):**
-   * *ข้อจำกัด:* ระบบปฏิบัติการ Windows มี TCP Socket Backlog จำกัด หากส่งทราฟฟิกเกิน 500 VUs (> 4,500 req/s) Windows จะปฏิเสธการเชื่อมต่อ
-   * *แนวทางแก้ไข:* แนะนำให้รันระบบใน Docker Linux Host หรือกำหนด Connection Pooling และ Keep-Alive อย่างเหมาะสมหากต้องการขยายขนาดเกิน 1,000 VUs
-3. **ความเสี่ยงข้อมูลจำลองขัดแย้งกับข้อมูลจริง (Synthetic vs Real Data):**
-   * *ความเสี่ยง:* การสุ่มข้อมูลหรือสร้างคลื่น Sine หลอกอาจทำให้ผู้ดูแลเครือข่ายเข้าใจผิดเกี่ยวกับประสิทธิภาพของแบนด์วิธ
-   * *แนวทางแก้ไข:* ตัดโมดูลคำนวณทราฟฟิกคณิตศาสตร์ Sine Wave ออก หากอุปกรณ์ไม่ตอบสนอง SNMP ระบบจะบันทึกสถานะเป็น 0 Mbps และติดป้าย `No SNMP Data` ชัดเจน
+1. **การอัปเดตสถานะหน้าเว็บ (HTTP Polling 15s vs WebSockets / SSE):**
+   - *แนวทางที่เลือก:* ใช้ HTTP Polling ทุก 15 วินาที (`LIVE_POLL_INTERVAL_MS = 15_000`) ร่วมกับ `deviceSnapshotKey` เพื่อข้ามการ Re-render เมื่อข้อมูลไม่เปลี่ยน
+   - *แนวทางที่คัดออก:* WebSockets หรือ SSE + PostgreSQL `LISTEN/NOTIFY` ซึ่งเพิ่มความซับซ้อนในการดูแลการเชื่อมต่อและสถานะ Pub/Sub เกินความจำเป็นสำหรับปริมาณ 100–500 อุปกรณ์
+2. **การเก็บผังห้องอาคาร (PostgreSQL `floor_layouts` + Cache vs Browser-Only `localStorage`):**
+   - *แนวทางที่เลือก:* เก็บผังห้องรายชั้นไว้ที่ตาราง `floor_layouts` (`GET /api/v1/layout`, `PUT /api/v1/layout/{floor}`) เพื่อให้ Backend (`placement.py`, `topology.py`) และทุกหน้าจอใช้อ้างอิงร่วมกัน โดยมี `localStorage` เป็น Read-through Cache เพื่อการแสดงผลทันที (พร้อมรองรับ `floor_rooms` override ใน request)
+   - *แนวทางที่คัดออก:* การเก็บไว้เฉพาะฝั่งเบราว์เซอร์ (`localStorage`) เพียงอย่างเดียว ซึ่งทำให้พิกัดห้องระหว่างการวางอุปกรณ์ฝั่ง Backend ไม่ตรงกับห้องที่ผู้ใช้ปรับแก้ หรือการทำระบบ Versioning พร้อม Conflict Resolution ข้ามผู้ใช้ซึ่งซับซ้อนเกินขนาดงาน
+3. **การคำนวณโทโพโลยีและ Blast-Radius (Backend Single Engine vs Dual Client/Server Engine):**
+   - *แนวทางที่เลือก:* ให้ Frontend (`FaultSimProvider.tsx`, `DeviceDetailPage.tsx`) เรียก `POST /api/v1/simulate/impact` เพื่อใช้ `backend/app/topology.py` เป็นแหล่งคำนวณหลักเพียงแหล่งเดียว และเก็บ `netmonitor/src/services/topologyEngine.ts` ไว้เฉพาะเป็น Offline Fallback เมื่อ Backend ไม่สามารถติดต่อได้
+   - *แนวทางที่คัดออก:* การคำนวณคู่ขนานทั้งในเบราว์เซอร์และบนเซิร์ฟเวอร์ทุกครั้งที่ข้อมูลเปลี่ยนแปลง ซึ่งซ้ำซ้อนและเสี่ยงเกิดผลลัพธ์ไม่ตรงกัน
+4. **การสื่อสาร SNMP และสแกนเครือข่าย (Net-SNMP CLI Subprocesses vs Async Python Libraries):**
+   - *แนวทางที่เลือก:* เรียก `snmpget`/`snmpwalk` ผ่าน `asyncio.to_thread` พร้อม `sanitize_snmp_community()` และแยกคำสั่งค้นหา OS (`arp`/`netsh`/`route` บน Windows และ `ip neigh`/`ip route` บน Linux)
+   - *แนวทางที่คัดออก:* การเขียนหรือเปลี่ยนไปใช้ Native Async SNMP Library (`pysnmp`/`aiosnmp`) ซึ่งต้องรื้อชุดทดสอบ MIB/Counter parsing ที่ผ่านการทดสอบกับอุปกรณ์จริงแล้ว
+5. **การควบคุมสิทธิ์การเข้าถึง (`X-API-Key` vs RBAC / OIDC):**
+   - *แนวทางที่เลือก:* ใช้ `settings.API_KEY` ตรวจสอบผ่าน Header `X-API-Key` บน Endpoint ที่เปลี่ยนแปลงข้อมูลหรือสั่งสแกนเครือข่าย สอดคล้องกับ Non-Goal ที่เป็นเครื่องมือสำหรับทีม NOC ภายในเดียว
+   - *แนวทางที่คัดออก:* ระบบ Authentication เต็มรูปแบบ (RBAC / OIDC / Session Management)
+6. **การจัดเก็บ Time-Series (PostgreSQL + Periodic Retention vs TimescaleDB):**
+   - *แนวทางที่เลือก:* ใช้ PostgreSQL ปกติร่วมกับ Index และงานล้างข้อมูลเก่าอัตโนมัติ (`purge_expired_telemetry()` ตาม `METRICS_RETENTION_DAYS = 7`)
+   - *แนวทางที่คัดออก:* การติดตั้ง Extension เพิ่มเติมอย่าง TimescaleDB เพื่อลดภาระในการดูแล Image และ Schema
+
+### 2.4 ความเสี่ยง ขีดจำกัด และแนวทางความปลอดภัย (Risks, Limits & Security Mitigations)
+
+1. **ความปลอดภัยและการยืนยันตัวตน (Security & Input Hardening):**
+   - Endpoint ที่เปลี่ยนแปลงฐานข้อมูล สั่งจำลองสถานะ แก้ไขผังห้อง หรือสแกนเครือข่ายทั้งหมดอยู่ภายใต้ Dependency `require_api_key` (ตรวจ Header `X-API-Key` แบบ Constant-time ผ่าน `hmac.compare_digest` เมื่อตั้งค่า `API_KEY` ใน `backend/.env`)
+   - CORS ถูกจำกัดตามรายการ `ALLOWED_ORIGINS` (`settings.allowed_origins_list` ค่าเริ่มต้น `http://localhost:5173,http://127.0.0.1:5173`)
+   - IP และ CIDR ของอุปกรณ์ถูกตรวจสอบด้วย `ipaddress` ใน [models.py](./backend/app/models.py) และ SNMP Community String ผ่าน `sanitize_snmp_community()` ใน [snmp.py](./backend/app/snmp.py) เพื่อป้องกันการแทรก CLI options (`-...`) หรือ control characters
+   - สถานะอุปกรณ์จำลองถูกแยกไว้ที่คอลัมน์ `devices.is_simulated` เพื่อไม่ให้เขียนทับ Community String จริงใน `credential_ref`; รหัสผ่านฐานข้อมูลต้องกำหนดผ่าน `.env` (ดู [backend/.env.example](./backend/.env.example)) และไม่ใช้รหัสผ่านจริงในไฟล์ตั้งค่าที่ Track ใน Git
+2. **คอขวดของ Background SNMP Poller (Concurrency & Subprocess Limits):**
+   - Background Poller ทำงานทุก `SNMP_POLL_INTERVAL_S = 30` วินาที จำกัดจำนวนอุปกรณ์พร้อมกันที่ `SNMP_MAX_CONCURRENT_POLLS = 5` โดยใช้ `asyncio.gather` เพื่อดึง OID ที่เป็นอิสระของแต่ละอุปกรณ์พร้อมกันและทำ Batch DB insert
+   - หากขยายจำนวนอุปกรณ์ที่มี SNMP จริงเข้าใกล้ 300–500 เครื่องพร้อมพอร์ตจำนวนมาก รอบการ Poll อาจใช้เวลาเกิน 30 วินาที ควรปรับเพิ่มค่า `SNMP_POLL_INTERVAL_S` และ `SNMP_MAX_CONCURRENT_POLLS` ใน `.env` ตามความเหมาะสม
+3. **พฤติกรรม Offline Fallback และการแยก HTTP Error:**
+   - ใน [api.ts](./netmonitor/src/services/api.ts) การตอบกลับ HTTP `4xx` หรือ `5xx` ที่เป็น JSON จาก Backend จะถูกส่งเป็น `Error` ไปยัง UI โดยตรงโดยไม่ Fallback ไปแก้ไข `localStorage` เพื่อป้องกันสถานะคลาดเคลื่อนกับฐานข้อมูล
+   - `localStorage` Fallback และฟังก์ชันสร้างกราฟฝั่ง Client (`traffic.ts`, `random.ts` และ `topologyEngine.ts`) จะทำงานเฉพาะเมื่อ Backend ไม่ตอบสนองระดับ Transport/Proxy เท่านั้น ส่วนฝั่ง Backend ใน `collector.py` ไม่มีการสร้างทราฟฟิกสังเคราะห์ (อุปกรณ์ที่ไม่มี SNMP จะแสดง `No SNMP Data (ICMP Only)`)
+4. **การใช้งานข้ามระบบปฏิบัติการ (Windows vs Linux Discovery):**
+   - `discovery.py` รองรับทั้ง Windows (`arp -a`, `netsh wlan`, `route print 0.0.0.0`, `ping -n`) และ Linux/POSIX (`ip neigh`, `arp -n`, `ip route show default`, `ping -c`) ทั้งนี้บน Windows การสืบค้น Wi-Fi SSID จะทำงานเพิ่มผ่าน `netsh` ในขณะที่ Linux Container จะข้ามข้อมูล Wi-Fi โดยอัตโนมัติ
 
 ---
 
-## 3. โครงสร้างโฟลเดอร์และไฟล์สำคัญ (Project Directory Structure)
+## 3. โครงสร้างโปรเจกต์ (Project Directory Structure)
 
-ตำแหน่ง Root ของโครงการ: `C:\work\snmp_font_end\`
+รายละเอียดโครงสร้างภายในแต่ละส่วนสามารถดูเพิ่มเติมได้ที่ [README.md](./README.md), [backend/README.md](./backend/README.md) และ [netmonitor/README.md](./netmonitor/README.md)
 
 ```text
 snmp_font_end/
-├── .gitignore                   # ตัวกรองบล็อกไฟล์ขยะ แคช และ build artifacts
-├── start_all.bat                # [สำคัญ] สคริปต์เปิดทั้งระบบ (Docker DB + Backend + Frontend)
-├── start_docker_backend.bat     # สคริปต์เปิดเฉพาะ Docker DB และ Backend
-├── HANDOVER.md                  # เอกสารส่งมอบระบบฉบับสมบูรณ์ (ไฟล์นี้)
-├── seed_mock_data.sql           # ข้อมูลทดสอบ SQL สำหรับรีเซ็ตฐานข้อมูล
-├── test_e2e.py                  # สคริปต์ Smoke Test ฝั่ง Backend
-├── load_test.js                 # สคริปต์ k6 สำหรับทดสอบโหลดการทำงานทั่วไป
-├── stress_limit_test.js         # สคริปต์ k6 สำหรับทดสอบความทนทานถึง 500 VUs
+├── README.md                        # ภาพรวมระบบและคำสั่งเริ่มต้นใช้งาน
+├── HANDOVER.md                      # เอกสารส่งต่องานฉบับนี้
+├── docker-compose.yml               # PostgreSQL 17 Container (อ่านค่าจาก .env)
+├── init/
+│   └── 001_schema.sql               # DDL เริ่มต้น (รวม topology_links และ floor_layouts)
+├── seed_mock_data.sql               # ข้อมูลอุปกรณ์ตัวอย่างสำหรับ Seed และ Reset
+├── load_test.js                     # สคริปต์ k6 Baseline Load Test (15 VUs)
+├── stress_limit_test.js             # สคริปต์ k6 Stress Limit Test (ถึง 500 VUs)
+├── start_all.bat                    # สคริปต์เปิดระบบบน Windows (DB + Backend + Frontend)
+├── start_docker_backend.bat         # สคริปต์เปิด DB + Backend บน Windows
 │
-├── backend/                     # ระบบ Backend API (FastAPI)
+├── backend/                         # FastAPI Backend Service (ดู backend/README.md)
+│   ├── README.md
+│   ├── .env.example                 # ตัวอย่าง Environment Variables (DB, API_KEY, CORS, Retention)
+│   ├── requirements.txt
+│   ├── run_backend.bat
+│   ├── simulate_faults.py           # สคริปต์จำลองสถานะและ Alert 6 กรณี (is_simulated = true)
+│   ├── test_classifier.py           # Pytest ชุดทดสอบ Classifier (17 tests)
+│   ├── test_api.py                  # สคริปต์ทดสอบ CRUD Endpoints (ส่ง X-API-Key)
+│   ├── test_discovery.py            # สคริปต์ทดสอบ Discovery และ Offline Flow
+│   ├── test_real_snmp.py            # สคริปต์ทดสอบ SNMP กับ Switch จริงแบบ Standalone
+│   ├── test_smart_placement.py      # สคริปต์ทดสอบ Placement บนห้องจำลอง
 │   ├── app/
-│   │   ├── main.py              # จุดรวม API Endpoints, Routers, และ Lifespan (Clean Controllers)
-│   │   ├── repository.py        # [สำคัญ] Data Access Layer (Decoupled SQL Queries & Transactions)
-│   │   ├── database.py          # การเชื่อมต่อ asyncpg Pool และระบบ Auto-Migration
-│   │   ├── models.py            # Pydantic Schemas และ Data Transfer Objects (DTO)
-│   │   ├── discovery.py         # โมดูลสแกนเน็ตเวิร์ก, อ่าน ARP, และ Reverse DNS
-│   │   ├── classifier.py        # โมดูลจำแนกประเภทอุปกรณ์อัตโนมัติ
-│   │   ├── placement.py         # ระบบคำนวณตำแหน่งลงห้อง และ Affine GPS Mapping
-│   │   ├── collector.py         # โมดูล SNMP Poller, คำนวณ Bandwidth และ Sync Interfaces
-│   │   ├── snmp.py              # Wrapper เชื่อมต่อคำสั่ง Net-SNMP
-│   │   └── config.py            # การโหลดค่า Environment Settings & Telemetry Constants
-│   ├── tests/                   # ชุดทดสอบ Pytest (Real Ports, Rollover, Aggregation)
-│   ├── simulate_faults.py       # [สำคัญ] สคริปต์จำลองเหตุการณ์ขัดข้อง, Interfaces, Metrics และ Traffic
-│   ├── test_api.py              # ชุดทดสอบ CRUD API (ผ่าน 100%)
-│   ├── test_discovery.py        # ชุดทดสอบการสแกนและนำเข้าอุปกรณ์
-│   ├── test_smart_placement.py  # ชุดทดสอบการคำนวณพิกัดอุปกรณ์ลงห้อง
-│   ├── test_real_snmp.py        # ชุดทดสอบดึงข้อมูลอุปกรณ์จริงผ่าน SNMP
-│   └── run_backend.bat          # สคริปต์รันเฉพาะ Backend
+│   │   ├── main.py                  # FastAPI Endpoints, Lifecycle, Auth (`require_api_key`)
+│   │   ├── config.py                # ค่าคงที่และ Settings จาก .env
+│   │   ├── database.py              # asyncpg Pool & Idempotent DDL (Advisory Lock)
+│   │   ├── repository.py            # Data Access Layer, Status Logic, Retention Purge
+│   │   ├── models.py                # Pydantic Schemas & IP/CIDR/Community Validators
+│   │   ├── snmp.py                  # snmpget Wrapper & Community Sanitization
+│   │   ├── collector.py             # Concurrent SNMP Poller & Aggregate Bandwidth
+│   │   ├── discovery.py             # Cross-Platform Network Scanner
+│   │   ├── classifier.py            # Device Type Classification & Smart Naming
+│   │   ├── placement.py             # Smart Placement & Bilinear GPS Mapping
+│   │   └── topology.py              # Topology Inference, Blast Radius & SPOF Engine
+│   └── tests/
+│       ├── test_real_port_traffic.py
+│       ├── test_security_and_fixes.py
+│       ├── test_snmp_collector.py
+│       ├── test_topology_impact.py
+│       └── test_traffic_api.py
 │
-└── netmonitor/                  # ระบบ Frontend Web App (React 19)
-    ├── e2e/                     # [สำคัญ] ชุดการทดสอบ Playwright End-to-End Test Suite
-    │   └── netmonitor.spec.ts   # 10 E2E Test Scenarios ครอบคลุม 5 หน้าหลัก
-    ├── playwright.config.ts     # การตั้งค่า Playwright Test Engine
-    ├── public/
-    │   └── favicon.svg
-    ├── src/
-    │   ├── constants/           # deviceMeta.tsx (ไอคอน Lucide และคำค้นหาอุปกรณ์)
-    │   ├── components/
-    │   │   ├── detail/          # DeviceInfoModal, TrafficChart, MetricCard
-    │   │   ├── discovery/       # NetworkScanModal (หน้าต่างสแกนและแก้ชื่ออุปกรณ์)
-    │   │   ├── floor/           # FloorCanvas, FloorMapOverlay, DevicePin, FloorSidebar
-    │   │   ├── layout/          # Navbar, NavbarSearch (Ctrl + K Modular Component)
-    │   │   └── ui/              # Modal, ConfirmDialog, Toast แจ้งเตือน
-    │   ├── context/             # State Stores: Network, Simulation, Settings
-    │   ├── data/                # mockData.ts (ผังห้องเริ่มต้นและ Fallback Data)
-    │   ├── i18n/                # ไฟล์ภาษา th.ts และ en.ts (ตรงกัน 332 keys 100%)
-    │   ├── pages/               # FloorPlanPage, DeviceListPage, DeviceDetailPage, ReportsPage
-    │   ├── services/            # api.ts, mapGeo.ts, detailFactory.ts, traffic.ts, roomStore.ts, random.ts
-    │   └── types/               # index.ts (TypeScript Type Definitions)
+└── netmonitor/                      # React 19 Frontend Client (ดู netmonitor/README.md)
+    ├── README.md
+    ├── .env.example                 # VITE_API_KEY & VITE_MAP_API_KEY
     ├── package.json
-    └── vite.config.ts           # การตั้งค่า Chunk Splitting และ Proxy /api
+    ├── vite.config.ts               # Proxy /api -> 127.0.0.1:8000
+    ├── playwright.config.ts
+    ├── e2e/
+    │   ├── netmonitor.spec.ts       # Playwright 10 Core Navigation/UI Scenarios
+    │   └── fault-simulation.spec.ts # Playwright 8 Topology/Simulation/Sync Scenarios
+    └── src/
+        ├── components/              # detail/, discovery/, floor/, layout/, simulation/, ui/
+        ├── context/                 # NetworkProvider, FaultSimProvider, SettingsProvider, SimulationProvider
+        ├── hooks/                   # useDeviceDetail
+        ├── i18n/                    # th.ts, en.ts (543 บรรทัด / 510 entries), format.ts
+        ├── pages/                   # FloorPlanPage, DeviceListPage, DeviceDetailPage, ReportsPage
+        ├── services/                # api.ts, roomStore.ts, mapGeo.ts, detailFactory.ts, topologyEngine.ts
+        └── types/
 ```
 
 ---
 
 ## 4. ฟังก์ชันหลักและความสามารถของระบบ (Core Features & Capabilities)
 
-### 4.1 ระบบผังห้องและการซิงค์แผนที่ดาวเทียม (Floor Plan & Map Synchronization)
-* **โหมดย้ายตำแหน่งปลอดภัย (Move Mode):**
-  * มีปุ่ม `🔓 ย้ายตำแหน่ง` / `🔒 ล็อคตำแหน่ง` บนแถบเครื่องมือหลักพร้อมเอฟเฟกต์สีส้มเรืองแสง
-  * เมื่อกดล็อคตำแหน่ง ระบบจะบันทึกสถานะ `locked: true` ลง PostgreSQL ทันที ป้องกันหมุดเลื่อนโดยไม่ตั้งใจ
-* **การซิงค์พิกัดสองทาง (Two-Way Coordinate Sync):**
-  * เมื่อลากย้ายบน 2D Canvas ➔ คำนวณพิกัด GPS อัตโนมัติและบันทึกลงฐานข้อมูลทันที
-  * เมื่อลากย้ายบนแผนที่ดาวเทียม ➔ คำนวณพิกัดกลับมาเป็น (x, y) บนผังห้องทันที ทำให้เมื่อสลับมุมมอง หมุดจะอยู่ตรงกันพอดี
-* **Hover Mini Tooltip บนแผนที่จริง:**
-  * เมื่อชี้เมาส์ที่หมุดบนแผนที่ จะแสดงข้อมูลย่อทันที (ไอคอน, ชื่อ, สถานะเรืองแสง, IP, ชนิด, รุ่น, ชั้น)
-  * เมื่อคลิกหมุด จะเปิด Popup เต็มที่มีปุ่ม **"ดูรายละเอียดอุปกรณ์"** และ **"ล็อค/ปลดล็อคตำแหน่ง"**
-* **ไอคอนเวกเตอร์คุณภาพสูง (Lucide Vector Icons 100%):**
-  * ปรับเปลี่ยนระบบไอคอนทั้งหมดมาใช้ Lucide React เวกเตอร์ 100% ลบไฟล์ PNG เก่าทิ้งทั้งหมด ทำให้ UI โหลดเร็วขึ้น คมชัดทุกระดับความละเอียด และเข้ากับดีไซน์ยุคใหม่
+### 4.1 ระบบผังห้องและการซิงค์แผนที่ดาวเทียม (Floor Plan, Room Layouts & Map Synchronization)
 
-### 4.2 ระบบสแกนและค้นพบเครือข่ายอัตโนมัติ (Zero-Config Network Discovery)
-* **สแกนเครือข่ายความเร็วสูง (< 3 วินาที):**
-  * ใช้เทคนิคดึงข้อมูลจาก Dynamic ARP Table และตรวจสอบ ICMP Ping ก่อน จึงทำงานรวดเร็วไม่กิน CPU
-* **ระบบสืบค้นชื่ออุปกรณ์อัจฉริยะ (Smart Naming):**
-  * ดึงชื่อจริงจาก SNMP `sysName` หรือส่งคำสอบถามไปยัง Local Reverse DNS (mDNS/DHCP) ทำให้แสดงชื่อจริงของคอมพิวเตอร์และอุปกรณ์ IoT แทนการใช้ IP เปล่า
-* **แก้ไขชื่ออุปกรณ์ได้ทันที (Inline Editable Name ✏️):**
-  * ในหน้าต่างผลการสแกน ผู้ใช้สามารถคลิกพิมพ์แก้ไขชื่ออุปกรณ์ในตารางได้อิสระก่อนกดนำเข้าระบบ
-* **ระบบป้องกันข้อมูลซ้ำซ้อน (Strict Deduplication):**
-  * ตรวจสอบทั้ง IP Address และชื่อ หากมีอยู่ในระบบแล้วจะไม่นำเข้าซ้ำ
+- รองรับมุมมอง 2 มิติ (`FloorCanvas`) ควบคู่กับแผนที่ดาวเทียม/Carto (`FloorMapOverlay`) บนชั้น 1 และชั้น 2 พร้อมตัวเลือกความทึบและสลับชั้นแผนที่ฐาน
+- คำนวณพิกัดระหว่างผังอาคาร `(x, y)` กับพิกัดโลก `(latitude, longitude)` และระดับความสูง (`altitude`) ผ่าน Bilinear Affine Transformation ใน [placement.py](./backend/app/placement.py) และ [mapGeo.ts](./netmonitor/src/services/mapGeo.ts)
+- ผังห้องที่ปรับแต่งใน [FloorPlanPage.tsx](./netmonitor/src/pages/FloorPlanPage.tsx) ถูกบันทึกลง PostgreSQL ผ่าน `PUT /api/v1/layout/{floor}` และโหลดกลับมาผ่าน `GET /api/v1/layout` โดยมี `localStorage` (`roomStore.ts`) เป็น Cache ในเบราว์เซอร์
 
-### 4.3 ระบบกราฟทราฟฟิก (Traffic Metrics & Telemetry)
-* **การดึงข้อมูล Bandwidth จากพอร์ตอุปกรณ์จริง (Real SNMP Interface Polling):**
-  * ดึงข้อมูลปริมาณไบต์ Inbound/Outbound จากพอร์ตสวิตช์และเราเตอร์จริงผ่าน SNMP IF-MIB และ ifXTable
-  * รองรับเคาน์เตอร์ความจุสูง 64-bit HC Counters (`ifHCInOctets`, `ifHCOutOctets`) สำหรับพอร์ต Gigabit/10G/40G พร้อมระบบ Fallback เป็น 32-bit อัตโนมัติ
-  * คำนวณอัตราความเร็วจริงตามสมการ: $\text{Mbps} = \frac{\Delta \text{Octets} \times 8}{\Delta t \text{ (sec)} \times 1,000,000}$ พร้อมระบบป้องกัน Counter wrap-around
-  * บันทึกข้อมูลและจัดเก็บลงตาราง `interfaces` (47 พอร์ต) และ `interface_samples` ในฐานข้อมูล PostgreSQL
-* **คู่สีมาตรฐาน Telemetry (MRTG / Grafana Style):**
-  * แยกคู่สีชัดเจน: **Inbound (ขาเข้า/Download)** เป็นสีเขียวมรกต (`#10b981` ใน Dark / `#059669` ใน Light) และ **Outbound (ขาออก/Upload)** เป็นสีน้ำเงินสด (`#3b82f6` ใน Dark / `#2563eb` ใน Light) เพื่อให้อ่านง่ายทันที
-* **ตัวเลือก Interface Selector (Dropdown):**
-  * สามารถสลับดูได้ทั้ง **Total Aggregate Bandwidth** (รวมทุกพอร์ตทั้งอุปกรณ์) หรือเจาะจงรายพอร์ตย่อย (เช่น Port 1 Uplink, Port 2, VLAN) ได้ทันที
-* **ระบบ Strict Mode สำหรับอุปกรณ์ที่ไม่มี SNMP:**
-  * หากอุปกรณ์ไม่รองรับ SNMP (เช่น Node ที่ตอบเฉพาะ ICMP Ping) ระบบจะแสดงเส้น 0 Mbps และติดป้ายกำกับ **`○ No SNMP Data (ICMP Only)`**
-  * หากอุปกรณ์รองรับ SNMP จะแสดงป้ายเรืองแสงสีเขียว **`● LIVE (SNMP)`** พร้อมป้าย **`UPDATING...`** เมื่อโพลข้อมูลรอบใหม่
-* **กราฟ Bandwidth พร้อม Interactive Tooltip:**
-  * เส้น Crosshair วิ่งตามตำแหน่งเมาส์ พร้อมกล่องแก้วแสดงค่า Inbound/Outbound Mbps แบบปัดเศษ 2 ตำแหน่ง หมดปัญหาตัวเลข Floating-point ยาวเกินไป
+### 4.2 ระบบสแกน ค้นพบ และจำแนกอุปกรณ์ (Network Discovery & Classification)
 
-### 4.4 ระบบจัดการการแจ้งเตือนและการรับทราบปัญหา (Smart Alert Management)
-* **การคัดกรองปุ่มรับทราบอย่างมีประสิทธิภาพ:**
-  * การแจ้งเตือนระดับ **INFO (ข้อมูลทั่วไป)** จะ**ไม่แสดงปุ่ม "รับทราบ"** เพื่อไม่ให้รบกวนสายตาของผู้ดูแลระบบ
-  * ปุ่ม **"รับทราบ"** จะแสดงเฉพาะการแจ้งเตือนระดับ **WARN (เตือน)** และ **CRIT (ออฟไลน์ / วิกฤต)** เท่านั้น
-* **การตอบสนองแบบทันที (Optimistic UI):**
-  * เมื่อกด "รับทราบ" สถานะจะเปลี่ยนเป็น **"รับทราบแล้ว"** พร้อมไอคอนเครื่องหมายถูกสีเขียวทันที และส่งคำขอบันทึกลงฐานข้อมูลแบบ Background Sync
+- อ่านค่า ARP/Neighbor table, ตาราง Active Default Gateway (`0.0.0.0`), Reverse DNS, MAC OUI และ SNMP (`sysDescr`, `sysName`, `sysLocation`, `sysServices`, `ipForwarding`) ผ่าน [discovery.py](./backend/app/discovery.py)
+- จำแนกชนิดอุปกรณ์ (`router`, `switch`, `ap`, `server`) และชั้นที่ตั้งใน [classifier.py](./backend/app/classifier.py) จากหลักฐานหลายปัจจัย (Default Gateway suffix, MAC OUI, `ipForwarding`, `sysServices` และคีย์เวิร์ด)
+- จัดวางตำแหน่งลงห้องอัตโนมัติตามชนิดอุปกรณ์ใน `pick_smart_spot()` และป้องกันการนำเข้าอุปกรณ์ซ้ำด้วย IP หรือชื่อ (Case-insensitive) ใน `POST /api/v1/discovery/import`
 
-### 4.5 ประสบการณ์ผู้ใช้และการถนอมสายตา (NOC Ergonomics & Theme)
-* **Soft Slate Light Theme (Anti-Glare):**
-  * ออกแบบโทนสว่างใหม่ด้วยสี Slate Soft Light (`#e8edf2`, `#f6f8fa`) ลดแสงจ้าและลดความล้าของสายตาสำหรับเจ้าหน้าที่เฝ้าระวังระบบเครือข่าย (NOC Operators) ที่ต้องทำงานต่อเนื่องเป็นเวลานาน
-* **การเก็บกวาด UI และตัดปุ่มจำลองออก (UI Simplification):**
-  * นำปุ่ม Action จำลอง 4 ปุ่ม (Ping, Telnet/SSH, รีสตาร์ทพอร์ต, กำหนดค่า) ที่ไม่ได้เชื่อมโยงกับอุปกรณ์จริงออก เพื่อลดความสับสนและป้องกันการกดผิดพลาดของผู้ปฏิบัติงาน
+### 4.3 ระบบเก็บทราฟฟิกและสถานะอุปกรณ์ (SNMP Telemetry & Alert-Aware Device Status)
 
-### 4.6 การยกระดับระบบตัวอักษรและการรองรับสองภาษา (Typography & Bilingual Resilience)
-* **การเชื่อมต่อ Font Stack มาตรฐาน (`Inter` & `Noto Sans Thai`):**
-  * ฝังฟอนต์ Google Fonts คุณภาพสูงผ่าน `index.html` และกำหนดใน `index.css` เพื่อขจัดปัญหา Glyph Fallback ใน Windows ให้สระบน (อิ, อี, อึ, อื), สระล่าง (อุ, อู) และวรรณยุกต์ไทยคมชัด ไม่จม ไม่ซ้อนทับ
-* **การปรับ Line-height สำหรับภาษาไทย (`1.35`):**
-  * ปรับความสูงบรรทัดหัวข้อ `h1`–`h6` จาก 1.25 เป็น 1.35 เพื่อให้สระภาษาไทยมีระยะเว้นว่างปลอดภัย (Safety Margin) ปราศจากการถูก Bounding box ตัดขอบ
-* **ขจัดปัญหา Micro-text (Sub-12px Floor Elimination):**
-  * ยกเลิกตัวอักษรขนาดต่ำกว่า 12px ทั่วทั้งระบบ โดยปรับป้ายชื่อหมุดอุปกรณ์ขึ้นเป็น `11px` (พร้อมขยาย max-width เป็น 120px), ป้ายชื่อห้องบนผังเป็น `12px`, และป้ายพิกัด/มิติห้องเป็น `11.5px`–`12px`
-* **ระบบตัวเลขคงที่สำหรับข้อมูล Real-time (Tabular Numerals):**
-  * กำหนด `font-variant-numeric: tabular-nums` บนตัวเลขสถิติ, ข้อมูลแบนด์วิธ, และป้ายนับจำนวนทั้งหมด ป้องกันตัวเลขสั่น (Micro-jitter) ขณะ Polling ข้อมูลสด
+- Background Poller ทำงานทุก 30 วินาที (`SNMP_POLL_INTERVAL_S = 30`) โดยข้ามอุปกรณ์ที่ `enabled = false`, ไม่มี IP หรือ `is_simulated = true`
+- อ่านค่าพอร์ตผ่าน IF-MIB 64-bit HC (`ifHCInOctets`, `ifHCOutOctets`) หรือ Fallback 32-bit และบันทึกลง `interface_samples` พร้อมเมตริก CPU, Memory, อุณหภูมิ, Ping RTT และ `sys_uptime` ลง `device_metric_samples`
+- หน้า `GET /api/v1/devices/{id}` อ่าน `sys_uptime` ล่าสุดจากฐานข้อมูลโดยไม่บล็อก HTTP request ด้วยการยิง `snmpget` สด
+- เมื่อแสดงทราฟฟิกของ `interface_id == "all"` ใน `get_device_traffic_series()` ระบบจะ **รวมค่า (`sum`)** Mbps จากทุกพอร์ตในแต่ละ Bucket เวลา (ตัวเลข `47 พอร์ต` ที่เคยอ้างอิงในเอกสารก่อนหน้าเป็นเพียงจำนวนพอร์ตที่พบจาก Switch ทดสอบ Aruba 2930F ไม่ใช่ขีดจำกัดคงที่ของ Schema)
+- กราฟทราฟฟิกใน [TrafficChart.tsx](./netmonitor/src/components/detail/TrafficChart.tsx) แสดงข้อมูลตามจุดเวลาที่แบ่ง Bucket (`TELEMETRY_DEFAULT_POINTS = 60` สำหรับช่วง `15m`/`1h`)
+- ตรรกะ `compute_device_status()` ใน [repository.py](./backend/app/repository.py):
+  1. หาก `enabled = false` -> `offline`
+  2. หากมี Unacknowledged Alert ระดับ `crit` -> `offline`
+  3. หาก `latest_poll_status` ไม่มีค่าหรือเป็น `failed` -> `offline`
+  4. หากมี Unacknowledged Alert ระดับ `warn` หรือ `latest_poll_status == 'warning'` -> `warning`
+  5. หาก `latest_poll_status == 'succeeded'` -> `online`
+  - *ข้อควรทราบเมื่อกด Acknowledge:* การกดรับทราบ Alert จะล้างสถานะ Alert ออกจากเงื่อนไขข้อ 2 และ 4 แต่หากอุปกรณ์ยังออฟไลน์จริงและ `latest_poll_status` ล่าสุดเป็น `failed` สถานะของอุปกรณ์จะยังคงเป็น `offline` จนกว่าจะเชื่อมต่อหรือ Poll สำเร็จ (`succeeded`)
 
-### 4.7 ความคมชัดสมบูรณ์แบบและการรองรับโหมดสว่าง (Light Mode Contrast & WCAG AA)
-* **การแก้ไข Details Tooltip ในโหมดสว่าง:**
-  * กำหนดสไตล์เจาะจงให้กล่องรายละเอียดอุปกรณ์ (`DevicePin` popup) ในโหมดสว่างใช้พื้นหลังขาวบริสุทธิ์ `#ffffff` ขอบ `var(--border-default)` และเงา 3 มิติคมชัด
-  * ตัวอักษรชื่ออุปกรณ์และข้อมูลค่าสเปก (IP, ชนิด, รุ่น) แสดงผลเป็นสีดำเข้ม `#0f172a` 100% ไม่ซีดจางกลืนกับพื้นหลัง
-  * ปุ่มปลดล็อคตำแหน่ง (`.btnLockActive`) ใช้พื้นหลังสีเหลืองอำพันอ่อน `#fef3c7` และตัวหนังสือสีส้มเข้ม `#b45309` ได้ Contrast Ratio สูง ผ่านเกณฑ์การเข้าถึงระดับสากล WCAG AA
+### 4.4 ระบบโทโพโลยีและการจำลองผลกระทบลูกโซ่ (Topology Inference & Blast-Radius Simulation)
 
-### 4.8 การปรับสัดส่วนโครงสร้างหน้าจอ (Layout & Ergonomics)
-* **ขยายความกว้าง FloorSidebar:** ปรับจาก 220px เป็น 240px รองรับข้อความประเภทอุปกรณ์ภาษาไทยที่มีขนาดยาว (เช่น "สวิตช์เครือข่าย", "จุดกระจายสัญญาณไร้สาย") โดยไม่เบียดชิดป้ายจำนวน
-* **Responsive Grid สำหรับการ์ดเมตริกใน Modal:** ปรับการ์ดสรุปสถานะ 5 ใบใน `DeviceInfoModal` เป็น Auto-fit CSS Grid (`minmax(110px, 1fr)`) ไม่ล้นหรือตัดคำในจอขนาดเล็ก
-* **ขยายขนาด Touch Target บน Navbar:** ปรับปุ่มเปลี่ยนธีมและปุ่มสลับภาษาเป็นขนาด 32px เพื่อการสัมผัสที่แม่นยำยิ่งขึ้นบนหน้าจอแท็บเล็ตและอุปกรณ์พกพา
+- [topology.py](./backend/app/topology.py) สร้างสายเชื่อมโยงเบื้องต้นจากรายละเอียด Interface และลำดับชั้นอุปกรณ์ (`Router -> Core Switch -> Access/Dist Switch -> AP/Server`) ลงตาราง `topology_links` และเปิดให้ผู้ใช้เพิ่มหรือลบสายเชื่อมเองได้ใน UI (`Link Edit Mode` -> `POST/DELETE /api/v1/topology/links`)
+- เมื่อเปิดโหมดจำลอง (`จำลองล่ม` / [ImpactDrawer.tsx](./netmonitor/src/components/simulation/ImpactDrawer.tsx)) หรือคำนวณผลกระทบจากการล่มจริงในระบบ Frontend จะส่งรายการอุปกรณ์/สายเชื่อมที่ขัดข้องไปยัง `POST /api/v1/simulate/impact` เพื่อประเมิน:
+  - อุปกรณ์ที่เป็นต้นเหตุ (`root_down`), ขาดการเชื่อมต่อ (`unreachable`), ใช้เส้นทางสำรอง (`degraded`) และ `healthy` พร้อม Dependency Path
+  - คะแนน `spof_ranking`, ห้องที่ได้รับผลกระทบ (`affected_zones` โดยเทียบกรอบห้องจาก `floor_layouts`) และบริการที่กระทบ (`affected_services` จาก Role-based defaults + แท็กที่กำหนดใน [ServiceTagsEditor.tsx](./netmonitor/src/components/detail/ServiceTagsEditor.tsx))
+- ผู้ใช้สามารถบันทึกสถานะจำลองลง PostgreSQL ชั่วคราว (`POST /api/v1/simulate/apply-faults`) หรือใช้ปุ่ม `"นำเข้าตัวอย่างสถานะ"` และ `"ล้างข้อมูล DB ทั้งหมด"` บนหน้า [DeviceListPage.tsx](./netmonitor/src/pages/DeviceListPage.tsx)
+
+### 4.5 การค้นหา ธีม และการรองรับสองภาษา (Search, Theme & Localization)
+
+- **Global Search & Help Guide:** ค้นหาด่วนด้วย `Ctrl + K` ([NavbarSearch.tsx](./netmonitor/src/components/layout/NavbarSearch.tsx)) และคู่มือการใช้งานบน Navbar ([HelpGuideModal.tsx](./netmonitor/src/components/layout/HelpGuideModal.tsx))
+- **Themes:** รองรับ Dark Theme (`#0b0f17` / `#111827`) และ **Balanced Warm Tan / Almond-Beige Light Theme** (`--bg-canvas: #ddd0be`, `--bg-surface: #ede1cf`, `--bg-elevated: #e4d4be`, `--text-primary: #1d140c`, `--chart-inbound: #047857`, `--chart-outbound: #1e40af` ใน [index.css](./netmonitor/src/index.css))
+- **Typography & UI Scale:** ใช้ Google Fonts `Inter` และ `Noto Sans Thai`, `font-variant-numeric: tabular-nums` สำหรับตัวเลขสถิติ, หัวข้อ `line-height: 1.35`, ขนาดป้ายชื่อหมุด `11px`, ชื่อห้อง `12px`, Badge สถานะจำลอง `10px`, และปุ่มไอคอนบน Navbar `28px` (UI Scale ตั้งค่าเริ่มต้นที่ `'100%'` ใน [settingsContext.ts](./netmonitor/src/context/settingsContext.ts) และรองรับค่า `'100%'` / `'125%'` (`zoom: 1.15`) / `'150%'` (`zoom: 1.25`) ผ่าน `SettingsProvider` โดยไม่มีปุ่มสลับสเกลบน Navbar)
+- **Bilingual (`th` / `en`):** ข้อความหลักทั้งหมดแปลผ่าน `i18next` ใน [th.ts](./netmonitor/src/i18n/th.ts) และ [en.ts](./netmonitor/src/i18n/en.ts) (ไฟล์ละ 543 บรรทัด / 510 entries)
 
 ---
 
-## 5. ผลการทดสอบประสิทธิภาพและสมรรถนะ (Load & Quality Benchmarks)
+## 5. ผลการทดสอบสมรรถนะและข้อสังเกต (Performance Benchmarks & Test Scope)
 
-### 5.1 การทดสอบโหลดด้วย Grafana k6 (Load & Capacity Benchmark)
+### 5.1 การทดสอบโหลดด้วย Grafana k6 (Load & Stress Benchmarks)
 
-| ระดับการทดสอบ (Scenario) | ผู้ใช้พร้อมกัน (VUs) | ความเร็วตอบสนอง (Req/s) | Latency (p95) | อัตราข้อผิดพลาด | ผลการประเมิน |
-|---|---|---|---|---|---|
-| **ระดับปกติ (Baseline)** | 15 VUs | ~60 req/s | **7.96 ms** | **0.00%** | เร็วมาก ตอบกลับระดับ Sub-10ms |
-| **ระดับโหลดหนัก (Heavy)** | 150 – 300 VUs | ~400 req/s | **~150 ms** | **0.00%** | ไหลลื่น ไม่มีคำขอตกหล่น |
-| **ระดับขีดจำกัดปลอดภัยสูงสุด** | **500 VUs** | **738.77 req/s** | **976 ms** | **0.00%** | **ประมวลผลผ่าน 29,554 คำขอครบ 100% ปราศจาก Error** |
-| **ระดับขีดจำกัดวิกฤต (Breaking Point)** | **> 550 – 1,200 VUs** | > 4,500 req/s | Timeout | 95.1% Refused | คอขวดที่ TCP Socket Backlog ของ Windows |
+ชุดทดสอบ [load_test.js](./load_test.js) และ [stress_limit_test.js](./stress_limit_test.js) ยิงคำขอแบบ Read-only GET ไปยัง 4 Endpoints (`/api/v1/devices`, `/health`, `/api/v1/alerts`, `/api/v1/devices/1`) ต่อ Uvicorn Single Worker + `asyncpg` Pool (`max_size=10`) บนสภาพแวดล้อม Windows สำหรับพัฒนา (ไม่ได้ครอบคลุม Endpoint ที่เขียน DB หรือสแกน CIDR และไม่มีการบันทึกผลเป็น Log Artifact ใน Git):
 
-> **สรุปขีดจำกัดปัจจุบัน:** เซิร์ฟเวอร์ในปัจจุบัน (Uvicorn Single Worker + 10 DB Connections) รองรับผู้ใช้พร้อมกันได้สูงสุดอย่างปลอดภัยที่ **500 คนพร้อมกัน** หรือประมาณ **44,400 คำขอต่อนาที**
+| การทดสอบ / สคริปต์ | จำนวนผู้ใช้จำลอง (VUs) | อัตราคำขอ / Latency (ค่าสังเกตในการทดสอบอ้างอิง) | อัตรา Error (ในการทดสอบอ้างอิง) | ขอบเขตและข้อจำกัด |
+|---|---|---|---|---|
+| `load_test.js` (Baseline) | ถึง 15 VUs | ~60 req/s, `p95 = 7.96 ms` | `0.00%` | ทดสอบ Read-only GET routes |
+| `stress_limit_test.js` (ขั้น 150–300 VUs) | 150–300 VUs | ~400 req/s, `p95 ~150 ms` | `0.00%` | ช่วงละ 10 วินาที, Read-only GET routes |
+| `stress_limit_test.js` (ขั้น 500 VUs) | 500 VUs | `738.77 req/s`, `p95 = 976 ms` (29,554 requests) | `0.00%` | ขีดจำกัดที่ observed บน Windows Dev Host |
+| ทดสอบเกิน Breaking Point | > 550–1,200 VUs | Timeout / Refused (`95.1%`) | > 95% | คอขวดที่ Windows TCP Socket Backlog และ Connection Pool |
 
-### 5.2 ผลการตรวจสอบคุณภาพหน้าเว็บด้วย Google Lighthouse
-* **Best Practices:** **100 / 100 คะแนนเต็ม** (ปฏิบัติตามมาตรฐานสากลครบถ้วน)
-* **Accessibility (การเข้าถึง):** **93 / 100 คะแนน** (โครงสร้าง ARIA, คอนทราสต์ และฟอร์มชัดเจน)
-* **ความนิ่งของหน้าจอ (CLS):** **0.008 (คะแนน 100/100)** (ผังหน้าจอนิ่งสนิท ไม่มีการเลื่อนกระตุกขณะโหลด)
-* **การตอบสนองต่อผู้ใช้ (TBT):** **160 ms (คะแนน 94/100)** (Main Thread ไม่ถูกบล็อก)
-* **SEO:** **83 / 100 คะแนน**
+### 5.2 การตรวจสอบคุณภาพหน้าเว็บด้วย Google Lighthouse (Lighthouse Web Quality Audit)
+
+ผลตรวจคุณภาพ Web App จากรอบประเมินก่อนหน้าบนเบราว์เซอร์ Chrome DevTools (Build ล่าสุดในรอบส่งมอบนี้ผ่าน `tsc -b && vite build` ใช้เวลา `986ms` และผ่าน ESLint `0 errors`):
+
+- Best Practices: `100 / 100`
+- Accessibility: `93 / 100`
+- Cumulative Layout Shift (CLS): `0.008`
+- Total Blocking Time (TBT): `160 ms`
+- SEO: `83 / 100`
+
+*(หมายเหตุ: ค่าตัวเลข Lighthouse ด้านบนเป็นการบันทึกจากรอบทดสอบ UI เดิมก่อนปรับธีมเป็น Almond-Beige และเพิ่ม Telemetry Overlay ควรประเมินซ้ำก่อนส่งมอบจริงหากต้องการคะแนนล่าสุด)*
 
 ---
 
-## 6. คู่มือการติดตั้งและการเริ่มต้นใช้งาน (Installation & Quick Start Guide)
+## 6. คู่มือการติดตั้งและตั้งค่า (Installation & Configuration Guide)
 
 ### 6.1 ความต้องการขั้นต่ำของระบบ (System Requirements)
-1. **Node.js:** เวอร์ชัน 18.0.0 หรือใหม่กว่า
-2. **Python:** เวอร์ชัน 3.10 หรือใหม่กว่า
-3. **Docker Desktop:** สำหรับรันฐานข้อมูล PostgreSQL Container
-4. **Net-SNMP CLI Suite:** สำหรับคำสั่ง `snmpget` และ `snmpwalk` (บน Windows แนะนำติดตั้งไว้ที่ `C:\usr\bin` หรือตั้งค่าลง System PATH)
 
----
+1. **Node.js:** เวอร์ชัน `18.0.0` ขึ้นไป (และ `npm`)
+2. **Python:** เวอร์ชัน `3.10` ขึ้นไป
+3. **Docker Desktop / Docker Engine:** สำหรับรัน PostgreSQL 17 Container (`docker-db-1`)
+4. **Net-SNMP CLI Suite (`snmpget`, `snmpwalk`):** ต้องอยู่ใน System `PATH` (บน Windows โค้ดใน `snmp.py` และ `collector.py` จะต่อ `C:\usr\bin` เข้า `PATH` ให้อัตโนมัติหากมีอยู่)
+5. **เครื่องมือทดสอบเสริม:** Playwright Chromium (`npx playwright install chromium` ใน `netmonitor/`) และ Grafana `k6` (สำหรับสคริปต์ Load Test)
 
-### 6.2 การเปิดระบบแบบขั้นตอนเดียว (One-Click Launch — แนะนำ)
-ดับเบิลคลิกไฟล์ต่อไปนี้ที่ Root ของโปรเจกต์:
-```text
-C:\work\snmp_font_end\start_all.bat
-```
-สคริปต์จะเริ่มทำงานโดยอัตโนมัติ:
-1. เปิด Docker Database Container `docker-db-1` (PostgreSQL พอร์ต 5432)
-2. เริ่มต้นรัน FastAPI Backend Service ที่ `http://127.0.0.1:8000`
-3. เริ่มต้นรัน Vite Frontend Web App ที่ `http://localhost:5173`
+### 6.2 การเปิดระบบและการรันบน Production (One-Click Dev & Production Hosting)
 
----
+- **การเปิดสำหรับพัฒนาบน Windows (One-Click Dev Launch):** รัน [`start_all.bat`](./start_all.bat) เพื่อเริ่ม PostgreSQL (`5432`), FastAPI Backend (`8000`) และ Vite Dev Server (`5173`)
+- **การรันบน Production:**
+  1. Build ไฟล์ Frontend ด้วย `npm run build` ใน `netmonitor/` เพื่อสร้าง Static Assets ใน `netmonitor/dist/`
+  2. เสิร์ฟ `netmonitor/dist/` ผ่าน Reverse Proxy (เช่น Nginx หรือ Caddy) โดยตั้งค่า Proxy Pass เส้นทาง `/api/*` ไปยัง FastAPI Backend (`http://127.0.0.1:8000`)
+  3. รัน FastAPI ด้วย **Single Uvicorn Worker** โดยไม่ใส่ `--reload` (`python -m uvicorn app.main:app --host 0.0.0.0 --port 8000`)
 
-### 6.3 การเปิดใช้งานแบบแยกส่วน (Manual Execution)
+### 6.3 การตั้งค่าสภาพแวดล้อมและเปิดระบบแบบแยกส่วน (Environment Config & Manual Execution)
 
-#### ขั้นตอนที่ 1: ตรวจสอบและเปิด Docker Database
+#### 1. ตั้งค่าไฟล์ `.env` และฐานข้อมูล PostgreSQL
+
+1. คัดลอก [`backend/.env.example`](./backend/.env.example) เป็น `backend/.env` และตั้งค่าสำคัญ:
+   - `DB_HOST=127.0.0.1`, `DB_PORT=5432`, `DB_USER=netmon`, `DB_NAME=netmon`, `DB_PASSWORD=<รหัสผ่านเดียวกับ Docker Compose>`
+   - `SNMP_COMMUNITY=public` (Community String เริ่มต้นหากอุปกรณ์ไม่ได้กำหนด `credential_ref` เฉพาะเครื่อง)
+   - `API_KEY=<รหัสลับสำหรับ X-API-Key>` (หากกำหนดค่า ระบบจะบังคับตรวจ Header `X-API-Key` บน Route ที่แก้ไขข้อมูลและสแกน)
+   - `ALLOWED_ORIGINS=http://localhost:5173,http://127.0.0.1:5173`
+   - `SNMP_POLL_INTERVAL_S=30`, `SNMP_MAX_CONCURRENT_POLLS=5`, `TELEMETRY_DEFAULT_POINTS=60`, `METRICS_RETENTION_DAYS=7`
+2. คัดลอก [`netmonitor/.env.example`](./netmonitor/.env.example) เป็น `netmonitor/.env` และตั้งค่า `VITE_API_KEY` ให้ตรงกับ `API_KEY` ของฝั่ง Backend
+3. เริ่มต้น PostgreSQL Container (กำหนด `DB_PASSWORD` ใน `.env` ที่ Root หรือใช้ค่าเริ่มต้น `netmon` ใน [`docker-compose.yml`](./docker-compose.yml)):
+   ```powershell
+   docker compose up -d
+   ```
+   - เมื่อ Volume ว่างครั้งแรก PostgreSQL จะรัน [`init/001_schema.sql`](./init/001_schema.sql) และ [`seed_mock_data.sql`](./seed_mock_data.sql) อัตโนมัติ และเมื่อ FastAPI เริ่มทำงาน `init_db()` จะตรวจสอบ/สร้างตารางและคอลัมน์เสริมแบบ Idempotent ภายใต้ Advisory Lock
+
+#### 2. ตั้งค่า SNMP และการสแกนเครือข่าย
+
+- ระบบรองรับ SNMP `v1` และ `v2c` โดยเก็บ Community String ของแต่ละเครื่องไว้ที่ `devices.credential_ref` (หรือใช้ค่า `SNMP_COMMUNITY` จาก `.env`)
+- การค้นหาอุปกรณ์ผ่าน UI (`NetworkScanModal`) รองรับ CIDR เป้าหมาย (เช่น `192.168.22.0/24` หรือ `auto` จาก Gateway/Interface ปัจจุบัน) และกรอก Candidate Community Strings คั่นด้วยจุลภาคได้
+
+#### 3. เริ่มต้น Backend API และ Frontend Web
+
 ```powershell
-# ตรวจสอบสถานะ Container
-docker ps
-
-# หากยังไม่รัน ให้สั่งเริ่มฐานข้อมูล PostgreSQL ผ่าน Docker Compose ในไดเรกทอรีโปรเจกต์:
-docker compose up -d
-```
-* พอร์ตฐานข้อมูล: `127.0.0.1:5432`
-* ฐานข้อมูล: `netmon` (User: `netmon`)
-
-#### ขั้นตอนที่ 2: เริ่มต้นรัน Backend API (FastAPI)
-```powershell
-cd C:\work\snmp_font_end\backend
-
-# สร้างและเปิดใช้งาน Virtual Environment (หากยังไม่มี)
+# Backend (Port 8000, Swagger UI: http://127.0.0.1:8000/docs)
+cd backend
 python -m venv venv
 .\venv\Scripts\activate
-
-# ติดตั้งแพ็กเกจที่จำเป็น
 pip install -r requirements.txt
+python -m uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
 
-# เริ่มต้นรันเซิร์ฟเวอร์ FastAPI
-python -m uvicorn app.main:app --host 127.0.0.1 --port 8000 --reload
-```
-* เอกสาร Interactive API (Swagger UI): `http://127.0.0.1:8000/docs`
-
-#### ขั้นตอนที่ 3: เริ่มต้นรัน Frontend Web (React + Vite)
-```powershell
-cd C:\work\snmp_font_end\netmonitor
+# Frontend (Port 5173, Web App: http://localhost:5173)
+cd ..\netmonitor
 npm install
 npm run dev
 ```
-* หน้าเว็บแอปพลิเคชัน: `http://localhost:5173`
 
 ---
 
 ## 7. ชุดคำสั่งทดสอบระบบ (Automated Test Suites)
 
-ผู้ดูแลระบบสามารถรันคำสั่งเหล่านี้เพื่อยืนยันความถูกต้องของระบบได้ตลอดเวลา:
+### 7.1 ทดสอบ Backend (Python & Pytest)
 
-### 1. ทดสอบ Backend API และการคำนวณตำแหน่ง (Python):
 ```powershell
-cd C:\work\snmp_font_end\backend
+cd backend
 
-# 1. ทดสอบ Classifier การจำแนกประเภทอุปกรณ์อัจฉริยะ (17 tests ผ่าน 100%)
-.\venv\Scripts\python.exe -m pytest test_classifier.py -v
+# 1. ชุดทดสอบ Pytest ทั้งหมด (41 test cases: classifier, collector, security, topology, traffic API)
+# หมายเหตุ: tests/test_real_port_traffic.py และ tests/test_traffic_api.py ต้องมี PostgreSQL กำลังทำงานอยู่
+# และ tests/test_real_port_traffic.py จะเรียก pytest.skip() หาก Switch 192.168.22.254 ไม่ตอบสนอง
+.\venv\Scripts\python.exe -m pytest test_classifier.py tests/ -v
 
-# 2. ทดสอบระบบ SNMP Poller, การคำนวณ Bandwidth และการ Roll-over เคาน์เตอร์ (9 tests ผ่าน 100%)
-.\venv\Scripts\python.exe -m pytest tests/ -v
-
-# 3. ทดสอบ Endpoints CRUD ทั้งหมด
+# 2. สคริปต์ทดสอบ CRUD & Discovery (ต้องรัน PostgreSQL; มีการสร้างและลบข้อมูลทดสอบใน DB)
 .\venv\Scripts\python.exe test_api.py
-
-# 4. ทดสอบตรรกะการคำนวณตำแหน่งอุปกรณ์ลงห้อง (Smart Spot)
+.\venv\Scripts\python.exe test_discovery.py
 .\venv\Scripts\python.exe test_smart_placement.py
 
-# 5. ทดสอบระบบสแกนและนำเข้าอุปกรณ์ (Discovery Engine)
-.\venv\Scripts\python.exe test_discovery.py
-
-# 6. ทดสอบการเชื่อมต่อ Core Switch จริงผ่าน SNMP
+# 3. สคริปต์ทดสอบ Switch จริงแบบ Standalone (Raise AssertionError หาก Switch ไม่ตอบสนอง)
 .\venv\Scripts\python.exe test_real_snmp.py
 
-# 7. สคริปต์จำลองเหตุการณ์ขัดข้องเสมือนจริง 6 กรณี (Fault Simulation)
+# 4. สคริปต์จำลอง Faults 6 กรณี (เขียนลง PostgreSQL พร้อม is_simulated = true)
+# หมายเหตุ: หากต้องการล้างค่าจำลองกลับเป็น Seed เริ่มต้น ให้เรียก POST /api/v1/reset พร้อม X-API-Key
 .\venv\Scripts\python.exe simulate_faults.py
-
-# 8. รีเซ็ตฐานข้อมูลสู่สถานะเริ่มต้น
-curl -X POST http://127.0.0.1:8000/api/v1/reset
+curl -X POST http://127.0.0.1:8000/api/v1/reset -H "X-API-Key: <your_api_key>"
 ```
 
-### 2. ทดสอบการคอมไพล์ Frontend (TypeScript & Vite):
+### 7.2 ทดสอบ Frontend (ESLint, TypeScript & Vite)
+
 ```powershell
-cd C:\work\snmp_font_end\netmonitor
+cd netmonitor
+npm run lint
 npm run build
 ```
 
-### 3. รันการทดสอบ Playwright End-to-End Suite (10/10 Scenarios ผ่าน 100%):
-```powershell
-cd C:\work\snmp_font_end\netmonitor
+### 7.3 ทดสอบ End-to-End ด้วย Playwright (Playwright E2E Suite)
 
-# 1. รันการทดสอบ E2E อัตโนมัติทุกหน้า (Chromium Headless)
+ต้องรัน PostgreSQL, Backend (`:8000`) และ Frontend (`:5173`) พร้อมติดตั้ง Browser (`npx playwright install chromium`) ก่อนรัน:
+
+```powershell
+cd netmonitor
+
+# รัน E2E ทั้ง 18 กรณีแบบ Headless (netmonitor.spec.ts 10 กรณี + fault-simulation.spec.ts 8 กรณี)
 npm run test:e2e
 
-# 2. หรือรันแบบเปิด UI Dashboard สำหรับสังเกตการณ์แบบ Real-time
+# หรือรันผ่าน Playwright Interactive UI
 npm run test:e2e:ui
 ```
 
-### 4. รันการทดสอบโหลดด้วย k6:
+ขอบเขตหลักที่ชุดทดสอบ Playwright ครอบคลุม:
+- [`netmonitor.spec.ts`](./netmonitor/e2e/netmonitor.spec.ts): สลับแท็บนำทางหลัก, ค้นหาด้วย `Ctrl+K` + `Esc`, สลับภาษา `TH/EN` และ Theme, สลับชั้น 1/2, สลับโหมด `2D` และแผนที่ `Leaflet`, สลับ `Move Mode`, กรอง KPI และคำค้นหาในหน้ารายการอุปกรณ์, ตรวจหน้า `#/detail?id=` (CPU/Memory/Chart Range) และตรวจหน้า Reports summary counters
+- [`fault-simulation.spec.ts`](./netmonitor/e2e/fault-simulation.spec.ts): เปิด ImpactDrawer และเลือกอุปกรณ์จำลอง, โหมด `Link Edit` และ SVG lines, Downstream chips และการลิงก์ข้ามหน้ารายงาน, สร้าง/ตรวจซ้ำ/ลบสายเชื่อมใน PostgreSQL, Animated outage paths บน 2D/Map, Service tags persistence, Outage highlight ใน Light Mode และ Background outage sync
+
+### 7.4 ทดสอบโหลดด้วย Grafana k6 (Load & Stress Tests)
+
+ต้องรัน PostgreSQL และ FastAPI Backend (`127.0.0.1:8000`) ก่อนรัน:
+
 ```powershell
-k6 run C:\work\snmp_font_end\load_test.js
+k6 run load_test.js
+k6 run stress_limit_test.js
 ```
 
 ---
 
-## 8. บันทึกการปรับปรุงระบบล่าสุด (Recent Updates & Changelog — 11 พ.ย. 2026)
+## 8. สรุปพัฒนาการระบบตามเวอร์ชัน (Release History Summary)
 
-ในการส่งมอบรอบล่าสุด (Version 1.1.0) ได้มีการตรวจทานและปรับปรุงประสิทธิภาพทั้งฝั่ง Backend และ Frontend ตามแนวทาง **Ponytail Senior Dev** ครบถ้วนดังนี้:
+ประวัติการเปลี่ยนแปลงระดับ Commit อยู่ใน Git History (`git log`) ส่วนสรุปพัฒนาการเชิงสถาปัตยกรรมที่สำคัญมีดังนี้:
 
-### 8.1 การปรับปรุงฝั่ง Backend & Database:
-1. **Dynamic Relative Path และการปรับปรุง Database Reset (`reset_database`):**
-   - แก้ไขการอ่านไฟล์ `seed_mock_data.sql` ใน `reset_database` ให้ใช้ `Path(__file__).resolve().parents[2]` เพื่อป้องกันปัญหา Path หายเมื่อรันแอปจากไดเรกทอรีอื่น และตัดการอ่านไฟล์ `migration_002_topology.sql` ซ้ำซ้อนออกเนื่องจากโครงสร้างคอลัมน์และตาราง alerts ถูกย้ายไปสร้างแบบ Auto-migration ใน `database.py` โดยอัตโนมัติแล้ว พร้อมทั้งปรับปรุงข้อมูล Seed Data ให้มีพิกัดเริ่มต้น (x, y) และประเภทอุปกรณ์ (dtype) ครบถ้วนตรงตามผังห้อง
-2. **ป้องกัน Race Condition ในการสร้าง Database Connection Pool:**
-   - เพิ่ม `asyncio.Lock()` ครอบ `get_db_pool()` แบบ double-checked locking ป้องกันไม่ให้คำขอพร้อมกันในตอนเริ่มเซิร์ฟเวอร์แย่งกันสร้าง connection pool ซ้ำซ้อน
-3. **ปรับตั้งค่า CORS ให้สอดคล้องกับมาตรฐานความปลอดภัยเว็บ:**
-   - ตั้งค่า `allow_credentials=False` เมื่อใช้ `allow_origins=["*"]` ป้องกันการปฏิเสธคำขอจากเบราว์เซอร์สมัยใหม่
-4. **คำนวณสถานะอุปกรณ์จากข้อมูลจริง (Telemetry-based Status Calculation):**
-   - ตัดตรรกะที่ดักจับชื่ออุปกรณ์ (`-w`, `ap-a2`, `sw-c1`) ออกทั้งหมด สถานะ `online`, `warning`, `offline` คำนวณจากสถานะการเชื่อมต่อ, Traffic, และ Packet Loss จริง 100%
-5. **Auto Interface Discovery ใน Background Poller:**
-   - เพิ่มการตรวจสอบและ sync พอร์ตอัตโนมัติใน background SNMP poller เมื่อพบว่าอุปกรณ์ในระบบยังไม่มีข้อมูลพอร์ตในตาราง `interfaces`
-6. **ดักจับ Unique Violation ใน `PATCH /api/v1/devices/{id}`:**
-   - ครอบ `except asyncpg.UniqueViolationError` ส่งคืน HTTP 400 Bad Request แทน 500 เมื่อมีการเปลี่ยน IP ไปชนกับอุปกรณ์อื่น
-7. **ทำความสะอาด Pydantic Model Schema:**
-   - ลบฟิลด์ที่นิยามซ้ำซ้อนใน `DiscoveredDevice` schema
-
-### 8.2 การปรับปรุงฝั่ง Frontend & UI/UX:
-1. **มาตรฐานคู่สี Telemetry บนกราฟ Bandwidth (`TrafficChart.tsx`):**
-   - Inbound (ดาวน์โหลด): เขียวมรกต (`#10b981` ใน Dark / `#059669` ใน Light)
-   - Outbound (อัปโหลด): น้ำเงินสด (`#3b82f6` ใน Dark / `#2563eb` ใน Light)
-   - ชัดเจน แยกแยะง่าย ไม่ทับซ้อนหรือกลืนกันเหมือนเดิม
-2. **ปรับระบบแจ้งเตือน (Alerts Workflow):**
-   - การแจ้งเตือนระดับ **INFO** จะไม่แสดงปุ่ม "รับทราบ"
-   - แสดงปุ่ม "รับทราบ" เฉพาะระดับ **WARN** และ **CRIT** เท่านั้น พร้อมระบบ Optimistic UI เปลี่ยนเป็น "รับทราบแล้ว" ทันทีที่กด
-3. **เพิ่มความแม่นยำในการแสดงผลทราฟฟิก (Floating-point Precision):**
-   - ปัดเศษทศนิยมผลรวมทราฟฟิกใน Tooltip ป้องกันบั๊กแสดงทศนิยมยาวล้นกล่อง
-   - เพิ่มการส่ง prop `timeRange` ตรงเข้าสู่กราฟเพื่อคำนวณแกนเวลาถอยหลังแม่นยำ
-   - แก้ไขปัญหา React key duplicate บนแกน X
-4. **ตัดปัญหา Side-effects ใน React State Updaters (`NetworkProvider.tsx`):**
-   - ดึงการเรียก API (`api.updateDevice`) ออกจาก callback ภายใน `setDevices` โดยใช้ `devicesRef` เพื่อป้องกันการยิง API ซ้ำ 2 รอบใน React StrictMode
-5. **ย้ายระบบไอคอนทั้งหมดสู่ Lucide React Vector Icons 100%:**
-   - ลบไฟล์ PNG เก่า 13 ไฟล์ใน `assets/icons/` ออกทั้งหมด ลด Bundle Size และเพิ่มความคมชัด
-6. **Soft Slate Light Theme (Anti-Glare):**
-   - ปรับชุดสีธีมสว่างให้อยู่ในโทน Slate Soft Light เพื่อถนอมสายตาเจ้าหน้าที่ NOC
-7. **UI Simplification:**
-   - นำปุ่ม Action จำลอง 4 ปุ่ม (Ping, Telnet/SSH, รีสตาร์ทพอร์ต, กำหนดค่า) ออกอย่างถาวร
-8. **Light Mode Adaptation บนแผนที่ดาวเทียม (`FloorMapOverlay.module.css`):**
-   - เพิ่มคลาส `:global([data-theme="light"])` รองรับ Floating Map Toolbar และ Stats Badge สรุปสถานะมุมล่างซ้าย ให้สลับเป็น Soft Slate Light Theme อย่างสมบูรณ์ พร้อมปรับสีตัวเลขอัตราสถานะและป็อปอัปให้ชัดเจนในโหมดสว่าง
-9. **ลบการแสดงพิกัด GPS Coordinates ใน DeviceInfoModal:**
-   - ตัดแถว GPS Coordinates พร้อมลิงก์ Google Maps ออกตามความต้องการ
-10. **รองรับ Light Mode เต็มรูปแบบบน 2D Canvas (`FloorCanvas.module.css`):**
-   - ปรับให้พื้นที่รอบ Canvas (`--bg-canvas`), พื้นผังห้อง (`.gridInner`), ขอบห้อง (`.room`), ป้ายชื่อห้อง (`.roomLabel`), กล่องสถิติ (`.statsBar`), ปุ่ม Zoom (`.zoomBtn`), ป้ายบอกขนาด (`.dimBadge`) และหมุดอุปกรณ์ (`DevicePin`) สลับเป็น Soft Slate Light Theme อย่างกลมกลืนและสบายตาเมื่อเปิดใช้งานโหมดสว่าง
-11. **ปรับสไตล์หมุดอุปกรณ์บน 2D FloorCanvas ให้ตรงกับแผนที่ดาวเทียม (`DevicePin`):**
-   - เปลี่ยนหมุดวงกลมขนาด 40px เป็นทรงสี่เหลี่ยมโค้งมนขนาด 26px สไตล์นีออนเรืองแสงตามสถานะ
-   - ย้ายไอคอนล็อคไปเป็น Badge วงกลมมุมขวาบน ยกเลิกเส้นประสีเหลืองรอบหมุด
-   - ปรับป้ายชื่ออุปกรณ์ด้านล่างให้เป็นแคปซูลเข้มสไตล์มินิมอล คมชัด อ่านง่าย และปรับเป็นสีสว่างในโหมดสว่าง
-12. **รองรับ Light Mode เต็มรูปแบบสำหรับผังห้องและหมุดบนแผนที่ดาวเทียม (`FloorMapOverlay`):**
-   - ป้ายกำกับห้อง (Room Labels), ป้ายชื่ออุปกรณ์ (Pin Tags), กล่องหมุดอุปกรณ์ และจุดจับย้ายอาคาร ปรับสลับเป็นสไตล์ธีมสว่าง คมชัด ไม่กลืนกับพื้นหลัง
-   - เพิ่มตัวเลือกชั้นแผนที่ `Light Theme (Carto)` พร้อมระบบสลับอัตโนมัติเมื่อเปลี่ยนธีมของระบบ
-13. **แก้ไขบัคกรอบ Details Popup และสีตัวอักษรของอุปกรณ์ (`DevicePin.module.css`):**
-   - เปลี่ยนสีตัวอักษรชื่ออุปกรณ์ (`.popupName`) และค่าข้อมูล (`.popupVal`) จากเดิมที่เป็นสีเทาอ่อนฮาร์ดโค้ด ให้ใช้ `var(--text-primary)` เพื่อให้อ่านชัดเจน คมเข้ม ไม่ซีดจางกลืนกับพื้นหลังในโหมดสว่าง
-   - แก้ไขสีเส้นขอบสามเหลี่ยมลูกศรชี้ของ Popup (`.arrow_right`, `.arrow_below`, `.arrow_left`, `.arrow_above`) จากเดิมที่ฮาร์ดโค้ดเป็นสีกรมท่าเข้ม `#2a3d5c` ให้ใช้ `var(--border-default)` เชื่อมต่อกับกรอบอย่างเรียบเนียน
-   - ปรับสีเส้นคั่นส่วนหัวและส่วนท้าย (`.popupHeader`, `.popupActions`) เป็น `var(--border-subtle)`
-   - ปรับสีข้อความและสีสถานะของปุ่มปลดล็อค (`.btnLockActive`) ในโหมดสว่างให้เป็นโทนสีทองอำพันความเปรียบต่างสูง (High Contrast) มองเห็นได้ชัดเจน
-
-### 8.3 การปรับปรุงและตรวจเช็คระบบรอบส่งมอบล่าสุด (Version 1.2.0 — 9 พ.ย. 2026):
-1. **แก้ปัญหา Contrast & Details Popup ใน Light Mode คมชัด 100%:**
-   - เพิ่มคลาส `:global([data-theme="light"])` เจาะจงใน `DevicePin.module.css` กำหนดพื้นหลังสีขาว `#ffffff` และข้อความ `.popupName`, `.popupVal` เป็นสีดำเข้ม `#0f172a !important`
-   - ตรึงสีข้อความใน Leaflet Popup ของ `FloorMapOverlay.module.css` ในโหมดสว่างเป็น `#0f172a !important` ขจัดปัญหาตัวหนังสือกลืนกับพื้นหลังอย่างถาวร
-2. **ยกระดับระบบ Typography & Thai Script Resilience (Impeccable Audit):**
-   - เชื่อมต่อ Google Fonts `Inter` และ `Noto Sans Thai` ผ่าน `index.html` และกำหนด Font Stack มาตรฐานใน `index.css`
-   - ปรับความสูงบรรทัดหัวข้อ `line-height: 1.35` ป้องกันสระและวรรณยุกต์ไทยชนขอบ
-   - ยกเลิก Micro-text: ขยับขนาดป้ายชื่อหมุดจาก 9.5px เป็น 11px, ป้ายชื่อห้องจาก 10.5px เป็น 12px, ป้ายพิกัดและมิติห้องเป็น 11.5px–12px
-   - เพิ่ม `font-variant-numeric: tabular-nums` ให้ตัวเลขสถิติและเคาน์เตอร์ทั้งหมด เพื่อขจัดปัญหาตัวเลขสั่น (Jittering) ขณะ Polling ข้อมูล
-3. **ปรับ Spacing & Ergonomics:**
-   - ขยาย `FloorSidebar` จาก 220px เป็น 240px รองรับข้อความประเภทอุปกรณ์ภาษาไทยขนาดยาวได้สบายตา
-   - ปรับแถบการ์ดสถิติใน `DeviceInfoModal` เป็น Responsive Auto-fit Grid (`minmax(110px, 1fr)`) ป้องกันการตัดคำในจอขนาดเล็ก
-   - ขยายปุ่มสลับธีมและปุ่มภาษาบน Navbar เป็นขนาด 32px เพื่อการสัมผัสที่แม่นยำ
-4. **ตรวจเช็คและยืนยันระบบแสกนเครือข่าย (Network Discovery Live Verification):**
-   - ทดสอบแสกนเครือข่ายจริงบนวงแลน `192.168.22.0/24` ตรวจพบ 10 อุปกรณ์ในเวลาไม่ถึง 3 วินาที
-   - ยืนยันการเชื่อมต่อ SNMP v2c ดึงข้อมูล `sysDescr`, `sysName`, `sysLocation` จาก Aruba Core Switch (`192.168.22.254`) สำเร็จสมบูรณ์
-   - ยืนยันระบบป้องกันอุปกรณ์ซ้ำซ้อน (Deduplication) ทั้งทาง IP และชื่อ
-   - ยืนยันระบบ Smart Placement และ Fallback Simulation ใน Frontend กรณี Backend ออฟไลน์
-
-### 8.4 การยกระดับประสบการณ์ผู้ใช้และการใช้งานง่าย (Version 1.3.0 — 10 พ.ย. 2026):
-1. **FloorSidebar Device Directory & Quick Finder:**
-   - เพิ่มแท็บสลับระหว่าง **"ตัวกรอง (Filters)"** และ **"อุปกรณ์บนชั้น (Devices)"** บนแถบด้านข้างของผังเครือข่าย
-   - เพิ่มช่องค้นหาด่วนภายในชั้น (Search input) แสดงรายชื่ออุปกรณ์พร้อมไอคอน, จุดสถานะ, IP, และห้อง สามารถคลิกที่ชื่ออุปกรณ์เพื่อดูรายละเอียดหรือระบุตำแหน่งบนผังห้องได้ทันที
-   - ในแท็บตัวกรอง เพิ่มรายการผลลัพธ์การกรอง (Filtered Devices) แบบคลิกได้ทันที ลดภาระการกวาดสายตาหาหมุดบนผังขนาดใหญ่
-2. **Navbar Network Health Badge & Interactive User Guide Modal:**
-   - เพิ่ม Badge แสดงสถานะสุขภาพเครือข่ายรวมบน Navbar (`● ระบบปกติ (Online X/Total)` หรือป้ายเตือนสีอำพัน/แดงเมื่อมีอุปกรณ์ขัดข้อง) คลิกเพื่อข้ามไปยังหน้ารายงานภาพรวมได้ทันที
-   - เพิ่มปุ่ม **"คู่มือใช้งาน" (User Guide)** พร้อมหน้าต่าง Modal แสดงคำแนะนำ 4 ขั้นตอนหลัก (การดูผัง/ซูม, การย้าย/ล็อคตำแหน่ง, การตรวจทราฟฟิก, และปุ่มลัด `Ctrl+K`) ช่วยให้ผู้ใช้ใหม่เริ่มต้นใช้งานได้ใน 10 วินาที
-3. **DeviceListPage Live Search, Floor Filter & Fast Actions:**
-   - เพิ่มช่องค้นหาชื่ออุปกรณ์, IP Address, หรือรุ่นในหน้าตารางอุปกรณ์ พร้อมปุ่มล้างคำค้นหา
-   - เพิ่มตัวเลือกกรองตามชั้น (ทุกชั้น, ชั้น 1, ชั้น 2)
-   - เพิ่มปุ่ม Action ในแต่ละแถว: **"คัดลอก IP"** ในคลิกเดียว (พร้อมการแจ้งเตือนตอบรับ) และปุ่ม **"ดูตำแหน่งบนผัง"** เพื่อกระโดดไปยังผังห้องชั้นนั้นทันที
-4. **One-Click Telemetry Copy & Diagnostic Suggestion Banner:**
-   - เพิ่มปุ่มคัดลอก IP Address และ MAC Address ใน `DeviceInfoModal` และ `DeviceDetailPage`
-   - เพิ่มกล่องแนะนำการตรวจสอบปัญหา (Diagnostic Suggestion Banner) อัตโนมัติเมื่ออุปกรณ์ออฟไลน์หรือมีสถานะเตือน แนะนำการตรวจสอบสายสัญญาณ Uplink หรือไฟเลี้ยงอุปกรณ์
-   - เพิ่มตัวเลขนับจำนวนพอร์ต, VLAN, และอุปกรณ์ข้างเคียงบนแท็บในหน้ารายละเอียด
-5. **FloorPlan Sub-Banner Interactive Status Pills:**
-   - เพิ่มชิปสถานะสรุปประจำชั้น (`● ออนไลน์`, `▲ เตือน`, `✕ ขัดข้อง`) ที่สามารถคลิกเพื่อกรองสถานะนั้นได้ในคลิกเดียว
-6. **UI Scale Up 50% & Interactive Scale Switcher:**
-   - ปรับขนาด UI เริ่มต้นเพิ่มขึ้น 50% (150% Scale) ตามมาตรฐานห้องควบคุม NOC เพื่อให้อ่านตัวเลข Bandwidth, IP, สถิติ และผังอุปกรณ์ได้อย่างคมชัดสบายตา
-   - เพิ่มปุ่มปรับระดับสเกล UI บน Navbar (`150%` / `100%` / `125%`) บันทึกค่าลงใน LocalStorage พร้อมสลับใช้งานได้ทันที
-
-### 8.5 การปรับปรุงกลไกการจำแนกอุปกรณ์ประเภท Router อัจฉริยะ (Version 1.3.1 — 10 พ.ย. 2026):
-1. **แก้ไขข้อผิดพลาดตรรกะ IP Suffix & Default Gateway (`classifier.py`):**
-   - แก้ไขบัคตรรกะ Factor 5 เดิมที่รวม `.1` กับ `.254` เข้าด้วยกันและตรวจสอบ `scores["switch"] >= scores["router"]` ซึ่งทำให้ IP `.1` (Default Gateway ของเครือข่ายเกือบทั้งหมด) ถูกบวกคะแนนให้ Switch และกลายเป็น Switch เสมอ
-   - แยกตรรกะชัดเจน: หากเป็น Default Gateway หรือ IP ลงท้ายด้วย `.1` จะได้รับคะแนน Router (+45) ทันที
-2. **ขยายฐานข้อมูล MAC OUI สำหรับ Router และ Gateway ครบถ้วน:**
-   - เพิ่มรหัส MAC OUI ของ Router ยอดนิยม: MikroTik (14 รายการ), Cisco Routers (ISR/ASR/Catalyst 8000), Fortinet, Ubiquiti EdgeRouter/Gateway, TP-Link (Archer, Omada Gateway), D-Link, Netgear, ASUS, Huawei, ZTE, DrayTek Vigor, Juniper, Sophos, และ ISP Gateway ของผู้ให้บริการในไทย (AIS Fibre, True GigaTex, 3BB, NT)
-3. **ปรับปรุงการวิเคราะห์ SNMP sysServices และ sysDescr / sysName:**
-   - รองรับอุปกรณ์ L2/L3 Bridge-Router: เราเตอร์ส่วนใหญ่ในปัจจุบันมี LAN Switchports (L2) และทำ Routing (L3) ระบบได้ปรับให้ประเมินร่วมกับ Default Gateway, OUI และคีย์เวิร์ด
-   - เพิ่มคีย์เวิร์ดตระกูลเราเตอร์อย่างละเอียด: Cisco IOS Router (`c2900`, `c2800`, `c1900`, `c3900`, `c800`, `c1100`, `isr`, `asr`), MikroTik (`routeros`, `routerboard`, `rb750`, `hex`, `hap`), FortiGate, EdgeRouter, OpenWrt, pfSense, OPNsense, VyOS, TP-Link Archer, ASUS RT, DrayTek Vigor
-   - ป้องกันไม่ให้อุปกรณ์ Router ที่รันลินุกซ์เคอร์เนล (เช่น OpenWrt, EdgeRouter) ถูกจัดประเภทผิดเป็น Server เพราะคีย์เวิร์ด "linux"
-4. **เพิ่มการตรวจสอบ OID IP Forwarding (RFC 1213 OID `.1.3.6.1.2.1.4.1.0`):**
-   - เพิ่มการสืบค้น `ipForwarding` ระหว่างขั้นตอนค้นหาอุปกรณ์ (Discovery) หากค่าเป็น 1 (forwarding) จะเพิ่มคะแนน Router (+45) บ่งบอกอย่างเป็นทางการตามมาตรฐาน MIB-II ว่าเป็นอุปกรณ์ Routing
-5. **ดึง Default Gateway จริงจากตาราง Route ของระบบปฏิบัติการ:**
-   - ใน `discovery.py` ฟังก์ชัน `detect_local_network_info()` เปลี่ยนจากการฮาร์ดโค้ด `.254` มาเป็นการอ่าน Active Route `0.0.0.0/0` แบบไดนามิก และส่งค่า Gateway ไปช่วยประเมินใน `classify_device`
-6. **Smart Placement สำหรับ Router:**
-   - ปรับ `pick_smart_spot` ใน `placement.py` ให้ประเภท `router` มีลำดับความสำคัญจัดวางลงในห้อง "Network Core" หรือ "Server Room" อัตโนมัติเช่นเดียวกับ Switch และ Server
-7. **ชุดการทดสอบครอบคลุม 100% (`backend/test_classifier.py`):**
-   - เพิ่มแบบทดสอบ 17 กรณีทดสอบ ครอบคลุม Default Gateway IP, MikroTik, Cisco 2900/2800/ISR, OpenWrt, FortiGate, Ubiquiti EdgeRouter, TP-Link Archer, DrayTek, IP Forwarding ตลอดจนการคงความถูกต้องของ Switch (Aruba Core Switch `.254`), AP, และ Server ผ่านการทดสอบทั้งหมด 100%
-
-### 8.6 การปรับเปลี่ยน Emoji ทั้งหมดเป็น Lucide Icons มาตรฐาน (Version 1.3.2 — 10 พ.ย. 2026):
-1. **ปรับปรุงส่วนแสดงผล Frontend (NetMonitor React UI):**
-   - `DeviceInfoModal.tsx`:
-     - เปลี่ยน `🏢 {locationText}` เป็น `<Building2 size={13} /> {locationText}`
-     - เปลี่ยนลูกศร `➔` เป็น `<ArrowRight size={12} />`
-     - เปลี่ยนสถานะ `● LIVE` เป็น `<Radio size={11} /> LIVE`
-   - `DeviceDetailPage.tsx`:
-     - เปลี่ยนลูกศรนำทางแท็บ `➔` เป็น `<ArrowRight size={12} />`
-   - `HelpGuideModal.tsx`:
-     - เปลี่ยนไอคอนหลอดไฟ `💡` เป็น `<Lightbulb size={14} style={{ color: 'var(--accent-warning, #f59e0b)' }} />`
-   - `FloorPlanPage.tsx`:
-     - เปลี่ยนชิปกรองสถานะ (`●`, `▲`, `✕`) เป็น `<CheckCircle2 size={12} />`, `<AlertTriangle size={12} />`, `<XCircle size={12} />`
-   - `DeviceListPage.tsx`:
-     - เปลี่ยนตัวบอกทิศทางการเรียงลำดับหัวตาราง (`▲`/`▼`) เป็น SVG ไอคอน `<ChevronUp size={13} />` และ `<ChevronDown size={13} />`
-   - `MetricCard.tsx`:
-     - เปลี่ยนสัญลักษณ์อัตราการเปลี่ยนแปลง (Change Badge) จากข้อความ `▲`, `▼`, `—` เป็น `<TrendingUp size={12} />`, `<TrendingDown size={12} />`, `<Minus size={12} />`
-   - `TrafficChart.tsx`:
-     - เปลี่ยน `○ No SNMP Data (ICMP Only)` เป็น `<Info size={11} /> No SNMP Data (ICMP Only)`
-     - เปลี่ยน `● LIVE` เป็น `<Radio size={11} /> LIVE`
-   - `DevicePin.tsx`:
-     - เปลี่ยนจุดวงกลมสถานะ `●` ใน Device Tooltip / Popup เป็นไอคอน `<CheckCircle2 size={12} />`, `<AlertTriangle size={12} />`, `<XCircle size={12} />`
-   - `ReportsPage.tsx`:
-     - ยกเลิกการเรนเดอร์ string emoji `{alert.icon}` โดยตรง และเปลี่ยนเป็น Lucide Component แบบ Type-safe: `<AlertOctagon />` สำหรับ Critical, `<AlertTriangle />` สำหรับ Warning, `<Info />` สำหรับ Info
-   - `NetworkScanModal.tsx`:
-     - เพิ่มไอคอนบริบทสำหรับเหตุผลการจัดชั้น (`Tag` สำหรับ OUI, `Navigation` สำหรับ Gateway/Subnet, `MapPin` สำหรับ Room/Keyword, `Building2` สำหรับ Default) พร้อมคำสั่งลบ Emoji ตกค้าง
-2. **ทำความสะอาดข้อมูลฝั่ง Backend (FastAPI / Classifier Engine):**
-   - `backend/app/classifier.py`: ลบอีโมจิ (`🏷️`, `🛰️`, `📍`, `🏢`) ออกจากข้อความผลลัพธ์ `infer_floor()`
-   - `backend/app/discovery.py`: ลบ `🛰️` ออกจาก `floor_reason`
-   - `backend/app/database.py`, `backend/app/models.py`, `backend/app/main.py`: ปรับ Default Alert Icon ให้เป็นค่าว่าง เพื่อให้ส่วนติดต่อผู้ใช้เรนเดอร์ผ่าน Lucide SVG อย่างเป็นเอกภาพ 100%
-
-### 8.7 ชุดสคริปต์และข้อมูลจำลองสถานการณ์ความผิดปกติของอุปกรณ์ (Version 1.3.3 — 10 พ.ย. 2026):
-สร้างสคริปต์ `backend/simulate_faults.py` เพื่อจำลองปัญหาเครือข่ายเสมือนจริง 6 กรณี ครอบคลุมทุกประเภทอุปกรณ์ (Router, Switch, AP, Server) ทั้งสถานะ Warning (เตือน) และ Offline (ขัดข้อง) ครอบคลุมทั้งสองชั้น:
-1. **[Router - Warning] RTR-CORE-01 (192.168.22.1, ชั้น 1):** BGP Route Flapping สลับเส้นทาง และ CPU Load ขึ้นสูงถึง 88.5%
-2. **[Router - Offline] RTR-BRANCH-02 (192.168.22.2, ชั้น 2):** สาย Fiber WAN ขาด เกตเวย์ออฟไลน์ ขาดการเชื่อมต่อ
-3. **[Switch - Warning] SW-42-B73C (192.168.22.42, ชั้น 1):** ทราฟฟิกพอร์ต Trunk 10G เต็มพิกัด > 92.4% พร้อมอุณหภูมิความร้อนสูง 68°C
-4. **[Switch - Offline] SW-112-B3C3 (192.168.22.112, ชั้น 2):** Power Supply Unit (PSU) ขัดข้อง ดับทั้งเครื่อง ส่งผลกระทบ 24 Edge Ports
-5. **[AP - Warning] Ubiquiti-AP-239 (192.168.22.239, ชั้น 2):** ผู้ใช้งานหนาแน่น 65+ Clients สัญญาณชนกันรุนแรง (Co-channel interference) เกิด Packet Loss 8.7%
-6. **[Server - Offline] SRV-44-F9FF (192.168.22.44, ชั้น 1):** โฮสต์เกิด Kernel Panic พอร์ต 161 (SNMP) และ ICMP ไม่ตอบสนอง ฐานข้อมูลหยุดให้บริการ
-* ปรับปรุง `poll_runs_status_check` Constraint ใน PostgreSQL ให้รองรับสถานะ `'warning'` ควบคู่กับ `'succeeded'` และ `'failed'`
-* เชื่อมโยงหน้า `ReportsPage` ให้ดึง Alerts จาก Database API มาแสดงร่วมกับ Mock Detail โดยอัตโนมัติ
-
-### 8.8 การแก้ไขข้อผิดพลาดระดับวิกฤตและความทนทานของระบบ (Version 1.3.4 — 10 พ.ย. 2026):
-1. **Zero-State DDL Idempotency (`backend/app/database.py`):**
-   - เพิ่มคำสั่ง `CREATE TABLE IF NOT EXISTS` แบบ Idempotent สำหรับตารางแกนหลักทั้งหมด (`devices`, `interfaces`, `poll_runs`, `interface_samples`, `device_metric_samples`, `alerts`) ครอบคลุม Foreign Keys, Index, และ Constraints ทำให้ระบบเริ่มต้นทำงานได้อย่างสมบูรณ์แบบ แม้เริ่มจากฐานข้อมูลว่างเปล่า (Zero-state DB)
-2. **ขจัดทราฟฟิกสังเคราะห์ Sine-Wave หลอก (`backend/app/collector.py`):**
-   - ตัดสูตรคำนวณคณิตศาสตร์ `math.sin` และ `math.cos` ออกจากการประมวลผลทราฟฟิกใน background poller สำหรับอุปกรณ์ที่ไม่มี SNMP telemetry ระบบจะตั้งค่า `has_snmp: False` และส่งทราฟฟิกเป็น 0 Mbps พร้อมป้ายกำกับ `No SNMP Data (ICMP Only)` อย่างถูกต้องตามความเป็นจริง 100%
-3. **ป้องกัน Multi-Worker Poll Duplication ด้วย PostgreSQL Advisory Lock (`backend/app/main.py`):**
-   - ฝัง PostgreSQL Session-level Advisory Lock (`0x534E4D50`) ในลูป `background_snmp_poller` ป้องกันไม่ให้ Uvicorn multi-worker process แย่งกันยิง SNMP ซ้ำซ้อนไปยังอุปกรณ์เครือข่ายเดียวกัน
-4. **บันทึกสถานะการเชื่อมต่อจริงใน `poll_runs` (`backend/app/main.py`):**
-   - บันทึกผลการสำรวจ (`status: succeeded` / `failed`, latency, error messages) ลงตาราง `poll_runs` ทุกรอบการทำงาน ทำให้อุปกรณ์สะท้อนสถานะการเชื่อมต่อจริงในแดชบอร์ดอย่างแม่นยำ
-5. **ปรับปรุง `simulate_faults.py` ค้นหา Foreign Key แบบไดนามิก:**
-   - แก้ไขการสร้าง Alert จำลองให้ดึงรหัสอุปกรณ์ (`device_id`) จากฐานข้อมูลจริงแบบไดนามิก ขจัดปัญหา `ForeignKeyViolationError` จากการฮาร์ดโค้ด ID ที่ไม่มีอยู่
-6. **Docker Compose แบบพกพา (Portable Docker Setup):**
-   - รวมไฟล์ `docker-compose.yml` และไดเรกทอรี `init/001_schema.sql` ไว้ที่ Root ของโปรเจกต์ ยกเลิกการอ้างอิง Path เฉพาะเครื่องใน `%LOCALAPPDATA%`
-
-### 8.9 การปรับปรุงโครงสร้างสถาปัตยกรรม Clean Architecture & SRP (Version 1.3.5 — 11 พ.ย. 2026):
-1. **การแยกชั้นสถาปัตยกรรม Data Access Layer (Decoupled Repository Pattern):**
-   - แยกชุดคำสั่ง Raw SQL queries, การจัดการ Transaction, และ Connection Pool ทั้งหมดออกจาก Controller ใน [`backend/app/main.py`](file:///c:/work/snmp_font_end/backend/app/main.py) เข้าสู่โมดูล [`backend/app/repository.py`](file:///c:/work/snmp_font_end/backend/app/repository.py) โดยเฉพาะ
-   - มีฟังก์ชันจัดการข้อมูลที่เป็นอิสระ เช่น `fetch_all_devices`, `fetch_device_by_id`, `update_device`, `delete_device`, `fetch_pollable_devices`, `record_poll_run`, `fetch_active_alerts`, `acknowledge_alert` และ `resolve_alert`
-   - ปรับให้ `main.py` ทำหน้าที่เป็น Thin Controller ที่มุ่งเน้นการจัดการ HTTP routing, request validation และ orchestration ตามหลัก Clean Architecture และ Single Responsibility Principle (SRP)
-2. **การแยกคอมโพเนนต์ค้นหาอุปกรณ์แบบสากล (`NavbarSearch.tsx`):**
-   - แยกชุดโค้ด Global Search (`Ctrl + K` / Command Palette) ที่ซับซ้อนออกจาก [`Navbar.tsx`](file:///c:/work/snmp_font_end/netmonitor/src/components/layout/Navbar.tsx) ไปเป็นคอมโพเนนต์อิสระ [`NavbarSearch.tsx`](file:///c:/work/snmp_font_end/netmonitor/src/components/layout/NavbarSearch.tsx) ควบคู่กับ [`NavbarSearch.module.css`](file:///c:/work/snmp_font_end/netmonitor/src/components/layout/NavbarSearch.module.css)
-   - ลดความซับซ้อนของ `Navbar.tsx` ลงกว่า 200 บรรทัด ทำให้โค้ดอ่านง่าย บำรุงรักษาและทดสอบได้สะดวก
-3. **การจัดเก็บค่าคงที่เทคนิคส่วนกลาง (Centralized Telemetry Constants):**
-   - ย้าย Magic Numbers และการตั้งค่าคงที่ต่างๆ เช่น `MAX_SCAN_HOSTS = 254`, `SNMP_ADVISORY_LOCK_KEY = 0x534E4D50`, `DEFAULT_POLL_INTERVAL_S = 60` ไปไว้ที่ [`backend/app/config.py`](file:///c:/work/snmp_font_end/backend/app/config.py)
-4. **การจัดการ Graceful Test Skip สำหรับอุปกรณ์จริง (`test_real_snmp.py`):**
-   - เพิ่มการตรวจสอบสภาพแวดล้อมเครือข่ายก่อนรัน `test_real_snmp.py` หากอุปกรณ์ Core Switch จริงไม่ตอบสนองหรือไม่เสียบสาย LAN ระบบจะสั่ง `pytest.skip()` อย่างนุ่มนวล ทำให้ชุดทดสอบ Pytest ทั้งหมด (24 passed, 2 skipped) ผ่าน 100% เสมอในทุกสภาพแวดล้อม CI/CD
-
-### 8.10 การติดตั้งและพัฒนาชุดทดสอบ End-to-End ครอบคลุมทุกหน้า (Playwright E2E Test Suite):
-1. **ชุดทดสอบ Playwright ระดับมืออาชีพ (`netmonitor/e2e/netmonitor.spec.ts`):**
-   - ติดตั้งและตั้งค่า Playwright Test Framework (`@playwright/test`) พร้อม [`playwright.config.ts`](file:///c:/work/snmp_font_end/netmonitor/playwright.config.ts) รองรับการรันทั้ง Headless และ UI Mode
-   - พัฒนา 10 กรณีทดสอบ E2E ครอบคลุมทุกหน้าหลักของระบบ (ผ่าน 100% ภายใน 12 วินาที):
-     - **Scenario 1 (Floor Plan 2D):** ตรวจสอบการโหลด Canvas, แถบสถิติอุปกรณ์ด้านบน, หมุดอุปกรณ์, และการสลับชั้น 1/2
-     - **Scenario 2 (Floor Plan Satellite Map):** ตรวจสอบการสลับเป็นมุมมองแผนที่ดาวเทียม Leaflet Map, ผังห้องโปร่งแสง และหมุดพิกัด GPS
-     - **Scenario 3 (Device Details & Telemetry Modal):** ตรวจสอบการคลิกหมุดอุปกรณ์บนผัง, การเปิดโมดัลรายละเอียด, สเปก (IP, ชนิด, รุ่น, Uptime) และกราฟ Bandwidth
-     - **Scenario 4 (Device List Table & Search):** ตรวจสอบการโหลดตารางอุปกรณ์, การค้นหา (Search Filter), การกรองตามชั้น และการเรียงลำดับคอลัมน์
-     - **Scenario 5 (Device Detail Standalone Page):** ตรวจสอบการนำทางไปยังหน้า `/devices/:id`, แท็บ Specification, แถบสรุปสถานะพอร์ต/VLAN, และกราฟ Telemetry
-     - **Scenario 6 (Reports & Overview Page):** ตรวจสอบการโหลดหน้ารายงานภาพรวม, การ์ดสถานะอุปกรณ์ (Online, Warning, Offline), และตาราง Alerts
-     - **Scenario 7 (Interactive Alert Acknowledgment Flow):** ตรวจสอบการคลิกปุ่ม "รับทราบ" บนแจ้งเตือนระดับ Warning/Critical และการเปลี่ยนสถานะเป็น "รับทราบแล้ว" แบบเรียลไทม์
-     - **Scenario 8 (Global Command Palette - Ctrl+K):** ตรวจสอบการเปิดหน้าต่างค้นหาด่วน, การพิมพ์ค้นหาชื่อ/IP และการคลิกเพื่อนำทางไปยังอุปกรณ์
-     - **Scenario 9 (Theme Switching - Dark/Light):** ตรวจสอบการสลับธีมระหว่าง Dark Mode และ Soft Slate Light Mode พร้อมตรวจสอบความถูกต้องของ attribute `data-theme`
-     - **Scenario 10 (Bilingual Localization - TH/EN):** ตรวจสอบการสลับภาษาระหว่างภาษาไทยและอังกฤษผ่าน i18next และการเปลี่ยนข้อความบน Navbar และหัวข้อต่างๆ
-
-### 8.11 ระบบสถานะอุปกรณ์ผูกโยงการแจ้งเตือนและการจำลองสถานะครบวงจร (Alert-Aware Telemetry & Simulation UI):
-1. **การผูกโยงสถานะอุปกรณ์กับการแจ้งเตือน (Alert-Aware Device Status):**
-   - ปรับปรุงฟังก์ชัน `compute_device_status()` ใน [`backend/app/repository.py`](file:///c:/work/snmp_font_end/backend/app/repository.py) โดยคำนวณสถานะอุปกรณ์ร่วมกับ Active Unacknowledged Alerts:
-     - หากมี Alert ระดับ `critical` ที่ยังไม่ได้รับทราบ $\rightarrow$ ปรับสถานะอุปกรณ์เป็น `offline` ทันที
-     - หากมี Alert ระดับ `warning` ที่ยังไม่ได้รับทราบ $\rightarrow$ ปรับสถานะอุปกรณ์เป็น `warning`
-     - เมื่อผู้ดูแลระบบกด "รับทราบ" (Acknowledge) หรือปัญหาคลี่คลาย $\rightarrow$ สถานะอุปกรณ์จะกลับคืนสู่ `online` อย่างถูกต้องตามสถานะจริง
-2. **ระบบป้องกันอุปกรณ์จำลองถูก Background Poller ทับซ้อน (`credential_ref = 'simulated'`):**
-   - แก้ไขปัญหา Background SNMP Poller ที่ทำงานทุก 60 วินาทีและเขียนสถานะ `offline` ทับอุปกรณ์ที่จำลองสถานะไว้ โดยเพิ่มเงื่อนไข `(credential_ref IS NULL OR credential_ref NOT IN ('simulated', 'mock', 'demo'))` ใน `fetch_pollable_devices` ทำให้อุปกรณ์จำลองสถานะคงอยู่ถาวรจนกว่าจะสั่งรีเซ็ต
-3. **การจำลอง Telemetry เสมือนจริงครบวงจร (`backend/simulate_faults.py`):**
-   - ยกระดับสคริปต์จำลองเหตุการณ์ให้สร้างข้อมูลอินเทอร์เฟซพอร์ต (`interfaces`: GigabitEthernet, Trunk, SFP+), ตัวอย่างทราฟฟิกย้อนหลัง 15 นาที (`interface_samples`), และเมตริกสุขภาพ (`device_metric_samples`: CPU Load, Memory Usage, Temperature, Packet Loss) เสมือนระบบกำลังทำงานจริง
-4. **ปุ่มสั่งการจำลองสถานะและรีเซ็ตระบบบนหน้าเว็บ (One-Click Simulation on UI):**
-   - เพิ่มปุ่ม **"จำลองปัญหา (Simulate Faults)"** และ **"รีเซ็ตระบบ (Reset System)"** พร้อมไอคอน Lucide บนหน้า [`FloorPlanPage.tsx`](file:///c:/work/snmp_font_end/netmonitor/src/pages/FloorPlanPage.tsx) และหน้า [`DeviceListPage.tsx`](file:///c:/work/snmp_font_end/netmonitor/src/pages/DeviceListPage.tsx)
-   - มี Confirm Dialog ยืนยันก่อนทำรายการ และระบบแจ้งเตือน Toast เมื่อทำรายการสำเร็จ ทำให้สามารถนำเสนองาน (Demo) และทดสอบระบบได้โดยตรงจาก UI โดยไม่ต้องเข้าสู่ Terminal
+- **v1.1.0 (Baseline Refactor):** ปรับปรุง `reset_database`, เพิ่ม `asyncio.Lock` ใน `get_db_pool()`, ลบตรรกะที่ผูกสถานะกับชื่ออุปกรณ์เดิม, เพิ่ม Auto-interface discovery, แยก `NavbarSearch.tsx` และย้ายไอคอนมาเป็น Lucide React
+- **v1.2.0:** เพิ่มการตรวจสอบ Discovery บนวง `192.168.22.0/24` (Smart Placement, Deduplication), เชื่อม Google Fonts (`Inter`, `Noto Sans Thai`), ปรับ `line-height` และ `tabular-nums`
+- **v1.3.0 – v1.3.4:** เพิ่ม `FloorSidebar` device directory, Global health badge, `HelpGuideModal`, ปรับ Classifier สำหรับ Router (`ipForwarding`, Default Gateway route, OUI), เพิ่มตาราง `device_metric_samples` และ Idempotent DDL ใน `database.py`, เพิ่ม Advisory Lock `0x534E4D50` ใน Background Poller, ตัดการสังเคราะห์ทราฟฟิก Sine-wave ออกจาก `collector.py` และสร้าง `simulate_faults.py`
+- **v1.3.5 (Current):**
+  - แยก Data Access Layer (`compute_device_status()` และ SQL ทั้งหมด) ออกจาก `main.py` เข้าสู่ [repository.py](./backend/app/repository.py) และรวบค่าคงที่กลางไว้ใน [config.py](./backend/app/config.py)
+  - เพิ่มระบบ Topology Inference, Link Management (`topology_links`), Blast-Radius/SPOF Simulator และ Business Impact (`affected_zones`, `affected_services`, `ServiceTagsEditor`) โดยรวมการคำนวณทั้งหมดไว้ที่ Backend (`/api/v1/simulate/impact`)
+  - ปรับโหมดสว่างเป็น Balanced Warm Tan / Almond-Beige Light Theme ([index.css](./netmonitor/src/index.css)) และเพิ่มผังห้องบน PostgreSQL (`floor_layouts`)
+  - เพิ่มความปลอดภัย (`require_api_key` ด้วย `X-API-Key`, `ALLOWED_ORIGINS`, `ipaddress`/`sanitize_snmp_community`, แยก `is_simulated` ออกจาก `credential_ref`), แก้สูตรรวมแบนด์วิธ `interface_id == "all"`, อ่าน `sys_uptime` จากฐานข้อมูลแบบ Non-blocking, ทำ Batch/Concurrent Polling + Telemetry Retention และรองรับคำสั่ง Discovery ทั้ง Windows และ Linux
 
 ---
 
-## 9. แนวทางการบำรุงรักษาและการขยายระบบในอนาคต (Maintenance & Scaling Guidelines)
+## 9. แนวทางการบำรุงรักษาและขีดจำกัดการขยายระบบ (Maintenance & Operational Guidelines)
 
 ### 9.1 การสำรองและกู้คืนฐานข้อมูล (Database Backup & Restore)
 
-#### สำรองข้อมูล (Backup) เป็น UTF-8 ที่ปลอดภัยต่อการ Restore:
+อ้างอิงชื่อผู้ใช้และรหัสผ่านฐานข้อมูลจากไฟล์ `.env` (ในตัวอย่างใช้ `$env:PGPASSWORD` จาก Environment เพื่อไม่ระบุรหัสผ่านตายตัวในคำสั่ง):
+
 ```powershell
-docker exec -e PGPASSWORD=netmon docker-db-1 pg_dump -U netmon netmon | Out-File -Encoding utf8 backup_netmon.sql
+# สำรองข้อมูลเป็น UTF-8
+docker exec -e PGPASSWORD=$env:DB_PASSWORD docker-db-1 pg_dump -U netmon netmon | Out-File -Encoding utf8 backup_netmon.sql
+
+# กู้คืนข้อมูลผ่าน CMD Stream (เลี่ยง UTF-16 BOM ของ PowerShell)
+cmd /c "docker exec -i -e PGPASSWORD=%DB_PASSWORD% docker-db-1 psql -U netmon -d netmon < backup_netmon.sql"
 ```
 
-#### กู้คืนข้อมูล (Restore) ผ่าน CMD Stream (ป้องกันปัญหา UTF-16 BOM ของ PowerShell):
-```powershell
-cmd /c "docker exec -i -e PGPASSWORD=netmon docker-db-1 psql -U netmon -d netmon < backup_netmon.sql"
-```
+### 9.2 การปรับตั้งค่า SNMP Polling และ Retention (SNMP Polling & Retention Tuning)
 
-### 9.2 การปรับตั้งค่า SNMP Timeout & Polling Interval
-- ค่ามาตรฐานถูกตั้งไว้ที่ `poll_interval_s = 60` วินาทีในฐานข้อมูล
-- หากเครือข่ายมี Latency สูงหรือมีแพ็กเก็ตตกหล่นบ่อย สามารถปรับ timeout ในไฟล์ `backend/app/snmp.py` (`timeout_s=2`, `retries=1`)
+- Background Poller ทำงานตามรอบกลาง `SNMP_POLL_INTERVAL_S = 30` วินาทีและจำกัด Concurrent Polls ที่ `SNMP_MAX_CONCURRENT_POLLS = 5` (ค่าคอลัมน์ `devices.poll_interval_s = 60` ใน DB ปัจจุบันใช้เป็น Metadata รายเครื่อง ยังไม่ได้แยก Scheduler รายเครื่อง)
+- ค่า Timeout/Retry ของ CLI อยู่ที่ [snmp.py](./backend/app/snmp.py) (`timeout_s=2`, `retries=1`) และ [collector.py](./backend/app/collector.py) (`timeout_s=2`, `-r1`)
+- ข้อมูล Time-series ใน `interface_samples`, `device_metric_samples` และ `poll_runs` เก่ากว่า `METRICS_RETENTION_DAYS` (ค่าเริ่มต้น `7` วัน) จะถูกล้างเป็นระยะในรอบ Background Poller โดยคงประวัติ `poll_runs` ล่าสุดของแต่ละอุปกรณ์ไว้เสมอ
 
-### 9.3 การขยายขนาดรองรับผู้ใช้ (Horizontal Scaling)
-- **เพิ่ม Uvicorn Workers:** ปัจจุบันรัน Single Worker สำหรับ Development หากขึ้น Production ในสภาพแวดล้อมจริง สามารถเพิ่มจำนวน Worker ตามจำนวน CPU Cores:
-  ```powershell
-  python -m uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 4
-  ```
-- **ปรับขนาด DB Connection Pool:** ใน `backend/app/database.py` ปรับ `max_size=20` หรือใช้ PgBouncer คั่นกลางเมื่อมีจำนวนผู้ใช้พร้อมกันเกิน 500 VUs
+### 9.3 แนวทางการรัน Single-Worker สำหรับระบบภายใน (Single-Worker Deployment Profile)
 
+- สำหรับขอบเขต 100–500 อุปกรณ์ของทีม NOC ภายใน แนะนำให้รัน Uvicorn แบบ **Single Worker** (`python -m uvicorn app.main:app --host 0.0.0.0 --port 8000` โดยไม่เปิด `--reload` บน Production) ร่วมกับ `asyncpg` Pool ขนาด `min_size=2, max_size=10` ซึ่งเพียงพอต่อการใช้งานจริงและหลีกเลี่ยงการแย่ง Advisory Lock ของ Background Poller รวมถึง Overhead ของหลาย Process บน Windows
+- `init_db()` ใน [database.py](./backend/app/database.py) ครอบ DDL ด้วย PostgreSQL Advisory Lock แล้วเพื่อความปลอดภัยกรณีมีการรัน Process ซ้อนชั่วคราวระหว่าง Restart

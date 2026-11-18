@@ -1,13 +1,13 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import type { Device, Port, TimeRange } from '../types'
+import type { BlastRadiusReport, Device, Port, TimeRange } from '../types'
 import { useNetwork } from '../context/networkContext'
 import { useSimulation } from '../context/simulationContext'
 import { useFaultSimOptional } from '../context/faultSimContext'
 import { useToast } from '../components/ui/toast-context'
 import { useDeviceDetail } from '../hooks/useDeviceDetail'
 import { VLAN_NAMES } from '../services/detailFactory'
-import { computeBlastRadius } from '../services/topologyEngine'
+import * as api from '../services/api'
 import { TIME_RANGES } from '../services/traffic'
 import { portName } from '../i18n/format'
 import { levelColor } from '../components/detail/metricColors'
@@ -107,16 +107,31 @@ export default function DeviceDetailPage({
       .filter((x): x is { port: Port; peer: Device } => !!x.peer)
   }, [detail, devices])
 
-  const blastPreview = useMemo(() => {
-    if (!device || !faultSim) return null
-    return computeBlastRadius(
-      devices,
-      faultSim.links,
-      new Set([device.id]),
-      new Set(),
-      false,
-    )
-  }, [device, devices, faultSim])
+  const [blastPreviewState, setBlastPreviewState] = useState<{
+    deviceId: string
+    report: BlastRadiusReport
+  } | null>(null)
+  const deviceId = device?.id
+  const linksCount = faultSim?.links.length ?? 0
+  const linksList = faultSim?.links ?? []
+
+  useEffect(() => {
+    if (!deviceId || !faultSim) return
+    let cancelled = false
+    api.simulateImpact([deviceId], [], false, devices, linksList)
+      .then(report => {
+        if (!cancelled) setBlastPreviewState({ deviceId, report })
+      })
+      .catch(err => console.warn('Failed to fetch device blast preview', err))
+    return () => {
+      cancelled = true
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [deviceId, devices.length, linksCount])
+
+  const blastPreview = deviceId && blastPreviewState?.deviceId === deviceId
+    ? blastPreviewState.report
+    : null
 
   const downstreamImpacted = useMemo(() => {
     if (!blastPreview) return []
@@ -140,8 +155,9 @@ export default function DeviceDetailPage({
     )
   }
 
-  const status = STATUS_META[device.status]
-  const uptimeText = device.status === 'offline' ? t('detail.notResponding') : `Uptime ${detail.uptime}`
+  const effectiveStatus = faultSim ? faultSim.getEffectiveStatus(device) : device.status
+  const status = STATUS_META[effectiveStatus]
+  const uptimeText = effectiveStatus === 'offline' ? t('detail.notResponding') : `Uptime ${detail.uptime}`
 
   // capture ค่าที่ผ่าน null-check แล้ว — closure ไม่รับการ narrow ของ parameter
   const dev = device
@@ -202,11 +218,11 @@ export default function DeviceDetailPage({
     { label: 'OS / Firmware', value: detail.iosVersion, mono: true },
     {
       label: 'Ping (RTT)',
-      value: device.status === 'offline' ? 'Request Timeout (100% loss)' : typeof detail.ping.value === 'number' ? `${detail.ping.value} ms (Online)` : detail.ping.value,
+      value: effectiveStatus === 'offline' ? 'Request Timeout (100% loss)' : typeof detail.ping.value === 'number' ? `${detail.ping.value} ms (Online)` : detail.ping.value,
     },
   ]
 
-  const pingColors   = device.status === 'offline'
+  const pingColors   = effectiveStatus === 'offline'
     ? { text: '#ef4444', fill: 'red' as const }
     : levelColor(detail.ping.value, 40, 80)
   const cpuColors    = levelColor(detail.cpu.value, 60, 85)
@@ -643,9 +659,9 @@ export default function DeviceDetailPage({
                             key={item.device_id}
                             type="button"
                             className={`${styles.blastPeerChip} ${
-                              item.impact_state === 'unreachable'
-                                ? styles.blastPeerCrit
-                                : styles.blastPeerWarn
+                              item.impact_state === 'unreachable' || item.impact_state === 'degraded'
+                                ? styles.blastPeerWarn
+                                : styles.blastPeerCrit
                             }`}
                             onClick={() => targetDev && onNavigateDevice(targetDev)}
                             title={chain}

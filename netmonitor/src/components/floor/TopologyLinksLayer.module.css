@@ -24,7 +24,7 @@
 }
 
 :global([data-theme="light"]) .lineCasing {
-  stroke: rgba(255, 255, 255, 0.88);
+  stroke: rgba(228, 231, 234, 0.9);
 }
 
 .lineTrackSevered {
@@ -139,7 +139,7 @@
 }
 
 :global([data-theme="light"]) .flowArrowBg {
-  fill: rgba(255, 255, 255, 0.96);
+  fill: rgba(228, 231, 234, 0.95);
 }
 
 .flowArrowPath {

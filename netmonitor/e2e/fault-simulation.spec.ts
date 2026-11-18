@@ -1,4 +1,19 @@
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import { test, expect } from '@playwright/test';
+
+function loadApiKey(): string {
+  if (process.env.VITE_API_KEY) return process.env.VITE_API_KEY.trim();
+  try {
+    const raw = readFileSync(resolve(process.cwd(), '.env'), 'utf-8');
+    const match = raw.match(/^VITE_API_KEY=(.*)$/m);
+    return match ? match[1].trim() : '';
+  } catch {
+    return '';
+  }
+}
+
+const E2E_API_KEY = loadApiKey();
 
 test.describe('Device-to-Device Failure Impact Simulation', () => {
   test.beforeEach(async ({ page }) => {
@@ -24,7 +39,7 @@ test.describe('Device-to-Device Failure Impact Simulation', () => {
     // Verify fault chip and hop-by-hop dependency chains appear immediately
     await expect(drawer.locator('button[class*="faultChip"]')).toHaveCount(1);
     const listRows = drawer.locator('button[class*="listRow"]');
-    expect(await listRows.count()).toBeGreaterThan(1);
+    await expect.poll(async () => listRows.count(), { timeout: 5000 }).toBeGreaterThan(1);
     await expect(drawer.getByTestId('dependency-chain').first()).toBeVisible();
 
     // 3. Reset clears faults
@@ -169,7 +184,14 @@ test.describe('Device-to-Device Failure Impact Simulation', () => {
       await page.getByTestId('toggle-link-edit-btn').click();
     } finally {
       if (createdId) {
-        await page.evaluate(id => fetch(`/api/v1/topology/links/${id}`, { method: 'DELETE' }), createdId);
+        await page.evaluate(
+          ({ id, apiKey }) =>
+            fetch(`/api/v1/topology/links/${id}`, {
+              method: 'DELETE',
+              headers: apiKey ? { 'X-API-Key': apiKey } : undefined,
+            }),
+          { id: createdId, apiKey: E2E_API_KEY },
+        );
       }
     }
   });
@@ -299,7 +321,7 @@ test.describe('Device-to-Device Failure Impact Simulation', () => {
     expect(animInfo.strokeWidth).toBeGreaterThanOrEqual(2.5);
 
     // Directional flow chevron should also be visible on failure lines
-    expect(await svgLayer.locator('g[class*="flowArrow"]').count()).toBeGreaterThanOrEqual(2);
+    await expect.poll(async () => svgLayer.locator('g[class*="flowArrow"]').count(), { timeout: 5000 }).toBeGreaterThanOrEqual(2);
 
     if (plan.cascadeCheck) {
       await drawer.locator('select').selectOption(plan.cascadeCheck.rootId);
@@ -372,12 +394,17 @@ test.describe('Device-to-Device Failure Impact Simulation', () => {
       // Exit simulation cleanly
       await page.getByTestId('sim-sandbox-banner').getByRole('button', { name: /เสร็จสิ้น|Done/i }).click();
     } finally {
-      await page.evaluate(() =>
-        fetch('/api/v1/devices/1', {
-          method: 'PATCH',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ services: [] }),
-        }),
+      await page.evaluate(
+        apiKey =>
+          fetch('/api/v1/devices/1', {
+            method: 'PATCH',
+            headers: {
+              'Content-Type': 'application/json',
+              ...(apiKey ? { 'X-API-Key': apiKey } : {}),
+            },
+            body: JSON.stringify({ services: [] }),
+          }),
+        E2E_API_KEY,
       );
     }
   });
@@ -488,6 +515,13 @@ test.describe('Device-to-Device Failure Impact Simulation', () => {
     // Server Room automatically highlights red without opening Outage Simulator
     const liveServerOutage = page.locator('[data-zone-state="outage"][class*="roomServer"]').first();
     await expect(liveServerOutage).toBeVisible({ timeout: 5000 });
+
+    // Cascading unreachable downstream devices transition from online to warning status
+    await expect.poll(
+      async () => page.locator('div[class*="_device_"][aria-label*="Warning"], div[class*="_device_"][aria-label*="เตือน"]').count(),
+      { timeout: 5000 },
+    ).toBeGreaterThan(0);
+
     await page.unroute('**/api/v1/devices');
   });
 });

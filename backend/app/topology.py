@@ -310,8 +310,17 @@ def resolve_device_services(device: Dict[str, Any]) -> List[str]:
     return inferred or ["Internal Server"]
 
 
-def _resolve_device_zone(device: Dict[str, Any]) -> str:
-    """Extracts readable zone/room name from target_room or location string."""
+def _resolve_device_zone(
+    device: Dict[str, Any],
+    floor_rooms: Optional[Dict[int, List[Dict[str, Any]]]] = None,
+) -> str:
+    """Resolves zone/room from live floor room boxes first, then target_room or location."""
+    floor = int(device.get("floor") or 1)
+    if floor_rooms and device.get("x") is not None and device.get("y") is not None:
+        from .placement import resolve_room_from_coords
+        matched = resolve_room_from_coords(floor, float(device["x"]), float(device["y"]), custom_rooms=floor_rooms)
+        if matched and matched.strip():
+            return matched.strip()
     target_room = (device.get("target_room") or "").strip()
     if target_room:
         return target_room
@@ -323,13 +332,13 @@ def _resolve_device_zone(device: Dict[str, Any]) -> str:
                 if part:
                     return part
         return loc
-    floor = int(device.get("floor") or 1)
     return f"Floor {floor}"
 
 
 def _compute_business_impacts(
     devices: List[Dict[str, Any]],
     device_impacts: List[Dict[str, Any]],
+    floor_rooms: Optional[Dict[int, List[Dict[str, Any]]]] = None,
 ) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]]]:
     """Aggregates affected zones/rooms and impacted services from device impact details."""
     by_id: Dict[str, Dict[str, Any]] = {str(d["id"]): d for d in devices}
@@ -339,7 +348,7 @@ def _compute_business_impacts(
     for d in devices:
         did = str(d["id"])
         floor = int(d.get("floor") or 1)
-        zone = _resolve_device_zone(d)
+        zone = _resolve_device_zone(d, floor_rooms)
         key = (floor, zone)
         bucket = zone_buckets.setdefault(
             key,
@@ -398,7 +407,7 @@ def _compute_business_impacts(
         dev = by_id.get(imp["device_id"])
         if not dev:
             continue
-        zone = _resolve_device_zone(dev)
+        zone = _resolve_device_zone(dev, floor_rooms)
         dev_name = dev.get("name") or imp["device_id"]
         for svc in resolve_device_services(dev):
             sb = service_buckets.setdefault(
@@ -431,6 +440,7 @@ def compute_blast_radius(
     down_device_ids: Iterable[str],
     down_link_ids: Iterable[str],
     include_spof: bool = True,
+    floor_rooms: Optional[Dict[int, List[Dict[str, Any]]]] = None,
 ) -> Dict[str, Any]:
     """
     Computes device-to-device cascading impact when specified devices or links go down.
@@ -594,7 +604,7 @@ def compute_blast_radius(
     affected_zones: List[Dict[str, Any]] = []
     affected_services: List[Dict[str, Any]] = []
     if include_spof or root_down_cnt + unreachable_cnt + degraded_cnt > 0:
-        affected_zones, affected_services = _compute_business_impacts(devices, device_impacts)
+        affected_zones, affected_services = _compute_business_impacts(devices, device_impacts, floor_rooms=floor_rooms)
 
     return {
         "down_device_ids": sorted(down_devs),

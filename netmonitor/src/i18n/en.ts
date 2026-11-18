@@ -155,6 +155,9 @@ const en = {
     moveModeHint: 'Move Mode: Drag devices to arrange layout, click "Lock Positions" when finished',
     lockedAllToast: 'All device positions locked',
     unlockedAllToast: 'All devices unlocked: drag to arrange positions freely',
+    filterOnlineTitle: 'Filter online devices only',
+    filterWarningTitle: 'Filter warning devices only',
+    filterOfflineTitle: 'Filter offline devices only',
   },
   pin: {
     type: 'Type',
@@ -180,6 +183,13 @@ const en = {
     copiedIp: 'IP copied',
     copyMac: 'Copy MAC',
     copiedMac: 'MAC copied',
+    clearSearchTitle: 'Clear search',
+    filterFloorTitle: 'Filter by floor',
+    loadSampleBtn: 'Load Sample Statuses',
+    loadingSampleBtn: 'Loading...',
+    loadSampleTitle: 'Import sample device statuses (Online, Warning, Offline)',
+    loadSampleSuccess: 'Sample device statuses loaded (Online, Warning, Offline)',
+    loadSampleFail: 'Failed to load sample device statuses',
   },
   actions: {
     ping: 'Ping',
@@ -311,6 +321,7 @@ const en = {
     impactMatrixTitle: 'Impact Matrix: If Infrastructure Device Goes Down',
     impactMatrixSub: 'Click "Simulate Down" to preview cascading impact across reports and map',
     affectsLabel: 'Affects',
+    ackFailed: 'Failed to acknowledge alert',
   },
   settings: {
     title: 'Settings',
