@@ -2,13 +2,14 @@
 
 from datetime import datetime, timedelta, timezone
 from unittest.mock import AsyncMock, MagicMock, patch
+import asyncpg
 import pytest
 from httpx import ASGITransport, AsyncClient
 from pydantic import ValidationError
 
 from app.collector import get_device_traffic_series
 from app.config import settings
-from app.main import app
+from app.main import app, _serialize_device
 from app.models import DeviceCreate, DeviceUpdate, ScanRequest
 from app.snmp import sanitize_snmp_community
 
@@ -225,3 +226,139 @@ async def test_reachability_retry_and_tcp_fallback():
     assert resolve_poll_failure_outcome("warning")[0] == "failed"
     assert resolve_poll_failure_outcome("failed")[0] == "failed"
     assert resolve_poll_failure_outcome(None)[0] == "failed"
+
+
+@pytest.mark.asyncio
+async def test_traffic_series_rejects_foreign_or_invalid_interface_id():
+    now = datetime.now(timezone.utc)
+    t_prev = now - timedelta(seconds=10)
+    t_curr = now - timedelta(seconds=1)
+
+    dev_row = {"id": 1, "dtype": "switch", "enabled": True}
+    if_rows = [{"id": 1, "speed_bps": 1_000_000_000}]
+    foreign_samples = [
+        {"interface_id": 999, "sampled_at": t_prev, "in_octets": 1_000_000, "out_octets": 500_000},
+        {"interface_id": 999, "sampled_at": t_curr, "in_octets": 10_000_000, "out_octets": 5_000_000},
+    ]
+    pool = _MockPool(_MockConn(dev_row, if_rows, foreign_samples))
+
+    foreign_res = await get_device_traffic_series(pool, device_id=1, interface_id="999", time_range="15m")
+    assert foreign_res["has_snmp"] is False
+    assert all(v == 0.0 for v in foreign_res["inbound"])
+    assert all(v == 0.0 for v in foreign_res["outbound"])
+
+    invalid_res = await get_device_traffic_series(pool, device_id=1, interface_id="not-a-number", time_range="15m")
+    assert invalid_res["has_snmp"] is False
+    assert all(v == 0.0 for v in invalid_res["inbound"])
+    assert all(v == 0.0 for v in invalid_res["outbound"])
+
+
+def test_serialize_device_exposes_is_simulated():
+    base = {
+        "id": 42,
+        "name": "SIM-SW-01",
+        "dtype": "switch",
+        "floor": 1,
+        "x": 120.0,
+        "y": 140.0,
+        "locked": True,
+        "ip": "10.0.0.42",
+        "model": "SimSwitch",
+        "enabled": True,
+        "latest_poll_status": "succeeded",
+        "alert_severity": None,
+        "services": [],
+    }
+    sim_out = _serialize_device({**base, "is_simulated": True})
+    assert sim_out.is_simulated is True
+
+    default_out = _serialize_device(base)
+    assert default_out.is_simulated is False
+
+
+@pytest.mark.asyncio
+async def test_get_device_interfaces_returns_mac_and_latest_rates():
+    fake_dev = {
+        "id": 1,
+        "ip": "192.168.22.254",
+        "is_simulated": False,
+        "credential_ref": "public",
+        "snmp_version": "v2c",
+        "snmp_port": 161,
+    }
+    fake_snapshot = {
+        "success": True,
+        "has_snmp": True,
+        "interfaces_polled": 1,
+        "total_in_mbps": 12.5,
+        "total_out_mbps": 4.2,
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "interfaces": [
+            {
+                "id": 10,
+                "if_index": 1,
+                "name": "Gi1/0/1",
+                "description": "Port Gi1/0/1",
+                "mac_address": "8C:85:C1:83:92:FF",
+                "speed_bps": 1_000_000_000,
+                "oper_status": "up",
+                "in_mbps": 12.5,
+                "out_mbps": 4.2,
+            }
+        ],
+    }
+    with (
+        patch("app.main.get_db_pool", return_value=AsyncMock()),
+        patch("app.main.repository.fetch_device_by_id", new=AsyncMock(return_value=fake_dev)),
+        patch("app.main.get_latest_interface_traffic_snapshot", new=AsyncMock(return_value=fake_snapshot)),
+    ):
+        transport = ASGITransport(app=app)
+        async with AsyncClient(transport=transport, base_url="http://test") as ac:
+            res = await ac.get("/api/v1/devices/1/interfaces")
+            assert res.status_code == 200
+            body = res.json()
+            assert len(body) == 1
+            assert body[0]["id"] == 10
+            assert body[0]["mac_address"] == "8C:85:C1:83:92:FF"
+            assert body[0]["in_mbps"] == 12.5
+            assert body[0]["out_mbps"] == 4.2
+
+
+@pytest.mark.asyncio
+async def test_create_device_alert_error_codes():
+    with (
+        patch.object(settings, "API_KEY", ""),
+        patch("app.main.get_db_pool", return_value=AsyncMock()),
+        patch(
+            "app.main.repository.create_alert",
+            new=AsyncMock(side_effect=asyncpg.ForeignKeyViolationError("fk")),
+        ),
+    ):
+        transport = ASGITransport(app=app)
+        async with AsyncClient(transport=transport, base_url="http://test") as ac:
+            res_bad = await ac.post(
+                "/api/v1/devices/not-an-int/alerts",
+                json={"severity": "warn", "title": "Test"},
+            )
+            assert res_bad.status_code == 400
+
+            res_missing = await ac.post(
+                "/api/v1/devices/999999/alerts",
+                json={"severity": "warn", "title": "Test"},
+            )
+            assert res_missing.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_repository_update_device_rejects_disallowed_columns():
+    from app import repository
+
+    mock_pool = AsyncMock()
+    with pytest.raises(ValueError):
+        await repository.update_device(mock_pool, 1, {"id": 999})
+    with pytest.raises(ValueError):
+        await repository.update_device(mock_pool, 1, {"name; DROP TABLE devices": "x"})
+    mock_pool.execute.assert_not_called()
+
+
+

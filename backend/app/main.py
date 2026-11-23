@@ -211,6 +211,7 @@ def _serialize_device(d: Any, status_override: Optional[DeviceStatus] = None) ->
         longitude=getter("longitude"),
         altitude=getter("altitude"),
         services=_parse_services(getter("services")),
+        is_simulated=bool(getter("is_simulated") or False),
     )
 
 
@@ -517,29 +518,17 @@ async def get_device_interfaces(device_id: int):
     if not dev:
         raise HTTPException(status_code=404, detail="Device not found")
 
-    rows = await repository.fetch_device_interface_traffic(pool, device_id)
+    snapshot = await get_latest_interface_traffic_snapshot(pool, device_id)
 
-    if not rows and dev["ip"] and not dev["is_simulated"]:
+    if not snapshot["interfaces"] and dev["ip"] and not dev["is_simulated"]:
         community = dev["credential_ref"] or settings.SNMP_COMMUNITY
         version = "2c" if dev["snmp_version"] == "v2c" else "1"
         ifaces = await collect_device_interfaces(dev["ip"], community, dev["snmp_port"], version)
         if ifaces:
             await sync_device_interfaces(pool, device_id, ifaces)
-            rows = await repository.fetch_device_interface_traffic(pool, device_id)
+            snapshot = await get_latest_interface_traffic_snapshot(pool, device_id)
 
-    return [
-        InterfaceTrafficOut(
-            id=r["id"],
-            if_index=r["if_index"],
-            name=r["name"],
-            description=r["description"],
-            speed_bps=r["speed_bps"],
-            oper_status=r["oper_status"],
-            in_mbps=float(r["in_mbps"]),
-            out_mbps=float(r["out_mbps"]),
-        )
-        for r in rows
-    ]
+    return [InterfaceTrafficOut(**i) for i in snapshot["interfaces"]]
 
 @app.post("/api/v1/devices/{device_id}/poll-traffic", response_model=PollTrafficResult, dependencies=[Depends(require_api_key)])
 async def poll_device_traffic(device_id: int):
@@ -1065,6 +1054,10 @@ async def create_device_alert(device_id: str, payload: AlertCreate):
     pool = await get_db_pool()
     try:
         dev_id_int = int(device_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid device ID")
+
+    try:
         row = await repository.create_alert(
             pool=pool,
             device_id=dev_id_int,
@@ -1084,6 +1077,10 @@ async def create_device_alert(device_id: str, payload: AlertCreate):
             acknowledged=row["acknowledged"],
             acknowledged_by=row["acknowledged_by"],
         )
+    except asyncpg.ForeignKeyViolationError:
+        raise HTTPException(status_code=404, detail="Device not found")
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Error creating alert: {e}")
         raise HTTPException(status_code=500, detail=str(e))

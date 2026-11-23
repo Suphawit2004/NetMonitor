@@ -341,15 +341,15 @@ export async function connectDevice(id: string): Promise<ConnectResult> {
       method: 'POST',
       headers: authHeaders(),
     })
-    if (res.ok) {
-      const result = (await res.json()) as ConnectResult
-      if (result.success) {
-        db = db.map(d => (d.id === id ? { ...d, status: result.status } : d))
-        saveStoredDevices(db)
-      }
-      return result
+    if (!res.ok) await throwIfBackendError(res, 'Failed to connect device')
+    const result = (await res.json()) as ConnectResult
+    if (result.success) {
+      db = db.map(d => (d.id === id ? { ...d, status: result.status } : d))
+      saveStoredDevices(db)
     }
+    return result
   } catch (err) {
+    if (!isOfflineTransportError(err)) throw err
     console.warn('Backend API unavailable for connect', err)
   }
 
@@ -425,10 +425,10 @@ export async function scanNetwork(
         floor_rooms: floorRooms,
       }),
     })
-    if (res.ok) {
-      return (await res.json()) as DiscoveredDevice[]
-    }
+    if (!res.ok) await throwIfBackendError(res, 'Failed to scan network')
+    return (await res.json()) as DiscoveredDevice[]
   } catch (err) {
+    if (!isOfflineTransportError(err)) throw err
     console.warn('Backend API unavailable for discovery scan', err)
   }
 

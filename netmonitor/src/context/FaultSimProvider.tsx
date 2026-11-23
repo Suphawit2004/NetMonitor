@@ -26,6 +26,7 @@ export default function FaultSimProvider({ children }: { children: ReactNode }) 
   const { devices, retryDevices } = useNetwork()
   const [links, setLinks] = useState<TopologyLink[]>([])
   const [linksLoading, setLinksLoading] = useState(false)
+  const [linksTopologyKey, setLinksTopologyKey] = useState<string | null>(null)
 
   const [isSimMode, setIsSimMode] = useState(false)
   const [isLinkEditMode, setIsLinkEditMode] = useState(false)
@@ -65,6 +66,12 @@ export default function FaultSimProvider({ children }: { children: ReactNode }) 
       .then(fetched => {
         if (!cancelled) {
           setLinks(fetched)
+          setLinksTopologyKey(deviceTopologyKey)
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setLinksTopologyKey(deviceTopologyKey)
         }
       })
       .finally(() => {
@@ -101,6 +108,7 @@ export default function FaultSimProvider({ children }: { children: ReactNode }) 
       setLiveImpactReport(EMPTY_REPORT)
       return
     }
+    if (linksTopologyKey !== deviceTopologyKey) return
     let cancelled = false
     const offlineIds = curDevices.filter(d => d.status === 'offline').map(d => d.id)
     api.simulateImpact(offlineIds, [], true, curDevices, curLinks)
@@ -111,13 +119,14 @@ export default function FaultSimProvider({ children }: { children: ReactNode }) 
     return () => {
       cancelled = true
     }
-  }, [deviceStatusKey, linksKey])
+  }, [deviceStatusKey, linksKey, linksTopologyKey, deviceTopologyKey])
 
   const downDevicesKey = useMemo(() => [...downDeviceIds].sort().join(','), [downDeviceIds])
   const downLinksKey = useMemo(() => [...downLinkIds].sort().join(','), [downLinkIds])
 
   // Compute interactive sandbox impact report from backend engine when faults or links change
   useEffect(() => {
+    if (!isSimMode) return
     const curDevices = devicesRef.current
     const curLinks = activeLinksRef.current
     if (curDevices.length === 0) {
@@ -135,7 +144,7 @@ export default function FaultSimProvider({ children }: { children: ReactNode }) 
     return () => {
       cancelled = true
     }
-  }, [deviceStatusKey, linksKey, downDevicesKey, downLinksKey])
+  }, [isSimMode, deviceStatusKey, linksKey, downDevicesKey, downLinksKey])
 
   const hasActiveSimulation = isSimMode && (downDeviceIds.size > 0 || downLinkIds.size > 0)
 
@@ -259,11 +268,11 @@ export default function FaultSimProvider({ children }: { children: ReactNode }) 
         const f1 = devices.filter(d => d.floor === 1)
         setDownDeviceIds(new Set(f1.map(d => d.id)))
       } else if (preset === 'top-spof') {
-        const top = impactReport.spof_ranking[0]
+        const top = impactReport.spof_ranking[0] ?? liveImpactReport.spof_ranking[0]
         if (top) setDownDeviceIds(new Set([top.device_id]))
       }
     },
-    [devices, impactReport.spof_ranking],
+    [devices, impactReport.spof_ranking, liveImpactReport.spof_ranking],
   )
 
   const resetSimulation = useCallback(() => {

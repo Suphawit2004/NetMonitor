@@ -21,6 +21,7 @@ export interface Device {
   ip?: string
   model?: string
   credential_ref?: string | null
+  is_simulated?: boolean
   target_room?: string | null
   latitude?: number | null
   longitude?: number | null

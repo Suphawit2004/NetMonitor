@@ -548,32 +548,26 @@ async def get_device_traffic_series(
     now = datetime.now(timezone.utc)
     since = now - timedelta(seconds=range_seconds)
 
+    def _empty_series() -> Dict[str, Any]:
+        return {
+            "has_snmp": False,
+            "interface_id": interface_id,
+            "inbound": [0.0] * point_count,
+            "outbound": [0.0] * point_count,
+            "labels": labels,
+            "peak": 0.0,
+            "avg": 0.0,
+            "timestamp": now.isoformat(),
+        }
+
     async with pool.acquire() as conn:
         dev_row = await conn.fetchrow("SELECT id, dtype, enabled FROM devices WHERE id = $1", device_id)
         if not dev_row:
-            return {
-                "has_snmp": False,
-                "interface_id": interface_id,
-                "inbound": [0.0] * point_count,
-                "outbound": [0.0] * point_count,
-                "labels": labels,
-                "peak": 0.0,
-                "avg": 0.0,
-                "timestamp": now.isoformat(),
-            }
+            return _empty_series()
 
         if_rows = await conn.fetch("SELECT id, speed_bps FROM interfaces WHERE device_id = $1", device_id)
         if not if_rows:
-            return {
-                "has_snmp": False,
-                "interface_id": interface_id,
-                "inbound": [0.0] * point_count,
-                "outbound": [0.0] * point_count,
-                "labels": labels,
-                "peak": 0.0,
-                "avg": 0.0,
-                "timestamp": now.isoformat(),
-            }
+            return _empty_series()
 
         speed_map = {r["id"]: r["speed_bps"] for r in if_rows}
 
@@ -590,14 +584,18 @@ async def get_device_traffic_series(
             try:
                 target_if_id = int(interface_id)
             except ValueError:
-                target_if_id = if_rows[0]["id"]
+                return _empty_series()
+
+            if target_if_id not in speed_map:
+                return _empty_series()
 
             sample_rows = await conn.fetch("""
                 SELECT s.interface_id, s.sampled_at, s.in_octets, s.out_octets
                 FROM interface_samples s
-                WHERE s.interface_id = $1 AND s.sampled_at >= $2
+                JOIN interfaces i ON i.id = s.interface_id
+                WHERE i.device_id = $1 AND s.interface_id = $2 AND s.sampled_at >= $3
                 ORDER BY s.sampled_at ASC
-            """, target_if_id, since)
+            """, device_id, target_if_id, since)
 
     bucket_sec = max(1, range_seconds // point_count)
     inbound = [0.0] * point_count
@@ -765,7 +763,7 @@ async def get_latest_interface_traffic_snapshot(pool, device_id: int) -> Dict[st
         total_in += in_mbps
         total_out += out_mbps
         interfaces_out.append({
-            "id": str(r["id"]),
+            "id": int(r["id"]),
             "if_index": r["if_index"],
             "name": r["name"],
             "description": r["description"],

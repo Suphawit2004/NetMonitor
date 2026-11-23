@@ -147,6 +147,7 @@ class DeviceOut(BaseModel):
     altitude: Optional[float] = None
     target_room: Optional[str] = None
     services: list[str] = Field(default_factory=list)
+    is_simulated: bool = False
 
 class InterfaceOut(BaseModel):
     id: str
