@@ -30,6 +30,7 @@ export function useDeviceDetail(device: Device | null, timeRange: TimeRange) {
   const [isPolling, setIsPolling] = useState<boolean>(true)
   const [realTelemetry, setRealTelemetry] = useState<RealTelemetry | null>(null)
   const lastAlertDeviceIdRef = useRef<string | undefined>(undefined)
+  const lastAlertFetchKeyRef = useRef<string | undefined>(undefined)
 
   // Clear realSeries and realTelemetry immediately on device or filter switch to avoid showing stale or mock data
   useEffect(() => {
@@ -43,12 +44,15 @@ export function useDeviceDetail(device: Device | null, timeRange: TimeRange) {
   useEffect(() => {
     if (!device?.id) {
       lastAlertDeviceIdRef.current = undefined
+      lastAlertFetchKeyRef.current = undefined
       // eslint-disable-next-line react-hooks/set-state-in-effect
       setDbAlerts([])
       return
     }
+    const fetchKey = `${device.id}:${device.status}`
     const deviceChanged = lastAlertDeviceIdRef.current !== device.id
-    if (!deviceChanged && tick > 0 && tick % 5 !== 0) {
+    const needsFetch = lastAlertFetchKeyRef.current !== fetchKey
+    if (!needsFetch && tick > 0 && tick % 5 !== 0) {
       return
     }
     if (deviceChanged) {
@@ -58,6 +62,7 @@ export function useDeviceDetail(device: Device | null, timeRange: TimeRange) {
     let cancelled = false
     fetchAlerts(device.id).then(alerts => {
       if (!cancelled) {
+        lastAlertFetchKeyRef.current = fetchKey
         setDbAlerts(alerts)
       }
     })
