@@ -128,8 +128,8 @@ export default function NetworkScanModal({ open, defaultFloor = 1, onClose }: Pr
       } else {
         showToast(t('scan.scanCompleted', { count: found.length }) + ` (${newCount} ใหม่, ${durationSec}s)`, 'success')
       }
-    } catch {
-      showToast(t('common.error'), 'error')
+    } catch (err) {
+      showToast(err instanceof Error && err.message ? err.message : t('common.error'), 'error')
     } finally {
       setScanning(false)
     }
@@ -176,8 +176,8 @@ export default function NetworkScanModal({ open, defaultFloor = 1, onClose }: Pr
       const created = await importDiscovered(items)
       showToast(t('scan.importSuccess', { count: created.length }), 'success')
       onClose()
-    } catch {
-      showToast(t('common.error'), 'error')
+    } catch (err) {
+      showToast(err instanceof Error && err.message ? err.message : t('common.error'), 'error')
     } finally {
       setImporting(false)
     }

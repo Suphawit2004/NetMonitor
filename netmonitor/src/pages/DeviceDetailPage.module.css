@@ -125,7 +125,7 @@
   letter-spacing: 0.5px;
   margin-bottom: 4px;
 }
-.infoValue { font-size: 13px; font-weight: 600; color: var(--text-primary); word-break: break-all; }
+.infoValue { font-size: 13px; font-weight: 600; color: var(--text-primary); overflow-wrap: break-word; word-break: normal; }
 .infoMono  { font-size: 12px; font-family: 'JetBrains Mono', monospace; font-variant-numeric: tabular-nums; letter-spacing: 0.3px; }
 
 /* ── Diagnostic Banner ── */

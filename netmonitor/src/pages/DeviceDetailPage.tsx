@@ -173,8 +173,8 @@ export default function DeviceDetailPage({
       } else {
         showToast(t('detail.connectFailed', { message: res.message }), 'error')
       }
-    } catch {
-      showToast(t('common.error'), 'error')
+    } catch (err) {
+      showToast(err instanceof Error && err.message ? err.message : t('common.error'), 'error')
     } finally {
       setConnecting(false)
     }

@@ -155,7 +155,7 @@ async def fetch_devices_with_telemetry(pool: asyncpg.Pool) -> List[asyncpg.Recor
         SELECT 
             d.id, d.name, d.hostname, host(d.management_ip) AS ip, 
             d.snmp_port, d.snmp_version, d.credential_ref, d.poll_interval_s, 
-            d.location, d.enabled, d.dtype, d.floor, d.x, d.y, 
+            d.location, d.enabled, d.is_simulated, d.dtype, d.floor, d.x, d.y, 
             d.locked, d.model, d.latitude, d.longitude, d.altitude, d.services,
             p.status AS latest_poll_status,
             a.highest_severity AS alert_severity
@@ -231,7 +231,7 @@ async def insert_device(
             dtype, floor, x, y, locked, model, latitude, longitude, altitude, services
         )
         VALUES ($1, $2, $3::inet, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19::jsonb)
-        RETURNING id, name, dtype, floor, x, y, locked, host(management_ip) AS ip, model, latitude, longitude, altitude, services;
+        RETURNING id, name, dtype, floor, x, y, locked, host(management_ip) AS ip, model, latitude, longitude, altitude, services, is_simulated;
     """
     return await pool.fetchrow(
         insert_query,
@@ -284,9 +284,30 @@ async def fetch_device_by_id(pool: asyncpg.Pool, device_id: int) -> Optional[asy
     )
 
 
+_ALLOWED_DEVICE_UPDATE_COLUMNS = frozenset({
+    "name",
+    "dtype",
+    "floor",
+    "x",
+    "y",
+    "locked",
+    "model",
+    "location",
+    "enabled",
+    "latitude",
+    "longitude",
+    "altitude",
+    "management_ip",
+    "services",
+})
+
+
 async def update_device(pool: asyncpg.Pool, device_id: int, field_values: Dict[str, Any]) -> Optional[asyncpg.Record]:
     """Applies partial field updates to devices and returns refreshed row with telemetry."""
     if field_values:
+        invalid_cols = [col for col in field_values if col not in _ALLOWED_DEVICE_UPDATE_COLUMNS]
+        if invalid_cols:
+            raise ValueError(f"Unsupported device update column(s): {', '.join(invalid_cols)}")
         updates = []
         params: List[Any] = []
         idx = 1
@@ -318,7 +339,7 @@ async def fetch_device_interface_traffic(pool: asyncpg.Pool, device_id: int) -> 
     """Retrieves cached interfaces for a device with zeroed default rate placeholders."""
     return await pool.fetch(
         """
-        SELECT id, if_index, name, description, speed_bps, oper_status,
+        SELECT id, if_index, name, description, mac_address, speed_bps, oper_status,
                0.0 AS in_mbps, 0.0 AS out_mbps
         FROM interfaces
         WHERE device_id = $1

@@ -224,6 +224,7 @@ export default function ReportsPage({ onDeviceInfo, onOpenFullDetail }: Props) {
                   className={styles.barFill}
                   style={{
                     width: `${(tc.count / maxTypeCount) * 100}%`,
+                    minWidth: tc.count > 0 ? 2 : 0,
                     background: TYPE_COLOR[tc.type],
                   }}
                 />
@@ -257,7 +258,7 @@ export default function ReportsPage({ onDeviceInfo, onOpenFullDetail }: Props) {
                 {total}
               </text>
               <text x="60" y="71" textAnchor="middle" fontSize="10" fontWeight="500" fill="var(--text-muted)">
-                {t('nav.list')}
+                {t('reports.devicesLabel')}
               </text>
             </svg>
 
@@ -482,10 +483,10 @@ export default function ReportsPage({ onDeviceInfo, onOpenFullDetail }: Props) {
                     type="button"
                     className={styles.ackBtn}
                     onClick={e => handleAcknowledge(e, alert.id)}
-                    title="กดเพื่อรับทราบการแจ้งเตือน"
+                    title={t('alerts.ackTitle')}
                   >
                     <Check size={12} />
-                    <span>รับทราบ</span>
+                    <span>{t('alerts.ackButton')}</span>
                   </button>
                 )}
               </div>

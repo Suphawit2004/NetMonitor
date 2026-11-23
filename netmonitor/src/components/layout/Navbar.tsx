@@ -195,7 +195,7 @@ export default function Navbar({ activePage, devices, onNavigate, onSelectDevice
             className={styles.iconBtn}
             onClick={toggleTheme}
             title={settings.theme === 'light' ? t('nav.switchToDark') : t('nav.switchToLight')}
-            aria-label={t('nav.switchToDark')}
+            aria-label={settings.theme === 'light' ? t('nav.switchToDark') : t('nav.switchToLight')}
             type="button"
           >
             {settings.theme === 'light' ? <Sun size={15} /> : <Moon size={15} />}

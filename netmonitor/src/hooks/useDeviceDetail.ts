@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import type { Alert, Device, DeviceDetail, InterfaceTrafficItem, MetricValue, Port, PortStatus, TimeRange, TrafficSeries } from '../types'
 import { useNetwork } from '../context/networkContext'
 import { useSimulation } from '../context/simulationContext'
@@ -29,6 +29,7 @@ export function useDeviceDetail(device: Device | null, timeRange: TimeRange) {
   const [realSeries, setRealSeries] = useState<TrafficSeries | null>(null)
   const [isPolling, setIsPolling] = useState<boolean>(true)
   const [realTelemetry, setRealTelemetry] = useState<RealTelemetry | null>(null)
+  const lastAlertDeviceIdRef = useRef<string | undefined>(undefined)
 
   // Clear realSeries and realTelemetry immediately on device or filter switch to avoid showing stale or mock data
   useEffect(() => {
@@ -41,16 +42,22 @@ export function useDeviceDetail(device: Device | null, timeRange: TimeRange) {
   // 1. Fetch Alerts periodically (from database only)
   useEffect(() => {
     if (!device?.id) {
+      lastAlertDeviceIdRef.current = undefined
       // eslint-disable-next-line react-hooks/set-state-in-effect
       setDbAlerts([])
       return
     }
-    if (tick > 0 && tick % 5 !== 0 && dbAlerts.length > 0) {
+    const deviceChanged = lastAlertDeviceIdRef.current !== device.id
+    if (!deviceChanged && tick > 0 && tick % 5 !== 0) {
       return
+    }
+    if (deviceChanged) {
+      lastAlertDeviceIdRef.current = device.id
+      setDbAlerts([])
     }
     let cancelled = false
     fetchAlerts(device.id).then(alerts => {
-      if (!cancelled && alerts.length > 0) {
+      if (!cancelled) {
         setDbAlerts(alerts)
       }
     })
@@ -152,6 +159,7 @@ export function useDeviceDetail(device: Device | null, timeRange: TimeRange) {
     if (!device) return null
     const isRealDevice = Boolean(
       device.ip &&
+      !device.is_simulated &&
       device.credential_ref !== 'simulated' &&
       device.credential_ref !== 'mock'
     )
@@ -211,7 +219,7 @@ export function useDeviceDetail(device: Device | null, timeRange: TimeRange) {
       const mac = realTelemetry?.mac || interfaces.find(i => i.mac_address)?.mac_address || '—'
 
       // 9. REAL OS / FIRMWARE จาก sysDescr / model
-      const iosVersion = device.model || '—'
+      const iosVersion = device.model ? device.model.replace(/^["']+|["']+$/g, '').trim() || '—' : '—'
 
       // 10. REAL ALERTS จาก Database เท่านั้น (ห้าม generate alert ปลอม)
       const alerts = dbAlerts
